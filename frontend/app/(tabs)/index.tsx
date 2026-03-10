@@ -56,6 +56,7 @@ export default function DashboardScreen() {
   const cardLayouts = useRef<Record<string, { y: number; height: number }>>({});
   const scrollOffsetY = useRef(0);
   const containerPageY = useRef(0);
+  const containerRef = useRef<View>(null);
   const draggingKeyRef = useRef<string | null>(null);
   const cardOrderRef = useRef<string[]>(DEFAULT_ORDER);
 
@@ -324,7 +325,12 @@ export default function DashboardScreen() {
         }}
       >
         <View
-          onLayout={e => { containerPageY.current = e.nativeEvent.layout.y; }}
+          ref={containerRef}
+          onLayout={() => {
+            containerRef.current?.measure((_x, _y, _w, _h, _pageX, pageY) => {
+              containerPageY.current = pageY;
+            });
+          }}
         >
           {cardOrder.map((key, index) => {
             const isDraggingThis = draggingKey === key;
@@ -349,6 +355,7 @@ export default function DashboardScreen() {
                     cardLayouts={cardLayouts}
                     scrollOffsetY={scrollOffsetY}
                     containerPageY={containerPageY}
+                    containerRef={containerRef}
                     dragY={dragY}
                     setDraggingKey={setDraggingKey}
                     setHoverIndex={setHoverIndex}
@@ -376,16 +383,20 @@ interface DragHandleProps {
   cardLayouts: React.MutableRefObject<Record<string, { y: number; height: number }>>;
   scrollOffsetY: React.MutableRefObject<number>;
   containerPageY: React.MutableRefObject<number>;
+  containerRef: React.MutableRefObject<View | null>;
   dragY: Animated.Value;
   setDraggingKey: (k: string | null) => void;
   setHoverIndex: (i: number) => void;
   setCardOrder: (order: string[]) => void;
 }
 
-function DragHandle({ cardKey, cardOrderRef, cardLayouts, scrollOffsetY, containerPageY, dragY, setDraggingKey, setHoverIndex, setCardOrder }: DragHandleProps) {
+function DragHandle({ cardKey, cardOrderRef, cardLayouts, scrollOffsetY, containerPageY, containerRef, dragY, setDraggingKey, setHoverIndex, setCardOrder }: DragHandleProps) {
+  // relativeY = position within the container's coordinate space
+  // containerPageY is absolute screen Y of container top (from measure())
+  // cardLayouts[key].y is each card's Y within the container (from onLayout)
   const getHoverIndex = (gesturePageY: number): number => {
     const order = cardOrderRef.current;
-    const relativeY = gesturePageY - containerPageY.current + scrollOffsetY.current;
+    const relativeY = gesturePageY - containerPageY.current;
     for (let i = 0; i < order.length; i++) {
       const layout = cardLayouts.current[order[i]];
       if (!layout) continue;
@@ -399,6 +410,10 @@ function DragHandle({ cardKey, cardOrderRef, cardLayouts, scrollOffsetY, contain
       onStartShouldSetPanResponder: () => true,
       onMoveShouldSetPanResponder: () => true,
       onPanResponderGrant: () => {
+        // Re-measure container absolute position at drag start (scroll is disabled during drag)
+        containerRef.current?.measure((_x, _y, _w, _h, _pageX, pageY) => {
+          containerPageY.current = pageY;
+        });
         dragY.setValue(0);
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
         setDraggingKey(cardKey);
@@ -466,7 +481,15 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   cardDragging: {
-    opacity: 0.5,
+    shadowColor: COLORS.primary,
+    shadowOffset: { width: 0, height: 8 },
+    shadowOpacity: 0.35,
+    shadowRadius: 14,
+    elevation: 14,
+    borderRadius: 16,
+    borderWidth: 2,
+    borderColor: COLORS.primary,
+    zIndex: 10,
   },
   dragHandleContainer: {
     position: 'absolute',

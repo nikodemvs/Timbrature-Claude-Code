@@ -123,9 +123,6 @@ export default function DashboardScreen() {
             <Text style={styles.greeting}>Ciao, {data?.settings?.nome?.split(' ')[0] || 'Marco'}</Text>
             <Text style={styles.subtitle}>{meseCorrente} {today.getFullYear()}</Text>
           </View>
-          <TouchableOpacity style={[styles.chatButton, { borderColor: themeColors.primary }]} onPress={() => router.push('/altro')}>
-            <Ionicons name="chatbubble-ellipses" size={24} color={themeColors.primary} />
-          </TouchableOpacity>
         </View>
 
         {/* Quick Clock In/Out */}

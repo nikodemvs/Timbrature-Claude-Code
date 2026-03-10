@@ -1578,7 +1578,7 @@ Comporto malattia: {comporto['giorni_malattia_3_anni']} giorni su {comporto['sog
         ]
 
         chat = _gemini_client.aio.chats.create(
-            model="gemini-1.5-flash-latest",
+            model="gemini-2.0-flash",
             history=gemini_history,
             config=genai_types.GenerateContentConfig(
                 system_instruction=system_prompt,

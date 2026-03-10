@@ -24,6 +24,15 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timbraturaLoading, setTimbraturaLoading] = useState(false);
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({
+    timbratura: true,
+    riepilogo: false,
+    stima: false,
+    ferie: false,
+    comporto: false,
+    busta: false,
+  });
+  const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
   
   const themeColors = getThemeColors(theme);
 
@@ -127,12 +136,13 @@ export default function DashboardScreen() {
 
         {/* Quick Clock In/Out */}
         <Card style={styles.clockCard}>
-          <View style={styles.clockHeader}>
+          <TouchableOpacity style={styles.clockHeader} onPress={() => toggle('timbratura')} activeOpacity={0.7}>
             <Ionicons name="finger-print" size={24} color={themeColors.primary} />
-            <Text style={styles.clockTitle}>Timbratura Rapida</Text>
-          </View>
-          
-          {todayTimbratura ? (
+            <Text style={[styles.clockTitle, { flex: 1 }]}>Timbratura Rapida</Text>
+            <Ionicons name={expanded.timbratura ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+          </TouchableOpacity>
+
+          {expanded.timbratura && todayTimbratura ? (
             <View style={styles.clockInfo}>
               {/* Mostra lista marcature se presenti */}
               {marcature.length > 0 ? (
@@ -171,11 +181,11 @@ export default function DashboardScreen() {
                 <Text style={styles.oreTotaliValue}>{todayTimbratura.ore_arrotondate?.toFixed(1) || '0.0'}h</Text>
               </View>
             </View>
-          ) : (
+          ) : expanded.timbratura ? (
             <Text style={styles.clockEmpty}>Nessuna timbratura oggi</Text>
-          )}
-          
-          <View style={styles.clockButtons}>
+          ) : null}
+
+          {expanded.timbratura && <View style={styles.clockButtons}>
             <TouchableOpacity
               style={[
                 styles.clockButton,
@@ -229,12 +239,18 @@ export default function DashboardScreen() {
                 </>
               )}
             </TouchableOpacity>
-          </View>
+          </View>}
         </Card>
 
         {/* Monthly Stats */}
-        <Card title="Riepilogo Mese" icon="bar-chart" iconColor={themeColors.primary}>
-          <View style={styles.statsGrid}>
+        <Card
+          title="Riepilogo Mese"
+          icon="bar-chart"
+          iconColor={themeColors.primary}
+          onPress={() => toggle('riepilogo')}
+          rightElement={<Ionicons name={expanded.riepilogo ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}
+        >
+          {expanded.riepilogo && <View style={styles.statsGrid}>
             <StatCard
               label="Ore Lavorate"
               value={data?.mese_corrente?.ore_lavorate?.toFixed(1) || '0'}
@@ -257,42 +273,56 @@ export default function DashboardScreen() {
               value={data?.mese_corrente?.ticket_maturati || 0}
               color={COLORS.ticket}
             />
-          </View>
+          </View>}
         </Card>
 
         {/* Estimated Pay */}
-        <Card title="Stima Netto" icon="wallet" iconColor={COLORS.success}>
-          <View style={styles.estimateContainer}>
-            <Text style={styles.estimateValue}>
-              {formatCurrency(data?.stime?.netto_stimato || 0)}
-            </Text>
-            <Text style={styles.estimateLabel}>netto stimato per {meseCorrente}</Text>
-          </View>
-          <View style={styles.estimateDetails}>
-            <View style={styles.estimateRow}>
-              <Text style={styles.estimateDetailLabel}>Lordo stimato</Text>
-              <Text style={styles.estimateDetailValue}>
-                {formatCurrency(data?.stime?.lordo_stimato || 0)}
+        <Card
+          title="Stima Netto"
+          icon="wallet"
+          iconColor={COLORS.success}
+          onPress={() => toggle('stima')}
+          rightElement={<Ionicons name={expanded.stima ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}
+        >
+          {expanded.stima && <>
+            <View style={styles.estimateContainer}>
+              <Text style={styles.estimateValue}>
+                {formatCurrency(data?.stime?.netto_stimato || 0)}
               </Text>
+              <Text style={styles.estimateLabel}>netto stimato per {meseCorrente}</Text>
             </View>
-            <View style={styles.estimateRow}>
-              <Text style={styles.estimateDetailLabel}>Straordinari</Text>
-              <Text style={styles.estimateDetailValue}>
-                {formatCurrency(data?.stime?.straordinario_stimato || 0)}
-              </Text>
+            <View style={styles.estimateDetails}>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateDetailLabel}>Lordo stimato</Text>
+                <Text style={styles.estimateDetailValue}>
+                  {formatCurrency(data?.stime?.lordo_stimato || 0)}
+                </Text>
+              </View>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateDetailLabel}>Straordinari</Text>
+                <Text style={styles.estimateDetailValue}>
+                  {formatCurrency(data?.stime?.straordinario_stimato || 0)}
+                </Text>
+              </View>
+              <View style={styles.estimateRow}>
+                <Text style={styles.estimateDetailLabel}>Ticket ({data?.mese_corrente?.ticket_maturati || 0} gg)</Text>
+                <Text style={styles.estimateDetailValue}>
+                  {formatCurrency(data?.stime?.ticket_totale || 0)}
+                </Text>
+              </View>
             </View>
-            <View style={styles.estimateRow}>
-              <Text style={styles.estimateDetailLabel}>Ticket ({data?.mese_corrente?.ticket_maturati || 0} gg)</Text>
-              <Text style={styles.estimateDetailValue}>
-                {formatCurrency(data?.stime?.ticket_totale || 0)}
-              </Text>
-            </View>
-          </View>
+          </>}
         </Card>
 
         {/* Ferie Balance */}
-        <Card title="Saldo Ferie" icon="airplane" iconColor={COLORS.ferie}>
-          <View style={styles.balanceContainer}>
+        <Card
+          title="Saldo Ferie"
+          icon="airplane"
+          iconColor={COLORS.ferie}
+          onPress={() => toggle('ferie')}
+          rightElement={<Ionicons name={expanded.ferie ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}
+        >
+          {expanded.ferie && <View style={styles.balanceContainer}>
             <View style={styles.balanceMain}>
               <Text style={[styles.balanceValue, { color: COLORS.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) || '0'}</Text>
               <Text style={styles.balanceUnit}>ore disponibili</Text>
@@ -307,12 +337,18 @@ export default function DashboardScreen() {
                 <Text style={styles.balanceAmount}>{data?.ferie?.ore_godute?.toFixed(1) || '0'}h</Text>
               </View>
             </View>
-          </View>
+          </View>}
         </Card>
 
         {/* Comporto */}
-        <Card title="Comporto Malattia" icon="medkit" iconColor={COLORS.malattia}>
-          <View style={styles.comportoContainer}>
+        <Card
+          title="Comporto Malattia"
+          icon="medkit"
+          iconColor={COLORS.malattia}
+          onPress={() => toggle('comporto')}
+          rightElement={<Ionicons name={expanded.comporto ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}
+        >
+          {expanded.comporto && <View style={styles.comportoContainer}>
             <View style={styles.comportoMain}>
               <Text style={[
                 styles.comportoValue,
@@ -326,7 +362,7 @@ export default function DashboardScreen() {
             <Text style={styles.comportoInfo}>
               Negli ultimi 3 anni. Disponibili: {data?.comporto?.giorni_disponibili || 0} giorni
             </Text>
-          </View>
+          </View>}
         </Card>
 
         {/* Last Payslip */}
@@ -336,14 +372,15 @@ export default function DashboardScreen() {
             subtitle={`${getMesiItaliano(data.ultima_busta.mese)} ${data.ultima_busta.anno}`}
             icon="receipt"
             iconColor={themeColors.primary}
-            onPress={() => router.push('/buste-paga')}
+            onPress={() => toggle('busta')}
+            rightElement={<Ionicons name={expanded.busta ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}
           >
-            <View style={styles.payslipContainer}>
+            {expanded.busta && <View style={styles.payslipContainer}>
               <View style={styles.payslipRow}>
                 <Text style={styles.payslipLabel}>Netto</Text>
                 <Text style={styles.payslipValue}>{formatCurrency(data.ultima_busta.netto)}</Text>
               </View>
-            </View>
+            </View>}
           </Card>
         )}
 

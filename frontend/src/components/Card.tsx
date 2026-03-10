@@ -35,7 +35,7 @@ export const Card: React.FC<CardProps> = ({
       ) : (
         <>
           {(title || icon) && (
-            <View style={styles.header}>
+            <View style={[styles.header, !children && { marginBottom: 0 }]}>
               <View style={styles.headerLeft}>
                 {icon && (
                   <View style={[styles.iconContainer, { backgroundColor: `${iconColor}15` }]}>

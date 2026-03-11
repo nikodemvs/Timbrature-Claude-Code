@@ -1,17 +1,12 @@
-import React, { useEffect, useState, useCallback, useRef } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  PanResponder,
-  Animated,
-  Platform,
-  UIManager,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -21,15 +16,14 @@ import { useAppStore, getThemeColors } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
 import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
-
-if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
-  UIManager.setLayoutAnimationEnabledExperimental(true);
-}
+import DraggableFlatList, {
+  RenderItemParams,
+  ScaleDecorator,
+} from 'react-native-draggable-flatlist';
+import { GestureHandlerRootView } from 'react-native-gesture-handler';
 
 const CARD_ORDER_KEY = 'home_card_order';
 const DEFAULT_ORDER = ['timbratura', 'riepilogo', 'stima', 'ferie', 'comporto', 'busta'];
-const CARD_HEIGHT_ESTIMATE = 80; // used for drag threshold
 
 export default function DashboardScreen() {
   const { dashboard, setDashboard, todayTimbratura, setTodayTimbratura, setUnreadAlerts, theme } = useAppStore();
@@ -45,33 +39,16 @@ export default function DashboardScreen() {
     busta: false,
   });
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
-  const [draggingKey, setDraggingKey] = useState<string | null>(null);
-  const [hoverIndex, setHoverIndex] = useState<number>(-1);
 
   const themeColors = getThemeColors(theme);
   const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
-
-  // Drag state
-  const dragY = useRef(new Animated.Value(0)).current;
-  const cardLayouts = useRef<Record<string, { y: number; height: number }>>({});
-  const scrollOffsetY = useRef(0);
-  const containerPageY = useRef(0);
-  const containerRef = useRef<View>(null);
-  const draggingKeyRef = useRef<string | null>(null);
-  const cardOrderRef = useRef<string[]>(DEFAULT_ORDER);
-
-  useEffect(() => { cardOrderRef.current = cardOrder; }, [cardOrder]);
-  useEffect(() => { draggingKeyRef.current = draggingKey; }, [draggingKey]);
 
   useEffect(() => {
     AsyncStorage.getItem(CARD_ORDER_KEY).then(saved => {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setCardOrder(parsed);
-            cardOrderRef.current = parsed;
-          }
+          if (Array.isArray(parsed)) setCardOrder(parsed);
         } catch {}
       }
     });
@@ -144,159 +121,286 @@ export default function DashboardScreen() {
   const entrataActive = !ultimaMarcatura || ultimaMarcatura.tipo === 'uscita';
   const uscitaActive = ultimaMarcatura && ultimaMarcatura.tipo === 'entrata';
 
-  const renderCardContent = (key: string) => {
-    switch (key) {
+  const renderItem = ({ item, drag, isActive }: RenderItemParams<string>) => {
+    switch (item) {
       case 'timbratura':
         return (
-          <Card style={styles.clockCard}>
-            <TouchableOpacity style={styles.clockHeader} onPress={() => toggle('timbratura')} activeOpacity={0.7}>
-              <Ionicons name="finger-print" size={24} color={themeColors.primary} />
-              <Text style={[styles.clockTitle, { flex: 1 }]}>Timbratura Rapida</Text>
-              <Ionicons name={expanded.timbratura ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
-            </TouchableOpacity>
+          <ScaleDecorator activeScale={1.05}>
+            <View
+              style={[styles.cardWrapper, isActive && styles.cardActive]}
+              onTouchStart={e => e.stopPropagation()}
+            >
+              <Card style={styles.clockCard}>
+                <View style={styles.cardHeaderRow}>
+                  <TouchableOpacity
+                    style={[styles.clockHeader, { flex: 1 }]}
+                    onPress={() => toggle('timbratura')}
+                    activeOpacity={0.7}
+                  >
+                    <Ionicons name="finger-print" size={24} color={themeColors.primary} />
+                    <Text style={[styles.clockTitle, { flex: 1 }]}>Timbratura Rapida</Text>
+                    <Ionicons name={expanded.timbratura ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                  <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                    <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
+                  </TouchableOpacity>
+                </View>
 
-            {expanded.timbratura && todayTimbratura ? (
-              <View style={styles.clockInfo}>
-                {marcature.length > 0 ? (
-                  <View style={styles.marcatureList}>
-                    {marcature.map((m: any, idx: number) => (
-                      <View key={m.id || idx} style={styles.marcaturaItem}>
-                        <Ionicons name={m.tipo === 'entrata' ? 'log-in' : 'log-out'} size={14} color={m.tipo === 'entrata' ? COLORS.success : COLORS.error} />
-                        <Text style={styles.marcaturaText}>{m.tipo === 'entrata' ? 'E' : 'U'}: {m.ora}</Text>
-                        {m.is_reperibilita && <Ionicons name="call" size={12} color={COLORS.warning} style={{ marginLeft: 4 }} />}
+                {expanded.timbratura && todayTimbratura ? (
+                  <View style={styles.clockInfo}>
+                    {marcature.length > 0 ? (
+                      <View style={styles.marcatureList}>
+                        {marcature.map((m: any, idx: number) => (
+                          <View key={m.id || idx} style={styles.marcaturaItem}>
+                            <Ionicons name={m.tipo === 'entrata' ? 'log-in' : 'log-out'} size={14} color={m.tipo === 'entrata' ? COLORS.success : COLORS.error} />
+                            <Text style={styles.marcaturaText}>{m.tipo === 'entrata' ? 'E' : 'U'}: {m.ora}</Text>
+                            {m.is_reperibilita && <Ionicons name="call" size={12} color={COLORS.warning} style={{ marginLeft: 4 }} />}
+                          </View>
+                        ))}
                       </View>
-                    ))}
+                    ) : (
+                      <View style={styles.clockTimeRow}>
+                        <View style={styles.clockTimeItem}>
+                          <Text style={styles.clockLabel}>Entrata</Text>
+                          <Text style={styles.clockTime}>{todayTimbratura.ora_entrata || '--:--'}</Text>
+                        </View>
+                        <View style={styles.clockDivider} />
+                        <View style={styles.clockTimeItem}>
+                          <Text style={styles.clockLabel}>Uscita</Text>
+                          <Text style={styles.clockTime}>{todayTimbratura.ora_uscita || '--:--'}</Text>
+                        </View>
+                      </View>
+                    )}
+                    <View style={styles.oreTotaliRow}>
+                      <Text style={styles.oreTotaliLabel}>Ore lavorate:</Text>
+                      <Text style={styles.oreTotaliValue}>{todayTimbratura.ore_arrotondate?.toFixed(1) || '0.0'}h</Text>
+                    </View>
                   </View>
-                ) : (
-                  <View style={styles.clockTimeRow}>
-                    <View style={styles.clockTimeItem}>
-                      <Text style={styles.clockLabel}>Entrata</Text>
-                      <Text style={styles.clockTime}>{todayTimbratura.ora_entrata || '--:--'}</Text>
-                    </View>
-                    <View style={styles.clockDivider} />
-                    <View style={styles.clockTimeItem}>
-                      <Text style={styles.clockLabel}>Uscita</Text>
-                      <Text style={styles.clockTime}>{todayTimbratura.ora_uscita || '--:--'}</Text>
-                    </View>
+                ) : expanded.timbratura ? (
+                  <Text style={styles.clockEmpty}>Nessuna timbratura oggi</Text>
+                ) : null}
+
+                {expanded.timbratura && (
+                  <View style={styles.clockButtons}>
+                    <TouchableOpacity
+                      style={[styles.clockButton, entrataActive ? styles.clockButtonEntrata : styles.clockButtonDisabled]}
+                      onPress={onPressEntrata}
+                      activeOpacity={entrataActive ? 0.7 : 1}
+                    >
+                      {timbraturaLoading
+                        ? <ActivityIndicator size="small" color={entrataActive ? COLORS.textWhite : COLORS.textSecondary} />
+                        : <>
+                          <Ionicons name="log-in-outline" size={20} color={entrataActive ? COLORS.textWhite : COLORS.textSecondary} />
+                          <Text style={[styles.clockButtonText, entrataActive ? styles.clockButtonTextActive : styles.clockButtonTextDisabled]}>Entrata</Text>
+                        </>
+                      }
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.clockButton, uscitaActive ? styles.clockButtonUscita : styles.clockButtonDisabled]}
+                      onPress={onPressUscita}
+                      activeOpacity={uscitaActive ? 0.7 : 1}
+                    >
+                      {timbraturaLoading
+                        ? <ActivityIndicator size="small" color={uscitaActive ? COLORS.textWhite : COLORS.textSecondary} />
+                        : <>
+                          <Ionicons name="log-out-outline" size={20} color={uscitaActive ? COLORS.textWhite : COLORS.textSecondary} />
+                          <Text style={[styles.clockButtonText, uscitaActive ? styles.clockButtonTextActive : styles.clockButtonTextDisabled]}>Uscita</Text>
+                        </>
+                      }
+                    </TouchableOpacity>
                   </View>
                 )}
-                <View style={styles.oreTotaliRow}>
-                  <Text style={styles.oreTotaliLabel}>Ore lavorate:</Text>
-                  <Text style={styles.oreTotaliValue}>{todayTimbratura.ore_arrotondate?.toFixed(1) || '0.0'}h</Text>
-                </View>
-              </View>
-            ) : expanded.timbratura ? (
-              <Text style={styles.clockEmpty}>Nessuna timbratura oggi</Text>
-            ) : null}
-
-            {expanded.timbratura && (
-              <View style={styles.clockButtons}>
-                <TouchableOpacity style={[styles.clockButton, entrataActive ? styles.clockButtonEntrata : styles.clockButtonDisabled]} onPress={onPressEntrata} activeOpacity={entrataActive ? 0.7 : 1}>
-                  {timbraturaLoading ? <ActivityIndicator size="small" color={entrataActive ? COLORS.textWhite : COLORS.textSecondary} /> : (
-                    <>
-                      <Ionicons name="log-in-outline" size={20} color={entrataActive ? COLORS.textWhite : COLORS.textSecondary} />
-                      <Text style={[styles.clockButtonText, entrataActive ? styles.clockButtonTextActive : styles.clockButtonTextDisabled]}>Entrata</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.clockButton, uscitaActive ? styles.clockButtonUscita : styles.clockButtonDisabled]} onPress={onPressUscita} activeOpacity={uscitaActive ? 0.7 : 1}>
-                  {timbraturaLoading ? <ActivityIndicator size="small" color={uscitaActive ? COLORS.textWhite : COLORS.textSecondary} /> : (
-                    <>
-                      <Ionicons name="log-out-outline" size={20} color={uscitaActive ? COLORS.textWhite : COLORS.textSecondary} />
-                      <Text style={[styles.clockButtonText, uscitaActive ? styles.clockButtonTextActive : styles.clockButtonTextDisabled]}>Uscita</Text>
-                    </>
-                  )}
-                </TouchableOpacity>
-              </View>
-            )}
-          </Card>
+              </Card>
+            </View>
+          </ScaleDecorator>
         );
 
       case 'riepilogo':
         return (
-          <Card title="Riepilogo Mese" icon="bar-chart" iconColor={themeColors.primary} onPress={() => toggle('riepilogo')}
-            rightElement={<Ionicons name={expanded.riepilogo ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}>
-            {expanded.riepilogo && (
-              <View style={styles.statsGrid}>
-                <StatCard label="Ore Lavorate" value={data?.mese_corrente?.ore_lavorate?.toFixed(1) || '0'} unit="h" color={themeColors.primary} />
-                <StatCard label="Straordinari" value={data?.mese_corrente?.ore_straordinarie?.toFixed(1) || '0'} unit="h" color={COLORS.overtime} />
-                <StatCard label="Giorni" value={data?.mese_corrente?.giorni_lavorati || 0} color={COLORS.success} />
-                <StatCard label="Ticket" value={data?.mese_corrente?.ticket_maturati || 0} color={COLORS.ticket} />
-              </View>
-            )}
-          </Card>
+          <ScaleDecorator activeScale={1.05}>
+            <View style={[styles.cardWrapper, isActive && styles.cardActive]}>
+              <Card
+                title="Riepilogo Mese"
+                icon="bar-chart"
+                iconColor={themeColors.primary}
+                onPress={() => toggle('riepilogo')}
+                rightElement={
+                  <View style={styles.rightRow}>
+                    <Ionicons name={expanded.riepilogo ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                }
+              >
+                {expanded.riepilogo && (
+                  <View style={styles.statsGrid}>
+                    <StatCard label="Ore Lavorate" value={data?.mese_corrente?.ore_lavorate?.toFixed(1) || '0'} unit="h" color={themeColors.primary} />
+                    <StatCard label="Straordinari" value={data?.mese_corrente?.ore_straordinarie?.toFixed(1) || '0'} unit="h" color={COLORS.overtime} />
+                    <StatCard label="Giorni" value={data?.mese_corrente?.giorni_lavorati || 0} color={COLORS.success} />
+                    <StatCard label="Ticket" value={data?.mese_corrente?.ticket_maturati || 0} color={COLORS.ticket} />
+                  </View>
+                )}
+              </Card>
+            </View>
+          </ScaleDecorator>
         );
 
       case 'stima':
         return (
-          <Card title="Stima Netto" icon="wallet" iconColor={COLORS.success} onPress={() => toggle('stima')}
-            rightElement={<Ionicons name={expanded.stima ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}>
-            {expanded.stima && (
-              <>
-                <View style={styles.estimateContainer}>
-                  <Text style={styles.estimateValue}>{formatCurrency(data?.stime?.netto_stimato || 0)}</Text>
-                  <Text style={styles.estimateLabel}>netto stimato per {meseCorrente}</Text>
-                </View>
-                <View style={styles.estimateDetails}>
-                  <View style={styles.estimateRow}><Text style={styles.estimateDetailLabel}>Lordo stimato</Text><Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.lordo_stimato || 0)}</Text></View>
-                  <View style={styles.estimateRow}><Text style={styles.estimateDetailLabel}>Straordinari</Text><Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.straordinario_stimato || 0)}</Text></View>
-                  <View style={styles.estimateRow}><Text style={styles.estimateDetailLabel}>Ticket ({data?.mese_corrente?.ticket_maturati || 0} gg)</Text><Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.ticket_totale || 0)}</Text></View>
-                </View>
-              </>
-            )}
-          </Card>
+          <ScaleDecorator activeScale={1.05}>
+            <View style={[styles.cardWrapper, isActive && styles.cardActive]}>
+              <Card
+                title="Stima Netto"
+                icon="wallet"
+                iconColor={COLORS.success}
+                onPress={() => toggle('stima')}
+                rightElement={
+                  <View style={styles.rightRow}>
+                    <Ionicons name={expanded.stima ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                }
+              >
+                {expanded.stima && (
+                  <>
+                    <View style={styles.estimateContainer}>
+                      <Text style={styles.estimateValue}>{formatCurrency(data?.stime?.netto_stimato || 0)}</Text>
+                      <Text style={styles.estimateLabel}>netto stimato per {meseCorrente}</Text>
+                    </View>
+                    <View style={styles.estimateDetails}>
+                      <View style={styles.estimateRow}>
+                        <Text style={styles.estimateDetailLabel}>Lordo stimato</Text>
+                        <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.lordo_stimato || 0)}</Text>
+                      </View>
+                      <View style={styles.estimateRow}>
+                        <Text style={styles.estimateDetailLabel}>Straordinari</Text>
+                        <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.straordinario_stimato || 0)}</Text>
+                      </View>
+                      <View style={styles.estimateRow}>
+                        <Text style={styles.estimateDetailLabel}>Ticket ({data?.mese_corrente?.ticket_maturati || 0} gg)</Text>
+                        <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.ticket_totale || 0)}</Text>
+                      </View>
+                    </View>
+                  </>
+                )}
+              </Card>
+            </View>
+          </ScaleDecorator>
         );
 
       case 'ferie':
         return (
-          <Card title="Saldo Ferie" icon="airplane" iconColor={COLORS.ferie} onPress={() => toggle('ferie')}
-            rightElement={<Ionicons name={expanded.ferie ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}>
-            {expanded.ferie && (
-              <View style={styles.balanceContainer}>
-                <View style={styles.balanceMain}>
-                  <Text style={[styles.balanceValue, { color: COLORS.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) || '0'}</Text>
-                  <Text style={styles.balanceUnit}>ore disponibili</Text>
-                </View>
-                <View style={styles.balanceDetails}>
-                  <View style={styles.balanceRow}><Text style={styles.balanceLabel}>Maturate</Text><Text style={styles.balanceAmount}>{data?.ferie?.ore_maturate?.toFixed(1) || '0'}h</Text></View>
-                  <View style={styles.balanceRow}><Text style={styles.balanceLabel}>Godute</Text><Text style={styles.balanceAmount}>{data?.ferie?.ore_godute?.toFixed(1) || '0'}h</Text></View>
-                </View>
-              </View>
-            )}
-          </Card>
+          <ScaleDecorator activeScale={1.05}>
+            <View style={[styles.cardWrapper, isActive && styles.cardActive]}>
+              <Card
+                title="Saldo Ferie"
+                icon="airplane"
+                iconColor={COLORS.ferie}
+                onPress={() => toggle('ferie')}
+                rightElement={
+                  <View style={styles.rightRow}>
+                    <Ionicons name={expanded.ferie ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                }
+              >
+                {expanded.ferie && (
+                  <View style={styles.balanceContainer}>
+                    <View style={styles.balanceMain}>
+                      <Text style={[styles.balanceValue, { color: COLORS.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) || '0'}</Text>
+                      <Text style={styles.balanceUnit}>ore disponibili</Text>
+                    </View>
+                    <View style={styles.balanceDetails}>
+                      <View style={styles.balanceRow}>
+                        <Text style={styles.balanceLabel}>Maturate</Text>
+                        <Text style={styles.balanceAmount}>{data?.ferie?.ore_maturate?.toFixed(1) || '0'}h</Text>
+                      </View>
+                      <View style={styles.balanceRow}>
+                        <Text style={styles.balanceLabel}>Godute</Text>
+                        <Text style={styles.balanceAmount}>{data?.ferie?.ore_godute?.toFixed(1) || '0'}h</Text>
+                      </View>
+                    </View>
+                  </View>
+                )}
+              </Card>
+            </View>
+          </ScaleDecorator>
         );
 
       case 'comporto':
         return (
-          <Card title="Comporto Malattia" icon="medkit" iconColor={COLORS.malattia} onPress={() => toggle('comporto')}
-            rightElement={<Ionicons name={expanded.comporto ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}>
-            {expanded.comporto && (
-              <View style={styles.comportoContainer}>
-                <View style={styles.comportoMain}>
-                  <Text style={[styles.comportoValue, data?.comporto?.alert_critico && styles.comportoCritical, data?.comporto?.alert_attenzione && !data?.comporto?.alert_critico && styles.comportoWarning]}>
-                    {data?.comporto?.giorni_malattia_3_anni || 0}
-                  </Text>
-                  <Text style={styles.comportoUnit}>/ {data?.comporto?.soglia_critica || 180} giorni</Text>
-                </View>
-                <Text style={styles.comportoInfo}>Negli ultimi 3 anni. Disponibili: {data?.comporto?.giorni_disponibili || 0} giorni</Text>
-              </View>
-            )}
-          </Card>
+          <ScaleDecorator activeScale={1.05}>
+            <View style={[styles.cardWrapper, isActive && styles.cardActive]}>
+              <Card
+                title="Comporto Malattia"
+                icon="medkit"
+                iconColor={COLORS.malattia}
+                onPress={() => toggle('comporto')}
+                rightElement={
+                  <View style={styles.rightRow}>
+                    <Ionicons name={expanded.comporto ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                }
+              >
+                {expanded.comporto && (
+                  <View style={styles.comportoContainer}>
+                    <View style={styles.comportoMain}>
+                      <Text style={[
+                        styles.comportoValue,
+                        data?.comporto?.alert_critico && styles.comportoCritical,
+                        data?.comporto?.alert_attenzione && !data?.comporto?.alert_critico && styles.comportoWarning,
+                      ]}>
+                        {data?.comporto?.giorni_malattia_3_anni || 0}
+                      </Text>
+                      <Text style={styles.comportoUnit}>/ {data?.comporto?.soglia_critica || 180} giorni</Text>
+                    </View>
+                    <Text style={styles.comportoInfo}>
+                      Negli ultimi 3 anni. Disponibili: {data?.comporto?.giorni_disponibili || 0} giorni
+                    </Text>
+                  </View>
+                )}
+              </Card>
+            </View>
+          </ScaleDecorator>
         );
 
       case 'busta':
         if (!data?.ultima_busta) return null;
         return (
-          <Card title="Ultima Busta Paga" subtitle={`${getMesiItaliano(data.ultima_busta.mese)} ${data.ultima_busta.anno}`}
-            icon="receipt" iconColor={themeColors.primary} onPress={() => toggle('busta')}
-            rightElement={<Ionicons name={expanded.busta ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />}>
-            {expanded.busta && (
-              <View style={styles.payslipRow}>
-                <Text style={styles.payslipLabel}>Netto</Text>
-                <Text style={styles.payslipValue}>{formatCurrency(data.ultima_busta.netto)}</Text>
-              </View>
-            )}
-          </Card>
+          <ScaleDecorator activeScale={1.05}>
+            <View style={[styles.cardWrapper, isActive && styles.cardActive]}>
+              <Card
+                title="Ultima Busta Paga"
+                subtitle={`${getMesiItaliano(data.ultima_busta.mese)} ${data.ultima_busta.anno}`}
+                icon="receipt"
+                iconColor={themeColors.primary}
+                onPress={() => toggle('busta')}
+                rightElement={
+                  <View style={styles.rightRow}>
+                    <Ionicons name={expanded.busta ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
+                    <TouchableOpacity onLongPress={drag} delayLongPress={150} style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
+                      <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
+                    </TouchableOpacity>
+                  </View>
+                }
+              >
+                {expanded.busta && (
+                  <View style={styles.payslipRow}>
+                    <Text style={styles.payslipLabel}>Netto</Text>
+                    <Text style={styles.payslipValue}>{formatCurrency(data.ultima_busta.netto)}</Text>
+                  </View>
+                )}
+              </Card>
+            </View>
+          </ScaleDecorator>
         );
 
       default:
@@ -305,152 +409,34 @@ export default function DashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.header}>
-        <Text style={styles.greeting}>Ciao, {data?.settings?.nome?.split(' ')[0] || 'Marco'}</Text>
-        <Text style={styles.subtitle}>{meseCorrente} {today.getFullYear()}</Text>
-      </View>
-
-      <ScrollView
-        style={styles.scrollView}
-        contentContainerStyle={styles.content}
-        scrollEnabled={!draggingKey}
-        onScroll={e => { scrollOffsetY.current = e.nativeEvent.contentOffset.y; }}
-        scrollEventThrottle={16}
-        refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[themeColors.primary]} />}
-        showsVerticalScrollIndicator={false}
-        onLayout={e => {
-          // measure the ScrollView's pageY
-          const ref = e.target;
-        }}
-      >
-        <View
-          ref={containerRef}
-          onLayout={() => {
-            containerRef.current?.measure((_x, _y, _w, _h, _pageX, pageY) => {
-              containerPageY.current = pageY;
-            });
-          }}
-        >
-          {cardOrder.map((key, index) => {
-            const isDraggingThis = draggingKey === key;
-            const showInsertBefore = draggingKey && draggingKey !== key && hoverIndex === index;
-
-            return (
-              <View key={key}>
-                {showInsertBefore && <View style={styles.dropIndicator} />}
-                <View
-                  style={[isDraggingThis && styles.cardDragging]}
-                  onLayout={e => {
-                    cardLayouts.current[key] = {
-                      y: e.nativeEvent.layout.y,
-                      height: e.nativeEvent.layout.height,
-                    };
-                  }}
-                >
-                  {/* Drag handle overlay */}
-                  <DragHandle
-                    cardKey={key}
-                    cardOrderRef={cardOrderRef}
-                    cardLayouts={cardLayouts}
-                    scrollOffsetY={scrollOffsetY}
-                    containerPageY={containerPageY}
-                    containerRef={containerRef}
-                    dragY={dragY}
-                    setDraggingKey={setDraggingKey}
-                    setHoverIndex={setHoverIndex}
-                    setCardOrder={setCardOrder}
-                  />
-                  {renderCardContent(key)}
-                </View>
-              </View>
-            );
-          })}
-          {/* Insert indicator at end */}
-          {draggingKey && hoverIndex === cardOrder.length - 1 && !cardOrder.includes(cardOrder[hoverIndex]) && (
-            <View style={styles.dropIndicator} />
-          )}
+    <GestureHandlerRootView style={styles.container}>
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <View style={styles.header}>
+          <Text style={styles.greeting}>Ciao, {data?.settings?.nome?.split(' ')[0] || 'Marco'}</Text>
+          <Text style={styles.subtitle}>{meseCorrente} {today.getFullYear()}</Text>
         </View>
-        <View style={styles.bottomPadding} />
-      </ScrollView>
-    </SafeAreaView>
-  );
-}
 
-interface DragHandleProps {
-  cardKey: string;
-  cardOrderRef: React.MutableRefObject<string[]>;
-  cardLayouts: React.MutableRefObject<Record<string, { y: number; height: number }>>;
-  scrollOffsetY: React.MutableRefObject<number>;
-  containerPageY: React.MutableRefObject<number>;
-  containerRef: React.MutableRefObject<View | null>;
-  dragY: Animated.Value;
-  setDraggingKey: (k: string | null) => void;
-  setHoverIndex: (i: number) => void;
-  setCardOrder: (order: string[]) => void;
-}
-
-function DragHandle({ cardKey, cardOrderRef, cardLayouts, scrollOffsetY, containerPageY, containerRef, dragY, setDraggingKey, setHoverIndex, setCardOrder }: DragHandleProps) {
-  // relativeY = position within the container's coordinate space
-  // containerPageY is absolute screen Y of container top (from measure())
-  // cardLayouts[key].y is each card's Y within the container (from onLayout)
-  const getHoverIndex = (gesturePageY: number): number => {
-    const order = cardOrderRef.current;
-    const relativeY = gesturePageY - containerPageY.current;
-    for (let i = 0; i < order.length; i++) {
-      const layout = cardLayouts.current[order[i]];
-      if (!layout) continue;
-      if (relativeY < layout.y + layout.height * 0.5) return i;
-    }
-    return order.length - 1;
-  };
-
-  const panResponder = useRef(
-    PanResponder.create({
-      onStartShouldSetPanResponder: () => true,
-      onMoveShouldSetPanResponder: () => true,
-      onPanResponderGrant: () => {
-        // Re-measure container absolute position at drag start (scroll is disabled during drag)
-        containerRef.current?.measure((_x, _y, _w, _h, _pageX, pageY) => {
-          containerPageY.current = pageY;
-        });
-        dragY.setValue(0);
-        Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-        setDraggingKey(cardKey);
-        const currentIndex = cardOrderRef.current.indexOf(cardKey);
-        setHoverIndex(currentIndex);
-      },
-      onPanResponderMove: (evt, gestureState) => {
-        dragY.setValue(gestureState.dy);
-        setHoverIndex(getHoverIndex(evt.nativeEvent.pageY));
-      },
-      onPanResponderRelease: (evt) => {
-        const finalIndex = getHoverIndex(evt.nativeEvent.pageY);
-        const oldOrder = [...cardOrderRef.current];
-        const fromIndex = oldOrder.indexOf(cardKey);
-        if (fromIndex !== -1 && fromIndex !== finalIndex) {
-          const newOrder = [...oldOrder];
-          newOrder.splice(fromIndex, 1);
-          newOrder.splice(finalIndex, 0, cardKey);
-          setCardOrder(newOrder);
-          AsyncStorage.setItem(CARD_ORDER_KEY, JSON.stringify(newOrder));
-        }
-        dragY.setValue(0);
-        setDraggingKey(null);
-        setHoverIndex(-1);
-      },
-      onPanResponderTerminate: () => {
-        dragY.setValue(0);
-        setDraggingKey(null);
-        setHoverIndex(-1);
-      },
-    })
-  ).current;
-
-  return (
-    <View style={styles.dragHandleContainer} {...panResponder.panHandlers}>
-      <Ionicons name="reorder-three" size={22} color={COLORS.textSecondary} />
-    </View>
+        <DraggableFlatList
+          data={cardOrder}
+          keyExtractor={item => item}
+          renderItem={renderItem}
+          onDragEnd={({ data: newOrder }) => {
+            setCardOrder(newOrder);
+            AsyncStorage.setItem(CARD_ORDER_KEY, JSON.stringify(newOrder));
+          }}
+          onPlaceholderIndexChange={index => {
+            // placeholder moves to correct position automatically
+          }}
+          dragItemOverflow
+          contentContainerStyle={styles.content}
+          refreshControl={
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[themeColors.primary]} />
+          }
+          showsVerticalScrollIndicator={false}
+          ListFooterComponent={<View style={styles.bottomPadding} />}
+        />
+      </SafeAreaView>
+    </GestureHandlerRootView>
   );
 }
 
@@ -458,9 +444,6 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: COLORS.background,
-  },
-  scrollView: {
-    flex: 1,
   },
   content: {
     paddingHorizontal: 16,
@@ -480,30 +463,30 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
     marginTop: 4,
   },
-  cardDragging: {
-    shadowColor: COLORS.primary,
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.35,
-    shadowRadius: 14,
-    elevation: 14,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-    zIndex: 10,
+  cardWrapper: {
+    marginBottom: 0,
   },
-  dragHandleContainer: {
-    position: 'absolute',
-    top: 14,
-    right: 52,
-    zIndex: 10,
-    padding: 6,
+  cardActive: {
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.25,
+    shadowRadius: 16,
+    elevation: 16,
+    zIndex: 999,
   },
-  dropIndicator: {
-    height: 3,
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
-    marginHorizontal: 8,
-    marginBottom: 4,
+  cardHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  rightRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  dragHandle: {
+    paddingLeft: 8,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   clockCard: {
     backgroundColor: COLORS.card,

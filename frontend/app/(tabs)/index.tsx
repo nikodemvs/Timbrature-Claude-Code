@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -11,140 +11,15 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import Animated, {
-  useSharedValue,
-  useAnimatedStyle,
-  withSpring,
-  runOnJS,
-  SharedValue,
-} from 'react-native-reanimated';
-import {
-  GestureDetector,
-  Gesture,
-  GestureHandlerRootView,
-} from 'react-native-gesture-handler';
 import { Card, StatCard, LoadingScreen } from '../../src/components';
 import { COLORS } from '../../src/utils/colors';
 import { useAppStore, getThemeColors } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
 import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import AsyncStorage from '@react-native-async-storage/async-storage';
-import * as Haptics from 'expo-haptics';
 
 const CARD_ORDER_KEY = 'home_card_order';
 const DEFAULT_ORDER = ['timbratura', 'riepilogo', 'stima', 'ferie', 'comporto', 'busta'];
-
-// ─── Animated card wrapper ────────────────────────────────────────────────────
-
-interface AnimatedCardWrapperProps {
-  cardKey: string;
-  draggingKeyShared: SharedValue<string>;
-  dragY: SharedValue<number>;
-  dragScale: SharedValue<number>;
-  isActiveDragging: boolean; // React-side flag for shadow style
-  children: React.ReactNode;
-}
-
-function AnimatedCardWrapper({
-  cardKey,
-  draggingKeyShared,
-  dragY,
-  dragScale,
-  isActiveDragging,
-  children,
-}: AnimatedCardWrapperProps) {
-  const animStyle = useAnimatedStyle(() => {
-    const active = draggingKeyShared.value === cardKey;
-    return {
-      transform: [
-        { translateY: active ? dragY.value : 0 },
-        { scale: active ? dragScale.value : 1 },
-      ],
-      zIndex: active ? 999 : 0,
-    };
-  });
-
-  return (
-    <Animated.View style={[animStyle, isActiveDragging && styles.cardActive]}>
-      {children}
-    </Animated.View>
-  );
-}
-
-// ─── Drag handle ──────────────────────────────────────────────────────────────
-
-interface DragHandleProps {
-  cardKey: string;
-  draggingKeyShared: SharedValue<string>;
-  dragY: SharedValue<number>;
-  dragScale: SharedValue<number>;
-  onDragStart: (key: string) => void;
-  onDragMove: (absoluteY: number) => void;
-  onDragEnd: (absoluteY: number) => void;
-  onDragCancel: () => void;
-  measureContainer: () => void;
-}
-
-function DragHandle({
-  cardKey,
-  draggingKeyShared,
-  dragY,
-  dragScale,
-  onDragStart,
-  onDragMove,
-  onDragEnd,
-  onDragCancel,
-  measureContainer,
-}: DragHandleProps) {
-  const gesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activateAfterLongPress(250)
-        .minDistance(0)
-        // onBegin: finger down — do NOT set drag state, just measure position
-        .onBegin(() => {
-          'worklet';
-          runOnJS(measureContainer)();
-        })
-        // onStart: fires ONLY after long-press activation — safe to start drag
-        .onStart(() => {
-          'worklet';
-          draggingKeyShared.value = cardKey;
-          dragY.value = 0;
-          dragScale.value = withSpring(1.05, { damping: 15, stiffness: 200 });
-          runOnJS(onDragStart)(cardKey);
-        })
-        .onUpdate(e => {
-          'worklet';
-          dragY.value = e.translationY;
-          runOnJS(onDragMove)(e.absoluteY);
-        })
-        .onEnd(e => {
-          'worklet';
-          runOnJS(onDragEnd)(e.absoluteY);
-        })
-        // onFinalize: always fires — reset animations and clean up if needed
-        .onFinalize(() => {
-          'worklet';
-          dragScale.value = withSpring(1, { damping: 15 });
-          dragY.value = withSpring(0, { damping: 20 });
-          draggingKeyShared.value = '';
-          runOnJS(onDragCancel)();
-        }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [cardKey],
-  );
-
-  return (
-    <GestureDetector gesture={gesture}>
-      <View style={styles.dragHandle} hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}>
-        <Ionicons name="reorder-three" size={24} color={COLORS.textSecondary} />
-      </View>
-    </GestureDetector>
-  );
-}
-
-// ─── Main screen ──────────────────────────────────────────────────────────────
 
 export default function DashboardScreen() {
   const { dashboard, setDashboard, todayTimbratura, setTodayTimbratura, setUnreadAlerts, theme } =
@@ -161,44 +36,38 @@ export default function DashboardScreen() {
     busta: false,
   });
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
-  const [draggingKey, setDraggingKey] = useState<string | null>(null);
-  const [isDragActive, setIsDragActive] = useState(false);
-  const [hoverIndex, setHoverIndex] = useState<number>(-1);
+  const [editMode, setEditMode] = useState(false);
 
   const themeColors = getThemeColors(theme);
-  const toggle = (key: string) => setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  const toggle = (key: string) => {
+    if (editMode) return;
+    setExpanded(prev => ({ ...prev, [key]: !prev[key] }));
+  };
 
-  // Shared values for smooth animation (stable across renders)
-  const draggingKeyShared = useSharedValue('');
-  const dragY = useSharedValue(0);
-  const dragScale = useSharedValue(1);
-
-  // Stable refs for position calculations (avoid closures in gesture callbacks)
-  const cardOrderRef = useRef<string[]>(DEFAULT_ORDER);
-  const containerRef = useRef<View>(null);
-  const containerPageY = useRef(0);
-  const cardLayouts = useRef<Record<string, { y: number; height: number }>>({});
-  const hoverIndexRef = useRef(-1);
-  const draggingKeyRef = useRef('');
-
-  useEffect(() => { cardOrderRef.current = cardOrder; }, [cardOrder]);
-
-  // ── Load persisted order ───────────────────────────────────────────────────
   useEffect(() => {
     AsyncStorage.getItem(CARD_ORDER_KEY).then(saved => {
       if (saved) {
         try {
           const parsed = JSON.parse(saved);
-          if (Array.isArray(parsed)) {
-            setCardOrder(parsed);
-            cardOrderRef.current = parsed;
-          }
+          if (Array.isArray(parsed)) setCardOrder(parsed);
         } catch {}
       }
     });
   }, []);
 
-  // ── Data loading ──────────────────────────────────────────────────────────
+  const saveOrder = (newOrder: string[]) => {
+    setCardOrder(newOrder);
+    AsyncStorage.setItem(CARD_ORDER_KEY, JSON.stringify(newOrder));
+  };
+
+  const moveCard = (index: number, direction: 'up' | 'down') => {
+    const newOrder = [...cardOrder];
+    const targetIndex = direction === 'up' ? index - 1 : index + 1;
+    if (targetIndex < 0 || targetIndex >= newOrder.length) return;
+    [newOrder[index], newOrder[targetIndex]] = [newOrder[targetIndex], newOrder[index]];
+    saveOrder(newOrder);
+  };
+
   const loadData = useCallback(async () => {
     try {
       const [dashboardRes, timbraturaRes] = await Promise.all([
@@ -223,7 +92,6 @@ export default function DashboardScreen() {
     loadData();
   }, [loadData]);
 
-  // ── Timbratura ────────────────────────────────────────────────────────────
   const handleTimbra = async (tipo: 'entrata' | 'uscita') => {
     setTimbraturaLoading(true);
     try {
@@ -231,7 +99,9 @@ export default function DashboardScreen() {
       setTodayTimbratura(response.data);
       Alert.alert(
         'Timbratura registrata',
-        `${tipo === 'entrata' ? 'Entrata' : 'Uscita'} registrata alle ${tipo === 'entrata' ? response.data.ora_entrata : response.data.ora_uscita}`,
+        `${tipo === 'entrata' ? 'Entrata' : 'Uscita'} registrata alle ${
+          tipo === 'entrata' ? response.data.ora_entrata : response.data.ora_uscita
+        }`,
       );
       loadData();
     } catch (error: any) {
@@ -255,85 +125,6 @@ export default function DashboardScreen() {
     if (ultima && ultima.tipo === 'entrata') handleTimbra('uscita');
   };
 
-  // ── Drag callbacks (stable, called via runOnJS) ───────────────────────────
-  const measureContainer = useCallback(() => {
-    containerRef.current?.measure((_x, _y, _w, _h, _px, pageY) => {
-      containerPageY.current = pageY;
-    });
-  }, []);
-
-  const getHoverIndex = useCallback((absoluteY: number): number => {
-    const relativeY = absoluteY - containerPageY.current;
-    const order = cardOrderRef.current;
-    for (let i = 0; i < order.length; i++) {
-      const layout = cardLayouts.current[order[i]];
-      if (!layout) continue;
-      if (relativeY < layout.y + layout.height * 0.5) return i;
-    }
-    return order.length - 1;
-  }, []);
-
-  const onDragStart = useCallback((key: string) => {
-    draggingKeyRef.current = key;
-    setDraggingKey(key);
-    setIsDragActive(true);
-    const idx = cardOrderRef.current.indexOf(key);
-    hoverIndexRef.current = idx;
-    setHoverIndex(idx);
-    Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
-  }, []);
-
-  const onDragMove = useCallback((absoluteY: number) => {
-    const newHover = getHoverIndex(absoluteY);
-    if (newHover !== hoverIndexRef.current) {
-      hoverIndexRef.current = newHover;
-      setHoverIndex(newHover);
-    }
-  }, [getHoverIndex]);
-
-  const onDragEnd = useCallback((absoluteY: number) => {
-    const key = draggingKeyRef.current;
-    if (!key) return;
-    const finalIndex = getHoverIndex(absoluteY);
-    const oldOrder = [...cardOrderRef.current];
-    const fromIndex = oldOrder.indexOf(key);
-    if (fromIndex !== -1 && fromIndex !== finalIndex) {
-      const newOrder = [...oldOrder];
-      newOrder.splice(fromIndex, 1);
-      newOrder.splice(finalIndex, 0, key);
-      setCardOrder(newOrder);
-      AsyncStorage.setItem(CARD_ORDER_KEY, JSON.stringify(newOrder));
-    }
-    draggingKeyRef.current = '';
-    setDraggingKey(null);
-    setIsDragActive(false);
-    hoverIndexRef.current = -1;
-    setHoverIndex(-1);
-  }, [getHoverIndex]);
-
-  // Called from onFinalize — resets state if onDragEnd didn't already clean up
-  const onDragCancel = useCallback(() => {
-    if (!draggingKeyRef.current) return; // already cleaned up by onDragEnd
-    draggingKeyRef.current = '';
-    setDraggingKey(null);
-    setIsDragActive(false);
-    hoverIndexRef.current = -1;
-    setHoverIndex(-1);
-  }, []);
-
-  // ── Shared drag handle props ───────────────────────────────────────────────
-  const dragHandleProps = {
-    draggingKeyShared,
-    dragY,
-    dragScale,
-    onDragStart,
-    onDragMove,
-    onDragEnd,
-    onDragCancel,
-    measureContainer,
-  };
-
-  // ── Render ────────────────────────────────────────────────────────────────
   if (loading) return <LoadingScreen message="Caricamento dashboard..." />;
 
   const data = dashboard;
@@ -344,29 +135,51 @@ export default function DashboardScreen() {
   const entrataActive = !ultimaMarcatura || ultimaMarcatura.tipo === 'uscita';
   const uscitaActive = ultimaMarcatura && ultimaMarcatura.tipo === 'entrata';
 
-  const renderCardContent = (key: string) => {
+  // Frecce di riordino mostrate in modalità modifica
+  const OrderControls = ({ index }: { index: number }) => (
+    <View style={styles.orderControls}>
+      <TouchableOpacity
+        style={[styles.arrowBtn, index === 0 && styles.arrowBtnDisabled]}
+        onPress={() => moveCard(index, 'up')}
+        disabled={index === 0}
+      >
+        <Ionicons name="chevron-up" size={20} color={index === 0 ? COLORS.border : themeColors.primary} />
+      </TouchableOpacity>
+      <TouchableOpacity
+        style={[styles.arrowBtn, index === cardOrder.length - 1 && styles.arrowBtnDisabled]}
+        onPress={() => moveCard(index, 'down')}
+        disabled={index === cardOrder.length - 1}
+      >
+        <Ionicons name="chevron-down" size={20} color={index === cardOrder.length - 1 ? COLORS.border : themeColors.primary} />
+      </TouchableOpacity>
+    </View>
+  );
+
+  const renderCardContent = (key: string, index: number) => {
     switch (key) {
       case 'timbratura':
         return (
-          <Card style={styles.clockCard}>
+          <Card style={[styles.clockCard, editMode && styles.cardEditMode]}>
             <View style={styles.cardHeaderRow}>
               <TouchableOpacity
                 style={styles.clockHeaderTouchable}
                 onPress={() => toggle('timbratura')}
-                activeOpacity={0.7}
+                activeOpacity={editMode ? 1 : 0.7}
               >
                 <Ionicons name="finger-print" size={24} color={themeColors.primary} />
                 <Text style={[styles.clockTitle, { flex: 1 }]}>Timbratura Rapida</Text>
-                <Ionicons
-                  name={expanded.timbratura ? 'chevron-up' : 'chevron-down'}
-                  size={20}
-                  color={COLORS.textSecondary}
-                />
+                {!editMode && (
+                  <Ionicons
+                    name={expanded.timbratura ? 'chevron-up' : 'chevron-down'}
+                    size={20}
+                    color={COLORS.textSecondary}
+                  />
+                )}
               </TouchableOpacity>
-              <DragHandle cardKey="timbratura" {...dragHandleProps} />
+              {editMode && <OrderControls index={index} />}
             </View>
 
-            {expanded.timbratura && todayTimbratura ? (
+            {!editMode && expanded.timbratura && todayTimbratura ? (
               <View style={styles.clockInfo}>
                 {marcature.length > 0 ? (
                   <View style={styles.marcatureList}>
@@ -406,11 +219,11 @@ export default function DashboardScreen() {
                   </Text>
                 </View>
               </View>
-            ) : expanded.timbratura ? (
+            ) : !editMode && expanded.timbratura ? (
               <Text style={styles.clockEmpty}>Nessuna timbratura oggi</Text>
             ) : null}
 
-            {expanded.timbratura && (
+            {!editMode && expanded.timbratura && (
               <View style={styles.clockButtons}>
                 <TouchableOpacity
                   style={[styles.clockButton, entrataActive ? styles.clockButtonEntrata : styles.clockButtonDisabled]}
@@ -456,14 +269,13 @@ export default function DashboardScreen() {
             icon="bar-chart"
             iconColor={themeColors.primary}
             onPress={() => toggle('riepilogo')}
+            style={editMode ? styles.cardEditMode : undefined}
             rightElement={
-              <View style={styles.rightRow}>
-                <Ionicons name={expanded.riepilogo ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
-                <DragHandle cardKey="riepilogo" {...dragHandleProps} />
-              </View>
+              editMode ? <OrderControls index={index} /> :
+              <Ionicons name={expanded.riepilogo ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
             }
           >
-            {expanded.riepilogo && (
+            {!editMode && expanded.riepilogo && (
               <View style={styles.statsGrid}>
                 <StatCard label="Ore Lavorate" value={data?.mese_corrente?.ore_lavorate?.toFixed(1) || '0'} unit="h" color={themeColors.primary} />
                 <StatCard label="Straordinari" value={data?.mese_corrente?.ore_straordinarie?.toFixed(1) || '0'} unit="h" color={COLORS.overtime} />
@@ -481,14 +293,13 @@ export default function DashboardScreen() {
             icon="wallet"
             iconColor={COLORS.success}
             onPress={() => toggle('stima')}
+            style={editMode ? styles.cardEditMode : undefined}
             rightElement={
-              <View style={styles.rightRow}>
-                <Ionicons name={expanded.stima ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
-                <DragHandle cardKey="stima" {...dragHandleProps} />
-              </View>
+              editMode ? <OrderControls index={index} /> :
+              <Ionicons name={expanded.stima ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
             }
           >
-            {expanded.stima && (
+            {!editMode && expanded.stima && (
               <>
                 <View style={styles.estimateContainer}>
                   <Text style={styles.estimateValue}>{formatCurrency(data?.stime?.netto_stimato || 0)}</Text>
@@ -520,14 +331,13 @@ export default function DashboardScreen() {
             icon="airplane"
             iconColor={COLORS.ferie}
             onPress={() => toggle('ferie')}
+            style={editMode ? styles.cardEditMode : undefined}
             rightElement={
-              <View style={styles.rightRow}>
-                <Ionicons name={expanded.ferie ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
-                <DragHandle cardKey="ferie" {...dragHandleProps} />
-              </View>
+              editMode ? <OrderControls index={index} /> :
+              <Ionicons name={expanded.ferie ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
             }
           >
-            {expanded.ferie && (
+            {!editMode && expanded.ferie && (
               <View style={styles.balanceContainer}>
                 <View style={styles.balanceMain}>
                   <Text style={[styles.balanceValue, { color: COLORS.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) || '0'}</Text>
@@ -555,14 +365,13 @@ export default function DashboardScreen() {
             icon="medkit"
             iconColor={COLORS.malattia}
             onPress={() => toggle('comporto')}
+            style={editMode ? styles.cardEditMode : undefined}
             rightElement={
-              <View style={styles.rightRow}>
-                <Ionicons name={expanded.comporto ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
-                <DragHandle cardKey="comporto" {...dragHandleProps} />
-              </View>
+              editMode ? <OrderControls index={index} /> :
+              <Ionicons name={expanded.comporto ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
             }
           >
-            {expanded.comporto && (
+            {!editMode && expanded.comporto && (
               <View style={styles.comportoContainer}>
                 <View style={styles.comportoMain}>
                   <Text style={[
@@ -591,14 +400,13 @@ export default function DashboardScreen() {
             icon="receipt"
             iconColor={themeColors.primary}
             onPress={() => toggle('busta')}
+            style={editMode ? styles.cardEditMode : undefined}
             rightElement={
-              <View style={styles.rightRow}>
-                <Ionicons name={expanded.busta ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
-                <DragHandle cardKey="busta" {...dragHandleProps} />
-              </View>
+              editMode ? <OrderControls index={index} /> :
+              <Ionicons name={expanded.busta ? 'chevron-up' : 'chevron-down'} size={20} color={COLORS.textSecondary} />
             }
           >
-            {expanded.busta && (
+            {!editMode && expanded.busta && (
               <View style={styles.payslipRow}>
                 <Text style={styles.payslipLabel}>Netto</Text>
                 <Text style={styles.payslipValue}>{formatCurrency(data.ultima_busta.netto)}</Text>
@@ -613,114 +421,118 @@ export default function DashboardScreen() {
   };
 
   return (
-    <GestureHandlerRootView style={styles.container}>
-      <SafeAreaView style={styles.container} edges={['top']}>
-        <View style={styles.header}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      {/* Header */}
+      <View style={styles.header}>
+        <View>
           <Text style={styles.greeting}>Ciao, {data?.settings?.nome?.split(' ')[0] || 'Marco'}</Text>
           <Text style={styles.subtitle}>{meseCorrente} {today.getFullYear()}</Text>
         </View>
-
-        <ScrollView
-          style={styles.scrollView}
-          contentContainerStyle={styles.content}
-          scrollEnabled={!isDragActive}
-          onScroll={e => {
-            // Keep containerPageY accurate while scrolling (not during drag)
-            if (!draggingKey) {
-              containerRef.current?.measure((_x, _y, _w, _h, _px, pageY) => {
-                containerPageY.current = pageY;
-              });
-            }
-          }}
-          scrollEventThrottle={32}
-          refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[themeColors.primary]} />
-          }
-          showsVerticalScrollIndicator={false}
+        <TouchableOpacity
+          style={[styles.editButton, editMode && styles.editButtonActive]}
+          onPress={() => setEditMode(prev => !prev)}
         >
-          <View
-            ref={containerRef}
-            onLayout={() => {
-              containerRef.current?.measure((_x, _y, _w, _h, _px, pageY) => {
-                containerPageY.current = pageY;
-              });
-            }}
-          >
-            {cardOrder.map((key, index) => {
-              // Show indicator only when drag is truly active (after long-press activation)
-              // and the target position differs from the dragged card's own position
-              const fromIndex = isDragActive ? cardOrder.indexOf(draggingKey!) : -1;
-              const showIndicator =
-                isDragActive &&
-                draggingKey !== key &&
-                hoverIndex === index &&
-                hoverIndex !== fromIndex;
-              const isActive = isDragActive && draggingKey === key;
+          <Ionicons
+            name={editMode ? 'checkmark' : 'pencil'}
+            size={18}
+            color={editMode ? COLORS.textWhite : themeColors.primary}
+          />
+          <Text style={[styles.editButtonText, editMode && styles.editButtonTextActive]}>
+            {editMode ? 'Fatto' : 'Ordina'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
-              return (
-                <View key={key}>
-                  {showIndicator && <View style={styles.dropIndicator} />}
-                  <AnimatedCardWrapper
-                    cardKey={key}
-                    draggingKeyShared={draggingKeyShared}
-                    dragY={dragY}
-                    dragScale={dragScale}
-                    isActiveDragging={isActive}
-                  >
-                    <View
-                      onLayout={e => {
-                        cardLayouts.current[key] = {
-                          y: e.nativeEvent.layout.y,
-                          height: e.nativeEvent.layout.height,
-                        };
-                      }}
-                    >
-                      {renderCardContent(key)}
-                    </View>
-                  </AnimatedCardWrapper>
-                </View>
-              );
-            })}
+      {editMode && (
+        <Text style={styles.editHint}>Usa ↑ ↓ per riordinare le sezioni</Text>
+      )}
+
+      <ScrollView
+        style={styles.scrollView}
+        contentContainerStyle={styles.content}
+        refreshControl={
+          !editMode
+            ? <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[themeColors.primary]} />
+            : undefined
+        }
+        showsVerticalScrollIndicator={false}
+      >
+        {cardOrder.map((key, index) => (
+          <View key={key}>
+            {renderCardContent(key, index)}
           </View>
-          <View style={styles.bottomPadding} />
-        </ScrollView>
-      </SafeAreaView>
-    </GestureHandlerRootView>
+        ))}
+        <View style={styles.bottomPadding} />
+      </ScrollView>
+    </SafeAreaView>
   );
 }
-
-// ─── Styles ───────────────────────────────────────────────────────────────────
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: COLORS.background },
   scrollView: { flex: 1 },
   content: { paddingHorizontal: 16 },
-  header: { paddingHorizontal: 16, paddingTop: 8, marginBottom: 20 },
+  header: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    marginBottom: 12,
+  },
   greeting: { fontSize: 28, fontWeight: '700', color: COLORS.text },
   subtitle: { fontSize: 16, color: COLORS.textSecondary, marginTop: 4 },
-  cardActive: {
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.25,
-    shadowRadius: 18,
-    elevation: 18,
-  },
-  dropIndicator: {
-    height: 3,
-    backgroundColor: COLORS.primary,
-    borderRadius: 2,
-    marginHorizontal: 4,
-    marginVertical: 2,
-  },
-  dragHandle: {
-    paddingLeft: 10,
-    justifyContent: 'center',
+  editButton: {
+    flexDirection: 'row',
     alignItems: 'center',
+    gap: 6,
+    paddingHorizontal: 14,
+    paddingVertical: 8,
+    borderRadius: 20,
+    borderWidth: 1.5,
+    borderColor: COLORS.primary,
   },
-  rightRow: { flexDirection: 'row', alignItems: 'center', gap: 2 },
+  editButtonActive: {
+    backgroundColor: COLORS.primary,
+    borderColor: COLORS.primary,
+  },
+  editButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: COLORS.primary,
+  },
+  editButtonTextActive: {
+    color: COLORS.textWhite,
+  },
+  editHint: {
+    textAlign: 'center',
+    fontSize: 13,
+    color: COLORS.textSecondary,
+    marginBottom: 8,
+    marginHorizontal: 16,
+  },
+  cardEditMode: {
+    opacity: 0.92,
+  },
+  orderControls: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  arrowBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+    backgroundColor: COLORS.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  arrowBtnDisabled: {
+    backgroundColor: 'transparent',
+  },
+  clockCard: { backgroundColor: COLORS.card },
   cardHeaderRow: { flexDirection: 'row', alignItems: 'center' },
   clockHeaderTouchable: { flex: 1, flexDirection: 'row', alignItems: 'center' },
-  clockCard: { backgroundColor: COLORS.card },
   clockTitle: { fontSize: 18, fontWeight: '600', color: COLORS.text, marginLeft: 12 },
   clockInfo: { marginTop: 16, marginBottom: 16 },
   clockTimeRow: { flexDirection: 'row', justifyContent: 'space-around', alignItems: 'center' },

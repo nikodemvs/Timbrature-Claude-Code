@@ -21,6 +21,18 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const CARD_ORDER_KEY = 'home_card_order';
 const DEFAULT_ORDER = ['timbratura', 'riepilogo', 'stima', 'ferie', 'comporto', 'busta'];
 
+function formatHMS(totalSeconds: number): string {
+  const h = Math.floor(totalSeconds / 3600);
+  const m = Math.floor((totalSeconds % 3600) / 60);
+  const s = totalSeconds % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
+function parseOraToSeconds(ora: string): number {
+  const parts = ora.split(':');
+  return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parts[2] ? parseInt(parts[2]) : 0);
+}
+
 export default function DashboardScreen() {
   const { dashboard, setDashboard, todayTimbratura, setTodayTimbratura, setUnreadAlerts, theme } =
     useAppStore();
@@ -37,6 +49,7 @@ export default function DashboardScreen() {
   });
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
   const [editMode, setEditMode] = useState(false);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   const themeColors = getThemeColors(theme);
   const toggle = (key: string) => {
@@ -92,6 +105,30 @@ export default function DashboardScreen() {
     loadData();
   }, [loadData]);
 
+  // Ora dell'ultima entrata non ancora chiusa (null se cloccato fuori o nessuna timbratura)
+  const activeEntrataOra = (() => {
+    const m = todayTimbratura?.marcature || [];
+    const last = m.length > 0 ? m[m.length - 1] : null;
+    return last?.tipo === 'entrata' ? (last.ora as string) : null;
+  })();
+
+  useEffect(() => {
+    if (!activeEntrataOra) {
+      setElapsedSeconds(0);
+      return;
+    }
+    const now = new Date();
+    const parts = activeEntrataOra.split(':');
+    const start = new Date(
+      now.getFullYear(), now.getMonth(), now.getDate(),
+      parseInt(parts[0]), parseInt(parts[1]), parts[2] ? parseInt(parts[2]) : 0, 0
+    );
+    const compute = () => Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
+    setElapsedSeconds(compute());
+    const interval = setInterval(() => setElapsedSeconds(compute()), 1000);
+    return () => clearInterval(interval);
+  }, [activeEntrataOra]);
+
   const handleTimbra = async (tipo: 'entrata' | 'uscita') => {
     setTimbraturaLoading(true);
     try {
@@ -134,6 +171,17 @@ export default function DashboardScreen() {
   const ultimaMarcatura = marcature.length > 0 ? marcature[marcature.length - 1] : null;
   const entrataActive = !ultimaMarcatura || ultimaMarcatura.tipo === 'uscita';
   const uscitaActive = ultimaMarcatura && ultimaMarcatura.tipo === 'entrata';
+
+  // Secondi totali lavorati oggi (somma coppie E-U complete)
+  const totalWorkedSeconds = (() => {
+    let total = 0;
+    for (let i = 0; i + 1 < marcature.length; i += 2) {
+      if (marcature[i]?.tipo === 'entrata' && marcature[i + 1]?.tipo === 'uscita') {
+        total += parseOraToSeconds(marcature[i + 1].ora) - parseOraToSeconds(marcature[i].ora);
+      }
+    }
+    return total > 0 ? total : null;
+  })();
 
   // Frecce di riordino mostrate in modalità modifica
   const OrderControls = ({ index }: { index: number }) => (
@@ -178,6 +226,17 @@ export default function DashboardScreen() {
               </TouchableOpacity>
               {editMode && <OrderControls index={index} />}
             </View>
+
+            {!editMode && expanded.timbratura && (activeEntrataOra || totalWorkedSeconds) && (
+              <View style={styles.timerContainer}>
+                <Text style={[styles.timerDisplay, activeEntrataOra ? styles.timerActive : styles.timerStopped]}>
+                  {activeEntrataOra ? formatHMS(elapsedSeconds) : formatHMS(totalWorkedSeconds!)}
+                </Text>
+                <Text style={styles.timerSubLabel}>
+                  {activeEntrataOra ? `in corso dal ${activeEntrataOra}` : 'sessione conclusa'}
+                </Text>
+              </View>
+            )}
 
             {!editMode && expanded.timbratura && todayTimbratura ? (
               <View style={styles.clockInfo}>
@@ -582,4 +641,9 @@ const styles = StyleSheet.create({
   oreTotaliRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8, borderTopWidth: 1, borderTopColor: COLORS.border },
   oreTotaliLabel: { fontSize: 14, color: COLORS.textSecondary },
   oreTotaliValue: { fontSize: 20, fontWeight: '700', color: COLORS.primary },
+  timerContainer: { alignItems: 'center', paddingVertical: 16 },
+  timerDisplay: { fontSize: 52, fontWeight: '700', letterSpacing: 3, fontVariant: ['tabular-nums'] },
+  timerActive: { color: COLORS.success },
+  timerStopped: { color: COLORS.text },
+  timerSubLabel: { fontSize: 13, color: COLORS.textSecondary, marginTop: 6 },
 });

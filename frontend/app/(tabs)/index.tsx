@@ -172,16 +172,23 @@ export default function DashboardScreen() {
   const entrataActive = !ultimaMarcatura || ultimaMarcatura.tipo === 'uscita';
   const uscitaActive = ultimaMarcatura && ultimaMarcatura.tipo === 'entrata';
 
-  // Secondi totali lavorati oggi (somma coppie E-U complete)
-  const totalWorkedSeconds = (() => {
+  // Secondi totali lavorati oggi: somma coppie E-U complete + sessione corrente se attiva
+  const workedSecondsTotal = (() => {
     let total = 0;
-    for (let i = 0; i + 1 < marcature.length; i += 2) {
-      if (marcature[i]?.tipo === 'entrata' && marcature[i + 1]?.tipo === 'uscita') {
-        total += parseOraToSeconds(marcature[i + 1].ora) - parseOraToSeconds(marcature[i].ora);
+    let lastEntrata: string | null = null;
+    for (const m of marcature) {
+      if (m.tipo === 'entrata') {
+        lastEntrata = m.ora;
+      } else if (m.tipo === 'uscita' && lastEntrata) {
+        total += parseOraToSeconds(m.ora) - parseOraToSeconds(lastEntrata);
+        lastEntrata = null;
       }
     }
-    return total > 0 ? total : null;
+    // Aggiunge il tempo della sessione corrente se l'utente è ancora timbrato
+    if (activeEntrataOra) total += elapsedSeconds;
+    return total;
   })();
+  const workedHoursDecimal = workedSecondsTotal / 3600;
 
   // Frecce di riordino mostrate in modalità modifica
   const OrderControls = ({ index }: { index: number }) => (
@@ -227,10 +234,10 @@ export default function DashboardScreen() {
               {editMode && <OrderControls index={index} />}
             </View>
 
-            {!editMode && expanded.timbratura && (activeEntrataOra || totalWorkedSeconds) && (
+            {!editMode && expanded.timbratura && marcature.length > 0 && (
               <View style={styles.timerContainer}>
                 <Text style={[styles.timerDisplay, activeEntrataOra ? styles.timerActive : styles.timerStopped]}>
-                  {activeEntrataOra ? formatHMS(elapsedSeconds) : formatHMS(totalWorkedSeconds!)}
+                  {formatHMS(workedSecondsTotal)}
                 </Text>
                 <Text style={styles.timerSubLabel}>
                   {activeEntrataOra ? `in corso dal ${activeEntrataOra}` : 'sessione conclusa'}
@@ -274,7 +281,7 @@ export default function DashboardScreen() {
                 <View style={styles.oreTotaliRow}>
                   <Text style={styles.oreTotaliLabel}>Ore lavorate:</Text>
                   <Text style={styles.oreTotaliValue}>
-                    {todayTimbratura.ore_arrotondate?.toFixed(1) || '0.0'}h
+                    {workedHoursDecimal.toFixed(2)}h
                   </Text>
                 </View>
               </View>

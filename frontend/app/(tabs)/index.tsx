@@ -81,6 +81,7 @@ interface DragHandleProps {
   onDragStart: (key: string) => void;
   onDragMove: (absoluteY: number) => void;
   onDragEnd: (absoluteY: number) => void;
+  onDragCancel: () => void;
   measureContainer: () => void;
 }
 
@@ -92,19 +93,26 @@ function DragHandle({
   onDragStart,
   onDragMove,
   onDragEnd,
+  onDragCancel,
   measureContainer,
 }: DragHandleProps) {
   const gesture = useMemo(
     () =>
       Gesture.Pan()
-        .activateAfterLongPress(200)
+        .activateAfterLongPress(250)
+        .minDistance(0)
+        // onBegin: finger down — do NOT set drag state, just measure position
         .onBegin(() => {
           'worklet';
           runOnJS(measureContainer)();
-          runOnJS(onDragStart)(cardKey);
+        })
+        // onStart: fires ONLY after long-press activation — safe to start drag
+        .onStart(() => {
+          'worklet';
           draggingKeyShared.value = cardKey;
           dragY.value = 0;
           dragScale.value = withSpring(1.05, { damping: 15, stiffness: 200 });
+          runOnJS(onDragStart)(cardKey);
         })
         .onUpdate(e => {
           'worklet';
@@ -115,11 +123,13 @@ function DragHandle({
           'worklet';
           runOnJS(onDragEnd)(e.absoluteY);
         })
+        // onFinalize: always fires — reset animations and clean up if needed
         .onFinalize(() => {
           'worklet';
           dragScale.value = withSpring(1, { damping: 15 });
           dragY.value = withSpring(0, { damping: 20 });
           draggingKeyShared.value = '';
+          runOnJS(onDragCancel)();
         }),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [cardKey],
@@ -152,6 +162,7 @@ export default function DashboardScreen() {
   });
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
   const [draggingKey, setDraggingKey] = useState<string | null>(null);
+  const [isDragActive, setIsDragActive] = useState(false);
   const [hoverIndex, setHoverIndex] = useState<number>(-1);
 
   const themeColors = getThemeColors(theme);
@@ -265,6 +276,7 @@ export default function DashboardScreen() {
   const onDragStart = useCallback((key: string) => {
     draggingKeyRef.current = key;
     setDraggingKey(key);
+    setIsDragActive(true);
     const idx = cardOrderRef.current.indexOf(key);
     hoverIndexRef.current = idx;
     setHoverIndex(idx);
@@ -294,9 +306,20 @@ export default function DashboardScreen() {
     }
     draggingKeyRef.current = '';
     setDraggingKey(null);
+    setIsDragActive(false);
     hoverIndexRef.current = -1;
     setHoverIndex(-1);
   }, [getHoverIndex]);
+
+  // Called from onFinalize — resets state if onDragEnd didn't already clean up
+  const onDragCancel = useCallback(() => {
+    if (!draggingKeyRef.current) return; // already cleaned up by onDragEnd
+    draggingKeyRef.current = '';
+    setDraggingKey(null);
+    setIsDragActive(false);
+    hoverIndexRef.current = -1;
+    setHoverIndex(-1);
+  }, []);
 
   // ── Shared drag handle props ───────────────────────────────────────────────
   const dragHandleProps = {
@@ -306,6 +329,7 @@ export default function DashboardScreen() {
     onDragStart,
     onDragMove,
     onDragEnd,
+    onDragCancel,
     measureContainer,
   };
 
@@ -599,7 +623,7 @@ export default function DashboardScreen() {
         <ScrollView
           style={styles.scrollView}
           contentContainerStyle={styles.content}
-          scrollEnabled={!draggingKey}
+          scrollEnabled={!isDragActive}
           onScroll={e => {
             // Keep containerPageY accurate while scrolling (not during drag)
             if (!draggingKey) {
@@ -623,8 +647,15 @@ export default function DashboardScreen() {
             }}
           >
             {cardOrder.map((key, index) => {
-              const showIndicator = draggingKey !== null && draggingKey !== key && hoverIndex === index;
-              const isActive = draggingKey === key;
+              // Show indicator only when drag is truly active (after long-press activation)
+              // and the target position differs from the dragged card's own position
+              const fromIndex = isDragActive ? cardOrder.indexOf(draggingKey!) : -1;
+              const showIndicator =
+                isDragActive &&
+                draggingKey !== key &&
+                hoverIndex === index &&
+                hoverIndex !== fromIndex;
+              const isActive = isDragActive && draggingKey === key;
 
               return (
                 <View key={key}>
@@ -650,10 +681,6 @@ export default function DashboardScreen() {
                 </View>
               );
             })}
-            {/* Indicator at the end of the list */}
-            {draggingKey !== null && hoverIndex === cardOrder.length - 1 && (
-              <View style={styles.dropIndicator} />
-            )}
           </View>
           <View style={styles.bottomPadding} />
         </ScrollView>

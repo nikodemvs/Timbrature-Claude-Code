@@ -37,7 +37,7 @@ _gemini_client: genai.Client = None
 
 class UserSettings(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    nome: str = "Zambara Marco"
+    nome: str = "Marco Zambara"
     qualifica: str = "Operaio"
     livello: int = 5
     azienda: str = "Plastiape SpA"

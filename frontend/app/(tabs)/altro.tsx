@@ -13,7 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
+import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
 import { COLORS } from '../../src/utils/colors';
 import { useAppStore, THEMES, ThemeKey, getThemeColors } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
@@ -73,52 +73,52 @@ export default function AltroScreen() {
 
   const themeColors = getThemeColors(theme);
 
-  const loadChatHistory = async () => {
+  const loadChatHistory = useCallback(async () => {
     try {
       const response = await api.getChatHistory(50);
       setMessages(response.data);
     } catch (error) {
       console.error('Error loading chat history:', error);
     }
-  };
+  }, []);
 
-  const loadAlerts = async () => {
+  const loadAlerts = useCallback(async () => {
     try {
       const response = await api.getAlerts();
       setAlerts(response.data);
     } catch (error) {
       console.error('Error loading alerts:', error);
     }
-  };
+  }, []);
 
-  const loadReperibilita = async () => {
+  const loadReperibilita = useCallback(async () => {
     try {
       const response = await api.getReperibilita();
       setReperibilita(response.data);
     } catch (error) {
       console.error('Error loading reperibilita:', error);
     }
-  };
+  }, []);
 
-  const loadStats = async () => {
+  const loadStats = useCallback(async () => {
     try {
       const response = await api.getStatisticheMensili(selectedYear);
       setStatsData(response.data);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
-  };
+  }, [selectedYear]);
 
-  const loadDailyStats = async () => {
+  const loadDailyStats = useCallback(async () => {
     try {
       const response = await api.getTimbrature({ mese: selectedMonth, anno: selectedYear });
       setDailyStats(response.data);
     } catch (error) {
       console.error('Error loading daily stats:', error);
     }
-  };
+  }, [selectedMonth, selectedYear]);
 
-  const loadAllYearsStats = async () => {
+  const loadAllYearsStats = useCallback(async () => {
     try {
       const currentYear = new Date().getFullYear();
       const yearsData = [];
@@ -134,20 +134,20 @@ export default function AltroScreen() {
             ore_straordinarie: yearOvertime,
             netto_totale: yearNetto,
           });
-        } catch (e) {}
+        } catch {}
       }
       setAllYearsStats(yearsData);
     } catch (error) {
       console.error('Error loading all years stats:', error);
     }
-  };
+  }, []);
 
   useEffect(() => {
     if (activeTab === 'chat') loadChatHistory();
     else if (activeTab === 'alerts') loadAlerts();
     else if (activeTab === 'reperibilita') loadReperibilita();
     else if (activeTab === 'stats') loadStats();
-  }, [activeTab]);
+  }, [activeTab, loadAlerts, loadChatHistory, loadReperibilita, loadStats]);
 
   useEffect(() => {
     if (activeTab === 'stats') {
@@ -155,7 +155,7 @@ export default function AltroScreen() {
       else if (statsZoom === 'tutti') loadAllYearsStats();
       else loadStats();
     }
-  }, [statsZoom, selectedYear, selectedMonth]);
+  }, [activeTab, loadAllYearsStats, loadDailyStats, loadStats, selectedMonth, selectedYear, statsZoom]);
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
@@ -202,7 +202,7 @@ export default function AltroScreen() {
             await api.clearChatHistory();
             setMessages([]);
             setChatSessionId(null);
-          } catch (error) {
+          } catch {
             Alert.alert('Errore', 'Impossibile cancellare');
           }
         },
@@ -274,7 +274,7 @@ export default function AltroScreen() {
               });
               setShowEditSheet(false);
               Alert.alert('Successo', 'Dati aggiornati correttamente');
-            } catch (error) {
+            } catch {
               Alert.alert('Errore', 'Impossibile salvare le modifiche');
             } finally {
               setSavingSettings(false);
@@ -368,7 +368,7 @@ export default function AltroScreen() {
         )}
       />
       
-      {chatLoading && <View style={styles.chatTyping}><Text style={styles.chatTypingText}>L'assistente sta scrivendo...</Text></View>}
+      {chatLoading && <View style={styles.chatTyping}><Text style={styles.chatTypingText}>{"L'assistente sta scrivendo..."}</Text></View>}
       
       <View style={styles.chatInputContainer}>
         <TextInput

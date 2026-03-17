@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
-import * as FileSystem from 'expo-file-system';
 import { Card, Button, BottomSheet, InputField, LoadingScreen } from '../../src/components';
 import { COLORS } from '../../src/utils/colors';
 import * as api from '../../src/services/api';
@@ -112,11 +111,6 @@ export default function BustePagaScreen() {
 
       const file = result.assets[0];
       setUploading(true);
-
-      // Read file as base64
-      const base64 = await FileSystem.readAsStringAsync(file.uri, {
-        encoding: FileSystem.EncodingType.Base64,
-      });
 
       // Create form data
       const formData = new FormData();

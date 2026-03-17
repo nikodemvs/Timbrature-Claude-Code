@@ -17,6 +17,7 @@ export const COLORS = {
   
   // Background
   background: '#F8FAFC',
+  surface: '#FFFFFF',
   card: '#FFFFFF',
   cardDark: '#F1F5F9',
   

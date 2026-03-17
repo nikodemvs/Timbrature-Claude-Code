@@ -108,7 +108,7 @@ export default function AssenzeScreen() {
             try {
               await api.deleteAssenza(id);
               loadData();
-            } catch (error) {
+            } catch {
               Alert.alert('Errore', 'Impossibile eliminare');
             }
           },

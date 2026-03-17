@@ -3,12 +3,10 @@ import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
   RefreshControl,
   TouchableOpacity,
   Alert,
   FlatList,
-  Platform,
   Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -17,7 +15,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
 import { COLORS } from '../../src/utils/colors';
 import * as api from '../../src/services/api';
-import { formatDate, getGiornoSettimana, getTodayString, formatHours } from '../../src/utils/helpers';
+import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
 import { Timbratura, WeeklySummary } from '../../src/types';
 
 type TabType = 'personali' | 'aziendali' | 'confronto';
@@ -82,7 +80,7 @@ export default function TimbraturaScreen() {
       try {
         const azRes = await api.getTimbratureAziendali({ mese: meseSelezionato, anno: annoSelezionato });
         setTimbratureAziendali(azRes.data || []);
-      } catch (e) {
+      } catch {
         console.log('No company timbrature');
       }
       
@@ -91,7 +89,7 @@ export default function TimbraturaScreen() {
         const confRes = await api.getConfrontoTimbrature(meseSelezionato, annoSelezionato);
         setConfronto(confRes.data.confronti || []);
         setConfrontoRiepilogo(confRes.data.riepilogo);
-      } catch (e) {
+      } catch {
         console.log('No confronto data');
       }
     } catch (error) {
@@ -198,7 +196,7 @@ export default function TimbraturaScreen() {
             try {
               await api.deleteTimbratura(data);
               loadData();
-            } catch (error) {
+            } catch {
               Alert.alert('Errore', 'Impossibile eliminare');
             }
           },

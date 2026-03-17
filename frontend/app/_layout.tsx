@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { View, ActivityIndicator, StyleSheet, Platform } from 'react-native';
@@ -10,11 +10,7 @@ export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
   const { setAuthenticated } = useAppStore();
 
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
+  const checkAuth = useCallback(async () => {
     try {
       // On web, skip authentication and allow direct access
       if (Platform.OS === 'web') {
@@ -58,7 +54,11 @@ export default function RootLayout() {
     } finally {
       setIsReady(true);
     }
-  };
+  }, [setAuthenticated]);
+
+  useEffect(() => {
+    checkAuth();
+  }, [checkAuth]);
 
   if (!isReady) {
     return (

@@ -96,7 +96,7 @@ export default function DashboardScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [setDashboard, setTodayTimbratura, setUnreadAlerts]);
 
   useEffect(() => { loadData(); }, [loadData]);
 

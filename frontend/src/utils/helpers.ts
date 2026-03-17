@@ -1,4 +1,4 @@
-import { format, parseISO, startOfWeek, endOfWeek, addDays } from 'date-fns';
+import { format, parseISO, startOfWeek, endOfWeek } from 'date-fns';
 import { it } from 'date-fns/locale';
 
 export const formatDate = (dateStr: string, formatStr: string = 'dd/MM/yyyy'): string => {

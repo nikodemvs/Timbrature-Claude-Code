@@ -1,0 +1,9 @@
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+asyncio_mode = "auto"
+markers = [
+  "unit: test unitari rapidi sulle funzioni pure e sugli aggregatori diretti",
+  "api: test HTTP su FastAPI con httpx senza avviare il server",
+  "e2e: flussi utente completi con Playwright nel browser",
+  "visual: verifiche visuali responsive, dark mode e touch target con Playwright",
+]

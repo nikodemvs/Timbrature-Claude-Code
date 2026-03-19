@@ -28,3 +28,14 @@ I calcoli di dominio li fa il backend — qui si formattano e mostrano i risulta
 - Separare logica da UI nei componenti
 - Evitare dipendenze browser-specific dove possibile
 - Stato centralizzato (store/context), non sparso nei componenti
+
+## Testing
+- Test E2E: `tests/test_e2e.py` — Playwright, flussi utente nel browser
+- Test visual: `tests/test_e2e.py` con marker `@pytest.mark.visual`
+- Screenshot a 375px (iPhone SE) e 768px (tablet)
+- Screenshot dark mode — contrasto leggibile
+- Bottone TIMBRA visibile senza scroll su mobile
+- Touch target bottoni principali >= 44x44px
+- Font body >= 14px, nessun testo tagliato
+- Playwright è lo strumento per test visual e UX — per tutto il resto pytest
+- Ogni modifica visiva deve passare i test visual esistenti

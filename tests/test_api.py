@@ -1,0 +1,282 @@
+from __future__ import annotations
+
+from datetime import datetime, timedelta
+from types import SimpleNamespace
+
+import pytest
+
+import server
+
+pytestmark = [pytest.mark.api, pytest.mark.asyncio]
+
+
+class FintaSessioneChat:
+    async def send_message(self, messaggio: str):
+        return SimpleNamespace(text=f"Risposta sintetica a: {messaggio}")
+
+
+class FintiChats:
+    def create(self, **_kwargs):
+        return FintaSessioneChat()
+
+
+class FintoGemini:
+    aio = SimpleNamespace(chats=FintiChats())
+
+
+async def test_api_root_e_health_espongono_stato_app(client_api):
+    risposta_root = await client_api.get("/api/")
+    risposta_health = await client_api.get("/api/health")
+    errore_root = await client_api.post("/api/")
+    errore_health = await client_api.post("/api/health")
+
+    assert risposta_root.status_code == 200
+    assert risposta_root.json()["status"] == "online"
+    assert risposta_health.status_code == 200
+    assert risposta_health.json()["status"] == "healthy"
+    assert "timestamp" in risposta_health.json()
+    assert errore_root.status_code == 405
+    assert errore_health.status_code == 405
+
+
+async def test_api_settings_get_put_errore_e_caso_edge(client_api):
+    iniziale = await client_api.get("/api/settings")
+    aggiornata = await client_api.put("/api/settings", json={"nome": "Mario Rossi", "use_biometric": False})
+    errore = await client_api.put("/api/settings", json={"livello": "alto"})
+    edge = await client_api.put("/api/settings", json={"pin_hash": ""})
+
+    assert iniziale.status_code == 200
+    assert iniziale.json()["nome"] in {"Marco Zambara", "Zambara Marco"}
+    assert aggiornata.status_code == 200
+    assert aggiornata.json()["nome"] == "Mario Rossi"
+    assert aggiornata.json()["use_biometric"] is False
+    assert errore.status_code == 422
+    assert edge.status_code == 200
+
+
+async def test_api_timbrature_lista_creazione_duplicato_ed_edge_notturno(client_api):
+    vuota = await client_api.get("/api/timbrature")
+    creata = await client_api.post(
+        "/api/timbrature",
+        json={"data": "2026-03-19", "ora_entrata": "23:50", "ora_uscita": "01:10", "note": "Turno notte"},
+    )
+    lista = await client_api.get("/api/timbrature", params={"mese": 3, "anno": 2026})
+    duplicata = await client_api.post(
+        "/api/timbrature",
+        json={"data": "2026-03-19", "ora_entrata": "08:00", "ora_uscita": "17:00"},
+    )
+    errore = await client_api.get("/api/timbrature", params={"anno": "errore"})
+
+    assert vuota.status_code == 200
+    assert vuota.json() == []
+    assert creata.status_code == 200
+    assert creata.json()["ore_lavorate"] == 1.33
+    assert creata.json()["ore_arrotondate"] == 1.5
+    assert len(lista.json()) == 1
+    assert duplicata.status_code == 400
+    assert duplicata.json()["detail"] == "Timbratura già esistente per questa data"
+    assert errore.status_code == 422
+
+
+async def test_api_timbra_registra_flusso_completo_errore_e_reperibilita(client_api):
+    errore = await client_api.post("/api/timbrature/timbra", params={"tipo": "uscita"})
+    entrata = await client_api.post("/api/timbrature/timbra", params={"tipo": "entrata", "is_reperibilita": True})
+    doppia_entrata = await client_api.post("/api/timbrature/timbra", params={"tipo": "entrata"})
+    uscita = await client_api.post("/api/timbrature/timbra", params={"tipo": "uscita"})
+
+    assert errore.status_code == 400
+    assert "uscita senza un'entrata" in errore.json()["detail"]
+    assert entrata.status_code == 200
+    assert entrata.json()["is_reperibilita_attiva"] is True
+    assert doppia_entrata.status_code == 400
+    assert "Sequenza non valida" in doppia_entrata.json()["detail"]
+    assert uscita.status_code == 200
+    assert uscita.json()["ora_entrata"] is not None
+    assert uscita.json()["ora_uscita"] is not None
+
+
+async def test_api_settimana_restituisce_riepilogo_errore_e_caso_vuoto(client_api):
+    vuota = await client_api.get("/api/timbrature/settimana/2026-03-19")
+    await client_api.post(
+        "/api/timbrature",
+        json={"data": "2026-03-19", "ora_entrata": "08:00", "ora_uscita": "17:00"},
+    )
+    piena = await client_api.get("/api/timbrature/settimana/2026-03-19")
+    errore = await client_api.get("/api/timbrature/settimana/non-valida")
+
+    assert vuota.status_code == 200
+    assert vuota.json()["ore_totali"] == 0
+    assert piena.status_code == 200
+    assert piena.json()["ore_totali"] == 9.0
+    assert piena.json()["giorni_lavorati"] == 1
+    assert errore.status_code == 422
+
+
+async def test_api_assenze_lista_creazione_errore_ed_edge_calcolato(client_api):
+    vuota = await client_api.get("/api/assenze")
+    creata = await client_api.post(
+        "/api/assenze",
+        json={"tipo": "ferie", "data_inizio": "2026-03-10", "data_fine": "2026-03-11"},
+    )
+    lista = await client_api.get("/api/assenze", params={"tipo": "ferie", "anno": 2026})
+    errore = await client_api.post("/api/assenze", json={"data_inizio": "2026-03-10", "data_fine": "2026-03-11"})
+    filtro_errato = await client_api.get("/api/assenze", params={"anno": "x"})
+
+    assert vuota.status_code == 200
+    assert vuota.json() == []
+    assert creata.status_code == 200
+    assert creata.json()["ore_totali"] == 16
+    assert len(lista.json()) == 1
+    assert errore.status_code == 422
+    assert filtro_errato.status_code == 422
+
+
+async def test_api_ferie_saldo_positivo_errore_ed_edge_senza_dati(client_api):
+    anno_corrente = datetime.now().year
+    await client_api.post(
+        "/api/assenze",
+        json={"tipo": "ferie", "data_inizio": f"{anno_corrente}-03-01", "data_fine": f"{anno_corrente}-03-01", "ore_totali": 8},
+    )
+
+    positiva = await client_api.get("/api/ferie/saldo", params={"anno": anno_corrente})
+    errore = await client_api.get("/api/ferie/saldo", params={"anno": "anno"})
+    edge = await client_api.get("/api/ferie/saldo", params={"anno": anno_corrente - 1})
+
+    assert positiva.status_code == 200
+    assert positiva.json()["ore_godute"] == 8
+    assert errore.status_code == 422
+    assert edge.status_code == 200
+    assert edge.json()["ore_godute"] == 0
+
+
+async def test_api_comporto_positivo_errore_ed_edge_vuoto(client_api):
+    vuoto = await client_api.get("/api/malattia/comporto")
+    oggi = datetime.now().date()
+    await client_api.post(
+        "/api/assenze",
+        json={
+            "tipo": "malattia",
+            "data_inizio": (oggi - timedelta(days=5)).strftime("%Y-%m-%d"),
+            "data_fine": (oggi - timedelta(days=3)).strftime("%Y-%m-%d"),
+        },
+    )
+    pieno = await client_api.get("/api/malattia/comporto")
+    errore = await client_api.post("/api/malattia/comporto")
+
+    assert vuoto.status_code == 200
+    assert vuoto.json()["giorni_malattia_3_anni"] == 0
+    assert pieno.status_code == 200
+    assert pieno.json()["giorni_malattia_3_anni"] == 3
+    assert errore.status_code == 405
+
+
+async def test_api_reperibilita_lista_creazione_errore_ed_edge_notturno(client_api):
+    vuota = await client_api.get("/api/reperibilita")
+    creata = await client_api.post(
+        "/api/reperibilita",
+        json={"data": "2026-03-18", "ora_inizio": "22:00", "ora_fine": "02:00", "tipo": "passiva"},
+    )
+    lista = await client_api.get("/api/reperibilita", params={"mese": 3, "anno": 2026})
+    errore = await client_api.post("/api/reperibilita", json={"data": "2026-03-18", "ora_fine": "02:00"})
+    filtro_errato = await client_api.get("/api/reperibilita", params={"mese": "marzo"})
+
+    assert vuota.status_code == 200
+    assert vuota.json() == []
+    assert creata.status_code == 200
+    assert creata.json()["ore_totali"] == 4.0
+    assert creata.json()["compenso_calcolato"] == 16.0
+    assert len(lista.json()) == 1
+    assert errore.status_code == 422
+    assert filtro_errato.status_code == 422
+
+
+async def test_api_buste_paga_lista_creazione_errore_ed_edge_zero(client_api):
+    vuota = await client_api.get("/api/buste-paga")
+    creata = await client_api.post("/api/buste-paga", json={"mese": 3, "anno": 2026})
+    lista = await client_api.get("/api/buste-paga", params={"anno": 2026})
+    duplicata = await client_api.post("/api/buste-paga", json={"mese": 3, "anno": 2026})
+    errore = await client_api.get("/api/buste-paga", params={"anno": "anno"})
+
+    assert vuota.status_code == 200
+    assert vuota.json() == []
+    assert creata.status_code == 200
+    assert creata.json()["lordo"] == 0.0
+    assert creata.json()["netto"] == 0.0
+    assert len(lista.json()) == 1
+    assert duplicata.status_code == 400
+    assert errore.status_code == 422
+
+
+async def test_api_update_busta_paga_positivo_errore_ed_edge(client_api):
+    await client_api.put(
+        "/api/settings",
+        json={
+            "paga_base": 2000.0,
+            "scatti_anzianita": 50.0,
+            "superminimo": 100.0,
+            "premio_incarico": 25.0,
+        },
+    )
+    await client_api.post("/api/buste-paga", json={"mese": 4, "anno": 2026, "netto": 1500.0})
+
+    positiva = await client_api.put("/api/buste-paga/2026/4", json={"netto": 1800.0})
+    edge = await client_api.put("/api/buste-paga/2026/4", json={"lordo": 2500.0})
+    errore = await client_api.put("/api/buste-paga/2026/5", json={"netto": 1800.0})
+
+    assert positiva.status_code == 200
+    assert positiva.json()["netto"] == 1800.0
+    assert positiva.json()["netto_calcolato"] == 1631.25
+    assert positiva.json()["has_discrepancy"] is True
+    assert edge.status_code == 200
+    assert edge.json()["lordo"] == 2500.0
+    assert errore.status_code == 404
+
+
+async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
+    vuota = await client_api.get("/api/dashboard")
+    await client_api.put("/api/settings", json={"ticket_valore": 8.0})
+    await client_api.post(
+        "/api/timbrature",
+        json={"data": datetime.now().strftime("%Y-%m-%d"), "ora_entrata": "08:00", "ora_uscita": "17:00"},
+    )
+    piena = await client_api.get("/api/dashboard")
+    errore = await client_api.post("/api/dashboard")
+
+    assert vuota.status_code == 200
+    assert vuota.json()["mese_corrente"]["ore_lavorate"] == 0
+    assert piena.status_code == 200
+    assert piena.json()["mese_corrente"]["ore_lavorate"] == 9.0
+    assert piena.json()["mese_corrente"]["ticket_maturati"] == 1
+    assert errore.status_code == 405
+
+
+async def test_api_chat_e_storico_gestiscono_successo_errore_ed_edge(client_api):
+    server._gemini_client = FintoGemini()
+    positiva = await client_api.post("/api/chat", json={"message": "Ciao assistente"})
+    storico = await client_api.get("/api/chat/history")
+    edge = await client_api.get("/api/chat/history", params={"limit": "molti"})
+
+    server._gemini_client = None
+    errore = await client_api.post("/api/chat", json={"message": "Ciao senza chiave"})
+
+    assert positiva.status_code == 200
+    assert "Risposta sintetica" in positiva.json()["response"]
+    assert len(storico.json()) == 2
+    assert storico.json()[0]["role"] == "user"
+    assert edge.status_code == 422
+    assert errore.status_code == 500
+    assert "GEMINI_API_KEY non configurata" in errore.json()["detail"]
+
+
+async def test_api_storico_chat_vuoto_e_cancellabile(client_api):
+    vuoto = await client_api.get("/api/chat/history", params={"limit": 10})
+    server._gemini_client = FintoGemini()
+    await client_api.post("/api/chat", json={"message": "Prima domanda"})
+    cancellazione = await client_api.delete("/api/chat/history")
+    dopo = await client_api.get("/api/chat/history")
+
+    assert vuoto.status_code == 200
+    assert vuoto.json() == []
+    assert cancellazione.status_code == 200
+    assert cancellazione.json()["message"] == "Cronologia chat cancellata"
+    assert dopo.json() == []

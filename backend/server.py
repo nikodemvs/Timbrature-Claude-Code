@@ -679,7 +679,13 @@ async def get_timbrature(
 
 @api_router.get("/timbrature/settimana/{data}")
 async def get_settimana(data: str):
-    dt = datetime.strptime(data, "%Y-%m-%d")
+    try:
+        dt = datetime.strptime(data, "%Y-%m-%d")
+    except ValueError as exc:
+        raise HTTPException(
+            status_code=422,
+            detail="Formato data non valido. Usa YYYY-MM-DD"
+        ) from exc
     monday = dt - timedelta(days=dt.weekday())
     sunday = monday + timedelta(days=6)
     start = monday.strftime("%Y-%m-%d")
@@ -839,6 +845,11 @@ async def timbra(tipo: str, is_reperibilita: bool = False):
         )
         await _db.commit()
     else:
+        if tipo == "uscita":
+            raise HTTPException(
+                status_code=400,
+                detail="Non puoi registrare un'uscita senza un'entrata"
+            )
         t = Timbratura(
             data=data,
             ora_entrata=ora if tipo == "entrata" else None,
@@ -884,10 +895,16 @@ async def get_assenze(tipo: Optional[str] = None, anno: Optional[int] = None):
 async def create_assenza(input: AssenzaCreate):
     ore = input.ore_totali
     if not ore:
-        start = datetime.strptime(input.data_inizio, "%Y-%m-%d")
-        end = datetime.strptime(input.data_fine, "%Y-%m-%d")
+        try:
+            start = datetime.strptime(input.data_inizio, "%Y-%m-%d")
+            end = datetime.strptime(input.data_fine, "%Y-%m-%d")
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=422,
+                detail="Formato data non valido. Usa YYYY-MM-DD"
+            ) from exc
         ore = ((end - start).days + 1) * 8
-    a = Assenza(**input.dict(), ore_totali=ore)
+    a = Assenza(**input.model_dump(exclude={"ore_totali"}), ore_totali=ore)
     await _db.execute(
         "INSERT INTO assenze VALUES (?,?,?,?,?,?,?,?,?)",
         [a.id, a.tipo, a.data_inizio, a.data_fine, a.ore_totali,

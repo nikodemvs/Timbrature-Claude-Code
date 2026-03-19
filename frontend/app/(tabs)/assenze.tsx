@@ -166,7 +166,7 @@ export default function AssenzeScreen() {
   );
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="assenze-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Assenze</Text>
         <TouchableOpacity
@@ -175,6 +175,7 @@ export default function AssenzeScreen() {
             resetForm();
             setShowAddSheet(true);
           }}
+          testID="assenze-add-button"
         >
           <Ionicons name="add" size={24} color={COLORS.textWhite} />
         </TouchableOpacity>
@@ -187,7 +188,7 @@ export default function AssenzeScreen() {
             <Ionicons name="airplane" size={20} color={COLORS.ferie} />
           </View>
           <Text style={styles.summaryLabel}>Ferie</Text>
-          <Text style={[styles.summaryValue, { color: COLORS.ferie }]}>
+          <Text style={[styles.summaryValue, { color: COLORS.ferie }]} testID="assenze-ferie-value">
             {ferieData?.saldo_attuale?.toFixed(1) || '0'}h
           </Text>
           <Text style={styles.summarySubtext}>disponibili</Text>
@@ -233,6 +234,8 @@ export default function AssenzeScreen() {
         onClose={() => setShowAddSheet(false)}
         title="Nuova Assenza"
         height="75%"
+        testID="assenze-add-sheet"
+        closeButtonTestID="assenze-add-sheet-close"
       >
         <TouchableOpacity style={styles.tipoSelector} onPress={() => setShowTipoSheet(true)}>
           <View style={[styles.tipoIcon, { backgroundColor: `${getColorForTipo(selectedTipo)}15` }]}>
@@ -278,12 +281,14 @@ export default function AssenzeScreen() {
             variant="outline"
             onPress={() => setShowAddSheet(false)}
             style={styles.sheetButton}
+            testID="assenze-cancel-button"
           />
           <Button
             title="Salva"
             onPress={handleSave}
             loading={saving}
             style={styles.sheetButton}
+            testID="assenze-save-button"
           />
         </View>
       </BottomSheet>

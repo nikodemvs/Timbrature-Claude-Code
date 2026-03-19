@@ -54,6 +54,7 @@ Non aspettare che l'utente te lo chieda.
 - Dark mode: rispetta prefers-color-scheme
 - Il bottone TIMBRA è l'elemento più importante dell'app — sempre visibile, max 2 tap
 - TypeScript strict: niente `any`
+- Playwright è lo strumento per i test visual e UX: screenshot responsive, dark mode, touch target. Per tutto il resto usa pytest.
 
 ### Quando tocchi qualsiasi file backend
 - Validazione input con Pydantic su ogni endpoint
@@ -71,7 +72,15 @@ Non aspettare che l'utente te lo chieda.
 
 ### Quando fai qualsiasi modifica
 - Scrivi o aggiorna un test per ciò che hai modificato
+- I test sono su 3 livelli con marker pytest: unit, api, e2e, visual
+- `pytest -m unit` → test unitari, istantanei, sulle funzioni dirette
+- `pytest -m api` → test endpoint HTTP con httpx, ~5 sec
+- `pytest -m e2e` → flussi utente completi con Playwright, ~30 sec
+- `pytest -m visual` → screenshot responsive, dark mode, touch target con Playwright
+- `pytest` senza marker → esegue solo unit + api (default veloce)
 - I test verificano che la modifica funzioni, NON alterano gli algoritmi protetti
+- I test unitari VERIFICANO i risultati dei calcoli, NON MODIFICANO MAI le funzioni
+- Se un test unitario fallisce, il test è sbagliato — non la funzione
 - Testa anche il caso offline (cosa succede senza rete?)
 - Aggiorna CHANGELOG.md con una riga datata che spiega cosa hai fatto e perché
 

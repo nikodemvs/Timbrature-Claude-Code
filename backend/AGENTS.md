@@ -34,3 +34,10 @@ Python/FastAPI, porta 8000, Docker, deploy su Render.
 - Date ISO 8601, ore HH:MM, importi float 2 decimali
 - GEMINI_API_KEY solo da env var, mai nel codice
 - Le risposte devono essere cacheable dal frontend (pensare offline-first)
+
+## Testing
+- Test unitari: `tests/test_unit.py` — importa e chiama direttamente le funzioni di `server.py`, `sometime_parser.py`, `zucchetti_parser.py`
+- Test API: `tests/test_api.py` — httpx + TestClient di FastAPI, no server
+- Strumenti: pytest, httpx, pytest-asyncio
+- Ogni nuovo endpoint deve avere test in `tests/test_api.py` (positivo + errore)
+- Ogni modifica a una funzione di calcolo deve passare i test unitari esistenti senza alterarli

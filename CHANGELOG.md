@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-19 — Fix warning deprecazione FastAPI/Pydantic/datetime
+Cosa: sostituiti gli usi deprecati di `datetime.utcnow()`, introdotta una compatibilita runtime per FastAPI/Starlette su Python 3.14+, rimossi gli usi Pydantic v1 fuori dalla zona protetta e mantenuti filtri mirati solo per warning di librerie terze
+Perché: ottenere output pulito nei test, evitare regressioni con versioni future di Python e librerie e mantenere intatti gli algoritmi validati manualmente
+File: backend/server.py, tests/test_unit.py, tests/conftest.py, pyproject.toml, CHANGELOG.md
+
 ## 2026-03-19 — Tema chiaro/scuro con preferenza utente
 Cosa: introdotto un sistema di tema light/dark con opzione Sistema, tema persistito e applicazione del tema ai layout globali, componenti condivisi e tab principali del frontend
 Perché: rendere l'app più leggibile in ambienti scuri e permettere all'utente di scegliere se seguire il tema del dispositivo o forzare chiaro/scuro

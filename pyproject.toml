@@ -7,3 +7,7 @@ markers = [
   "e2e: flussi utente completi con Playwright nel browser",
   "visual: verifiche visuali responsive, dark mode e touch target con Playwright",
 ]
+filterwarnings = [
+  "ignore:Please use `import python_multipart` instead\\.:PendingDeprecationWarning:starlette\\.formparsers",
+  "ignore:'_UnionGenericAlias' is deprecated and slated for removal in Python 3\\.17:DeprecationWarning:google\\.genai\\.types",
+]

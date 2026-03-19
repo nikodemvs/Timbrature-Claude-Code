@@ -6,6 +6,7 @@ import socket
 import subprocess
 import sys
 import time
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterator
@@ -20,6 +21,23 @@ BACKEND_DIR = ROOT_DIR / "backend"
 FRONTEND_DIR = ROOT_DIR / "frontend"
 OUTPUT_DIR = ROOT_DIR / "output" / "playwright" / "pytest"
 
+def applica_filtri_warning() -> None:
+    warnings.filterwarnings(
+        "ignore",
+        message=r"Please use `import python_multipart` instead\.",
+        category=PendingDeprecationWarning,
+        module=r"starlette\.formparsers",
+    )
+    warnings.filterwarnings(
+        "ignore",
+        message=r"'_UnionGenericAlias' is deprecated and slated for removal in Python 3\.17",
+        category=DeprecationWarning,
+        module=r"google\.genai\.types",
+    )
+
+
+applica_filtri_warning()
+
 if str(BACKEND_DIR) not in sys.path:
     sys.path.insert(0, str(BACKEND_DIR))
 
@@ -27,6 +45,7 @@ import server as server_module
 
 
 def pytest_configure(config: pytest.Config) -> None:
+    applica_filtri_warning()
     if not config.option.markexpr:
         config.option.markexpr = "unit or api"
 

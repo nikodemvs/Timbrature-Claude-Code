@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import sys
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -119,7 +119,7 @@ async def inserisci_assenza_di_test(
         INSERT INTO assenze (id, tipo, data_inizio, data_fine, ore_totali, note, created_at)
         VALUES (?, ?, ?, ?, ?, ?, ?)
         """,
-        [str(uuid4()), tipo, data_inizio, data_fine, ore_totali, note, datetime.utcnow().isoformat()],
+        [str(uuid4()), tipo, data_inizio, data_fine, ore_totali, note, datetime.now(timezone.utc).isoformat()],
     )
     await server._db.commit()
 
@@ -195,7 +195,7 @@ async def test_unit_confronto_timbrature_dashboard_e_statistiche_mensili(db_temp
     await server.create_busta_paga(server.BustaPagaCreate(mese=mese, anno=anno, lordo=2800.0, netto=2100.0))
     await server._db.execute(
         "INSERT INTO alerts VALUES (?,?,?,?,?,?,?)",
-        ["alert-1", "info", "Promemoria", "Scadenza mensile", None, 0, datetime.utcnow().isoformat()],
+        ["alert-1", "info", "Promemoria", "Scadenza mensile", None, 0, datetime.now(timezone.utc).isoformat()],
     )
     await server._db.commit()
 

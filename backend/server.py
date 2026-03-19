@@ -1,7 +1,13 @@
 import uvicorn
+import functools
+import inspect
+from contextlib import asynccontextmanager
 from fastapi import FastAPI, APIRouter, HTTPException, UploadFile, File, Form
+import fastapi.routing as fastapi_routing
 from dotenv import load_dotenv
 from starlette.middleware.cors import CORSMiddleware
+import starlette._utils as starlette_utils
+import starlette.routing as starlette_routing
 import aiosqlite
 from google import genai
 from google.genai import types as genai_types
@@ -14,10 +20,9 @@ from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import uuid
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import base64
 import io
-from PyPDF2 import PdfReader
 from sometime_parser import parse_sometime_pdf
 from zucchetti_parser import parse_zucchetti_pdf
 
@@ -26,18 +31,73 @@ load_dotenv(ROOT_DIR / '.env')
 
 DB_PATH = ROOT_DIR / "bustapaga.db"
 
-app = FastAPI(title="BustaPaga API", version="1.0.0")
-api_router = APIRouter(prefix="/api")
-
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 _db: aiosqlite.Connection = None
 _gemini_client: genai.Client = None
 
+
+def _is_async_callable_compat(obj: Any) -> bool:
+    while isinstance(obj, functools.partial):
+        obj = obj.func
+    return inspect.iscoroutinefunction(obj) or (
+        callable(obj) and inspect.iscoroutinefunction(obj.__call__)
+    )
+
+
+def _apply_fastapi_starlette_compat() -> None:
+    # Python 3.14 depreca asyncio.iscoroutinefunction, ma le versioni correnti
+    # di FastAPI/Starlette la richiamano ancora in alcuni path runtime.
+    starlette_utils.is_async_callable = _is_async_callable_compat
+    starlette_routing.is_async_callable = _is_async_callable_compat
+    fastapi_routing.asyncio.iscoroutinefunction = inspect.iscoroutinefunction
+
+
+_apply_fastapi_starlette_compat()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+def _utc_now_iso() -> str:
+    return _utc_now().isoformat()
+
+
+@asynccontextmanager
+async def lifespan(_app: FastAPI):
+    global _db, _gemini_client
+    _db = await aiosqlite.connect(str(DB_PATH))
+    _db.row_factory = aiosqlite.Row
+    await _db.execute("PRAGMA journal_mode=WAL")
+    await _db.execute("PRAGMA foreign_keys=ON")
+    await init_db()
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key:
+        _gemini_client = genai.Client(api_key=api_key)
+        logger.info("Gemini client inizializzato")
+    else:
+        logger.warning("GEMINI_API_KEY non configurata — chat disabilitata")
+    try:
+        yield
+    finally:
+        if _db:
+            await _db.close()
+            _db = None
+
+
+app = FastAPI(title="BustaPaga API", version="1.0.0", lifespan=lifespan)
+api_router = APIRouter(prefix="/api")
+
 # ============== PYDANTIC MODELS ==============
 
-class UserSettings(BaseModel):
+class AppBaseModel(BaseModel):
+    def dict(self, *args: Any, **kwargs: Any) -> Dict[str, Any]:
+        return self.model_dump(*args, **kwargs)
+
+
+class UserSettings(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     nome: str = "Marco Zambara"
     qualifica: str = "Operaio"
@@ -57,10 +117,10 @@ class UserSettings(BaseModel):
     ticket_valore: float = 8.00
     pin_hash: Optional[str] = None
     use_biometric: bool = True
-    created_at: datetime = Field(default_factory=datetime.utcnow)
-    updated_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
+    updated_at: datetime = Field(default_factory=_utc_now)
 
-class UserSettingsUpdate(BaseModel):
+class UserSettingsUpdate(AppBaseModel):
     nome: Optional[str] = None
     qualifica: Optional[str] = None
     livello: Optional[int] = None
@@ -73,15 +133,15 @@ class UserSettingsUpdate(BaseModel):
     pin_hash: Optional[str] = None
     use_biometric: Optional[bool] = None
 
-class Marcatura(BaseModel):
+class Marcatura(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tipo: str
     ora: str
     is_reperibilita: bool = False
     note: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class Timbratura(BaseModel):
+class Timbratura(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     data: str
     ora_entrata: Optional[str] = None
@@ -92,28 +152,28 @@ class Timbratura(BaseModel):
     ore_reperibilita: float = 0.0
     is_reperibilita_attiva: bool = False
     note: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class TimbraturaCreate(BaseModel):
+class TimbraturaCreate(AppBaseModel):
     data: str
     ora_entrata: Optional[str] = None
     ora_uscita: Optional[str] = None
     is_reperibilita_attiva: bool = False
     note: Optional[str] = None
 
-class TimbraturaUpdate(BaseModel):
+class TimbraturaUpdate(AppBaseModel):
     ora_entrata: Optional[str] = None
     ora_uscita: Optional[str] = None
     is_reperibilita_attiva: Optional[bool] = None
     note: Optional[str] = None
 
-class MarcaturaCreate(BaseModel):
+class MarcaturaCreate(AppBaseModel):
     tipo: str
     ora: Optional[str] = None
     is_reperibilita: bool = False
     note: Optional[str] = None
 
-class Assenza(BaseModel):
+class Assenza(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tipo: str
     data_inizio: str
@@ -122,16 +182,16 @@ class Assenza(BaseModel):
     note: Optional[str] = None
     certificato_base64: Optional[str] = None
     certificato_nome: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class AssenzaCreate(BaseModel):
+class AssenzaCreate(AppBaseModel):
     tipo: str
     data_inizio: str
     data_fine: str
     ore_totali: Optional[float] = None
     note: Optional[str] = None
 
-class Reperibilita(BaseModel):
+class Reperibilita(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     data: str
     ora_inizio: str
@@ -141,9 +201,9 @@ class Reperibilita(BaseModel):
     interventi: int = 0
     compenso_calcolato: float = 0.0
     note: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class ReperibilitaCreate(BaseModel):
+class ReperibilitaCreate(AppBaseModel):
     data: str
     ora_inizio: str
     ora_fine: str
@@ -151,7 +211,7 @@ class ReperibilitaCreate(BaseModel):
     interventi: int = 0
     note: Optional[str] = None
 
-class BustaPaga(BaseModel):
+class BustaPaga(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     mese: int
     anno: int
@@ -166,9 +226,9 @@ class BustaPaga(BaseModel):
     differenza: float = 0.0
     has_discrepancy: bool = False
     note_confronto: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class BustaPagaCreate(BaseModel):
+class BustaPagaCreate(AppBaseModel):
     mese: int
     anno: int
     lordo: Optional[float] = None
@@ -177,14 +237,14 @@ class BustaPagaCreate(BaseModel):
     straordinari_importo: Optional[float] = None
     trattenute_totali: Optional[float] = None
 
-class BustaPagaUpdate(BaseModel):
+class BustaPagaUpdate(AppBaseModel):
     lordo: Optional[float] = None
     netto: Optional[float] = None
     straordinari_ore: Optional[float] = None
     straordinari_importo: Optional[float] = None
     trattenute_totali: Optional[float] = None
 
-class TimbraturaAziendale(BaseModel):
+class TimbraturaAziendale(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     data: str
     ora_entrata: Optional[str] = None
@@ -194,9 +254,9 @@ class TimbraturaAziendale(BaseModel):
     fonte_pdf: Optional[str] = None
     mese_riferimento: int = 0
     anno_riferimento: int = 0
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class ConfrontoTimbratura(BaseModel):
+class ConfrontoTimbratura(AppBaseModel):
     data: str
     personale_entrata: Optional[str] = None
     personale_uscita: Optional[str] = None
@@ -209,7 +269,7 @@ class ConfrontoTimbratura(BaseModel):
     has_discrepancy: bool = False
     note: Optional[str] = None
 
-class Documento(BaseModel):
+class Documento(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tipo: str
     titolo: str
@@ -218,26 +278,26 @@ class Documento(BaseModel):
     file_nome: str
     file_tipo: str
     data_riferimento: Optional[str] = None
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
-class ChatMessage(BaseModel):
+class ChatMessage(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     role: str
     content: str
-    timestamp: datetime = Field(default_factory=datetime.utcnow)
+    timestamp: datetime = Field(default_factory=_utc_now)
 
-class ChatRequest(BaseModel):
+class ChatRequest(AppBaseModel):
     message: str
     session_id: Optional[str] = None
 
-class Alert(BaseModel):
+class Alert(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tipo: str
     titolo: str
     messaggio: str
     data_scadenza: Optional[str] = None
     letto: bool = False
-    created_at: datetime = Field(default_factory=datetime.utcnow)
+    created_at: datetime = Field(default_factory=_utc_now)
 
 # ============== DB INIT ==============
 
@@ -448,7 +508,7 @@ def _safe_busta_paga(busta_data):
     if not busta_data:
         return None
     safe = _safe_busta_paga_data(busta_data)
-    return BustaPaga(**safe).dict()
+    return BustaPaga(**safe).model_dump()
 
 def _hash_pin(pin: str) -> str:
     return hashlib.sha256(pin.encode('utf-8')).hexdigest()
@@ -471,7 +531,7 @@ def _build_manual_marcature(
     is_reperibilita: bool = False,
     created_at: Optional[str] = None
 ) -> List[Dict[str, Any]]:
-    timestamp = created_at or datetime.utcnow().isoformat()
+    timestamp = created_at or _utc_now_iso()
     marcature: List[Dict[str, Any]] = []
     if ora_entrata:
         marcature.append({
@@ -589,7 +649,7 @@ async def get_settings():
     row = _row(await cur.fetchone())
     if not row:
         default = UserSettings()
-        d = default.dict()
+        d = default.model_dump()
         await _db.execute(
             "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             [d['id'], d['nome'], d['qualifica'], d['livello'], d['azienda'], d['sede'],
@@ -600,18 +660,18 @@ async def get_settings():
              d['created_at'].isoformat(), d['updated_at'].isoformat()]
         )
         await _db.commit()
-        return UserSettings(**_public_settings_from_row(default.dict()))
+        return UserSettings(**_public_settings_from_row(default.model_dump()))
     return UserSettings(**_public_settings_from_row(row))
 
 @api_router.put("/settings", response_model=UserSettings)
 async def update_settings(updates: UserSettingsUpdate):
-    update_data = {k: v for k, v in updates.dict().items() if v is not None}
+    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     if 'pin_hash' in update_data:
         pin_value = (update_data['pin_hash'] or '').strip()
         update_data['pin_hash'] = _hash_pin(pin_value) if pin_value else None
     if 'use_biometric' in update_data:
         update_data['use_biometric'] = int(update_data['use_biometric'])
-    update_data['updated_at'] = datetime.utcnow().isoformat()
+    update_data['updated_at'] = _utc_now_iso()
 
     cur = await _db.execute("SELECT id FROM settings LIMIT 1")
     existing = await cur.fetchone()
@@ -625,7 +685,7 @@ async def update_settings(updates: UserSettingsUpdate):
         await _db.commit()
     else:
         default = UserSettings(**update_data)
-        d = default.dict()
+        d = default.model_dump()
         await _db.execute(
             "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
             [d['id'], d['nome'], d['qualifica'], d['livello'], d['azienda'], d['sede'],
@@ -728,7 +788,7 @@ async def create_timbratura(input: TimbraturaCreate):
         input.is_reperibilita_attiva
     )
     t = Timbratura(
-        **input.dict(),
+        **input.model_dump(),
         marcature=marcature,
         ore_lavorate=ore_lavorate,
         ore_arrotondate=ore_arrotondate,
@@ -749,7 +809,7 @@ async def update_timbratura(data: str, updates: TimbraturaUpdate):
     row = _timbratura_from_row(_row(await cur.fetchone()))
     if not row:
         raise HTTPException(status_code=404, detail="Timbratura non trovata")
-    update_data = {k: v for k, v in updates.dict().items() if v is not None}
+    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     ora_entrata = update_data.get("ora_entrata", row.get("ora_entrata"))
     ora_uscita = update_data.get("ora_uscita", row.get("ora_uscita"))
     ore_lavorate, ore_arrotondate = calcola_ore_lavorate(ora_entrata, ora_uscita)
@@ -1013,7 +1073,7 @@ async def create_reperibilita(input: ReperibilitaCreate):
         minuti += 24 * 60
     ore = minuti / 60
     compenso = calcola_reperibilita_passiva(ore) if input.tipo == "passiva" else calcola_reperibilita_attiva(input.interventi)
-    rep = Reperibilita(**input.dict(), ore_totali=round(ore, 2), compenso_calcolato=compenso)
+    rep = Reperibilita(**input.model_dump(), ore_totali=round(ore, 2), compenso_calcolato=compenso)
     await _db.execute(
         "INSERT INTO reperibilita VALUES (?,?,?,?,?,?,?,?,?,?)",
         [rep.id, rep.data, rep.ora_inizio, rep.ora_fine, rep.tipo,
@@ -1061,7 +1121,7 @@ async def create_busta_paga(input: BustaPagaCreate):
     )
     if await cur.fetchone():
         raise HTTPException(status_code=400, detail="Busta paga già esistente per questo periodo")
-    busta_data = input.dict()
+    busta_data = input.model_dump()
     for f in ['lordo', 'netto', 'straordinari_ore', 'straordinari_importo', 'trattenute_totali']:
         if busta_data.get(f) is None:
             busta_data[f] = 0.0
@@ -1126,7 +1186,7 @@ async def upload_busta_paga(anno: int, mese: int, file: UploadFile = File(...)):
     )
     row = _busta_from_row(_row(await cur.fetchone()))
     return {
-        "busta": BustaPaga(**row).dict(),
+        "busta": BustaPaga(**row).model_dump(),
         "parse_success": parse_result["success"],
         "parsed_data": {k: v for k, v in parse_result.items()
                         if k not in ["raw_text", "success", "errors", "filename"]}
@@ -1147,7 +1207,7 @@ async def update_busta_paga(anno: int, mese: int, updates: BustaPagaUpdate):
     else:
         netto_stimato = 0
 
-    update_data = {k: v for k, v in updates.dict().items() if v is not None}
+    update_data = {k: v for k, v in updates.model_dump().items() if v is not None}
     update_data["netto_calcolato"] = round(netto_stimato, 2)
     if updates.netto:
         differenza = updates.netto - netto_stimato
@@ -1328,7 +1388,7 @@ async def import_timbrature_aziendali(timbrature: List[Dict[str, Any]]):
              timb.ore_lavorate, timb.descrizione, timb.fonte_pdf,
              timb.mese_riferimento, timb.anno_riferimento, timb.created_at.isoformat()]
         )
-        imported.append(timb.dict())
+        imported.append(timb.model_dump())
     await _db.commit()
     return {"message": f"Importate {len(imported)} timbrature aziendali", "timbrature": imported}
 
@@ -1684,7 +1744,7 @@ Comporto malattia: {comporto['giorni_malattia_3_anni']} giorni su {comporto['sog
         reply = response.text
 
         # Salva nella cronologia
-        now_iso = datetime.utcnow().isoformat()
+        now_iso = _utc_now_iso()
         user_msg = ChatMessage(role="user", content=request.message)
         asst_msg = ChatMessage(role="assistant", content=reply)
         await _db.execute(
@@ -1694,7 +1754,7 @@ Comporto malattia: {comporto['giorni_malattia_3_anni']} giorni su {comporto['sog
         await _db.execute(
             "INSERT INTO chat_history VALUES (?,?,?,?,?)",
             [asst_msg.id, session_id, asst_msg.role, asst_msg.content,
-             datetime.utcnow().isoformat()]
+             _utc_now_iso()]
         )
         await _db.commit()
 
@@ -1726,7 +1786,7 @@ async def root():
 
 @api_router.get("/health")
 async def health_check():
-    return {"status": "healthy", "timestamp": datetime.utcnow().isoformat()}
+    return {"status": "healthy", "timestamp": _utc_now_iso()}
 
 # ============== APP SETUP ==============
 
@@ -1739,26 +1799,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@app.on_event("startup")
-async def startup():
-    global _db, _gemini_client
-    _db = await aiosqlite.connect(str(DB_PATH))
-    _db.row_factory = aiosqlite.Row
-    await _db.execute("PRAGMA journal_mode=WAL")
-    await _db.execute("PRAGMA foreign_keys=ON")
-    await init_db()
-    api_key = os.environ.get("GEMINI_API_KEY")
-    if api_key:
-        _gemini_client = genai.Client(api_key=api_key)
-        logger.info("Gemini client inizializzato")
-    else:
-        logger.warning("GEMINI_API_KEY non configurata — chat disabilitata")
-
-@app.on_event("shutdown")
-async def shutdown():
-    if _db:
-        await _db.close()
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=False)

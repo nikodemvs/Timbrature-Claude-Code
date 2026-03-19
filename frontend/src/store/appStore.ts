@@ -90,6 +90,7 @@ export const THEMES = {
 };
 
 export type ThemeKey = keyof typeof THEMES;
+export type ColorSchemePreference = 'system' | 'light' | 'dark';
 
 interface AppState {
   // Auth
@@ -123,6 +124,8 @@ interface AppState {
   // Theme
   theme: ThemeKey;
   setTheme: (theme: ThemeKey) => void;
+  colorSchemePreference: ColorSchemePreference;
+  setColorSchemePreference: (preference: ColorSchemePreference) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -159,11 +162,16 @@ export const useAppStore = create<AppState>()(
       // Theme
       theme: 'blue',
       setTheme: (theme) => set({ theme }),
+      colorSchemePreference: 'system',
+      setColorSchemePreference: (preference) => set({ colorSchemePreference: preference }),
     }),
     {
       name: 'bustapaga-storage',
       storage: createJSONStorage(() => createCustomStorage()),
-      partialize: (state) => ({ theme: state.theme }),
+      partialize: (state) => ({
+        theme: state.theme,
+        colorSchemePreference: state.colorSchemePreference,
+      }),
     }
   )
 );

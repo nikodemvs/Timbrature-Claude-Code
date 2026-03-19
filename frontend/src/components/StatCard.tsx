@@ -1,6 +1,6 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
-import { COLORS } from '../utils/colors';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 interface StatCardProps {
   label: string;
@@ -14,9 +14,13 @@ export const StatCard: React.FC<StatCardProps> = ({
   label,
   value,
   unit,
-  color = COLORS.primary,
+  color,
   size = 'medium',
 }) => {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+  const resolvedColor = color ?? colors.primary;
+
   const getFontSize = () => {
     switch (size) {
       case 'small': return 18;
@@ -29,33 +33,34 @@ export const StatCard: React.FC<StatCardProps> = ({
     <View style={styles.container}>
       <Text style={styles.label}>{label}</Text>
       <View style={styles.valueContainer}>
-        <Text style={[styles.value, { fontSize: getFontSize(), color }]}>{value}</Text>
-        {unit && <Text style={[styles.unit, { color }]}>{unit}</Text>}
+        <Text style={[styles.value, { fontSize: getFontSize(), color: resolvedColor }]}>{value}</Text>
+        {unit && <Text style={[styles.unit, { color: resolvedColor }]}>{unit}</Text>}
       </View>
     </View>
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    alignItems: 'center',
-  },
-  label: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  valueContainer: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-  },
-  value: {
-    fontWeight: '700',
-  },
-  unit: {
-    fontSize: 14,
-    fontWeight: '500',
-    marginLeft: 4,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      alignItems: 'center',
+    },
+    label: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 4,
+      textAlign: 'center',
+    },
+    valueContainer: {
+      flexDirection: 'row',
+      alignItems: 'baseline',
+    },
+    value: {
+      fontWeight: '700',
+    },
+    unit: {
+      fontSize: 14,
+      fontWeight: '500',
+      marginLeft: 4,
+    },
+  });

@@ -16,7 +16,7 @@ export default function Root({ children }: PropsWithChildren) {
         <script
           dangerouslySetInnerHTML={{
             __html: `
-              if (typeof import === 'undefined' || typeof import.meta === 'undefined') {
+              if (!window.importMeta) {
                 window.importMeta = { url: window.location.href };
               }
             `,

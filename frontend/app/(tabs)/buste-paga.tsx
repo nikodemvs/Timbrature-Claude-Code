@@ -12,12 +12,14 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen } from '../../src/components';
-import { COLORS } from '../../src/utils/colors';
 import * as api from '../../src/services/api';
 import { formatCurrency, getMesiItaliano, getCurrentMonthYear } from '../../src/utils/helpers';
 import { BustaPaga } from '../../src/types';
+import { useAppTheme } from '../../src/hooks/useAppTheme';
 
 export default function BustePagaScreen() {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [bustePaga, setBustePaga] = useState<BustaPaga[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -171,7 +173,7 @@ export default function BustePagaScreen() {
       <Card style={styles.bustaCard}>
         <View style={styles.bustaHeader}>
           <View style={styles.bustaIconContainer}>
-            <Ionicons name="document-text" size={24} color={COLORS.primary} />
+            <Ionicons name="document-text" size={24} color={colors.primary} />
           </View>
           <View style={styles.bustaInfo}>
             <Text style={styles.bustaPeriodo}>
@@ -179,7 +181,7 @@ export default function BustePagaScreen() {
             </Text>
             {item.pdf_nome && (
               <View style={styles.pdfBadge}>
-                <Ionicons name="attach" size={12} color={COLORS.primary} />
+                <Ionicons name="attach" size={12} color={colors.primary} />
                 <Text style={styles.pdfText}>PDF allegato</Text>
               </View>
             )}
@@ -192,7 +194,7 @@ export default function BustePagaScreen() {
         
         {item.has_discrepancy && (
           <View style={styles.discrepancyBanner}>
-            <Ionicons name="alert-circle" size={16} color={COLORS.error} />
+            <Ionicons name="alert-circle" size={16} color={colors.error} />
             <Text style={styles.discrepancyText}>
               Differenza: {formatCurrency(item.differenza)}
             </Text>
@@ -213,7 +215,7 @@ export default function BustePagaScreen() {
             setShowAddSheet(true);
           }}
         >
-          <Ionicons name="add" size={24} color={COLORS.textWhite} />
+          <Ionicons name="add" size={24} color={colors.textWhite} />
         </TouchableOpacity>
       </View>
 
@@ -223,12 +225,12 @@ export default function BustePagaScreen() {
         renderItem={renderBustaPaga}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="document-text-outline" size={64} color={COLORS.border} />
+            <Ionicons name="document-text-outline" size={64} color={colors.border} />
             <Text style={styles.emptyText}>Nessuna busta paga</Text>
             <Text style={styles.emptySubtext}>Aggiungi la tua prima busta paga</Text>
           </View>
@@ -351,7 +353,7 @@ export default function BustePagaScreen() {
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Trattenute</Text>
-              <Text style={[styles.detailValue, { color: COLORS.error }]}>
+              <Text style={[styles.detailValue, { color: colors.error }]}>
                 -{formatCurrency(selectedBusta.trattenute_totali || 0)}
               </Text>
             </View>
@@ -367,7 +369,7 @@ export default function BustePagaScreen() {
                   <Text style={styles.detailLabel}>Differenza</Text>
                   <Text style={[
                     styles.detailValue,
-                    { color: selectedBusta.has_discrepancy ? COLORS.error : COLORS.success }
+                    { color: selectedBusta.has_discrepancy ? colors.error : colors.success }
                   ]}>
                     {formatCurrency(selectedBusta.differenza)}
                   </Text>
@@ -377,7 +379,7 @@ export default function BustePagaScreen() {
 
             {selectedBusta.pdf_nome && (
               <View style={styles.pdfSection}>
-                <Ionicons name="document" size={20} color={COLORS.primary} />
+                <Ionicons name="document" size={20} color={colors.primary} />
                 <Text style={styles.pdfFileName}>{selectedBusta.pdf_nome}</Text>
               </View>
             )}
@@ -396,188 +398,189 @@ export default function BustePagaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  bustaCard: {
-    marginBottom: 12,
-  },
-  bustaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  bustaIconContainer: {
-    width: 48,
-    height: 48,
-    borderRadius: 12,
-    backgroundColor: `${COLORS.primary}15`,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  bustaInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  bustaPeriodo: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  pdfBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 4,
-  },
-  pdfText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginLeft: 4,
-  },
-  bustaAmounts: {
-    alignItems: 'flex-end',
-  },
-  bustaNetto: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.success,
-  },
-  bustaLordo: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  discrepancyBanner: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${COLORS.error}10`,
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 8,
-    marginTop: 12,
-  },
-  discrepancyText: {
-    fontSize: 13,
-    color: COLORS.error,
-    fontWeight: '500',
-    marginLeft: 8,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  periodRow: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  halfInput: {
-    flex: 1,
-  },
-  uploadButton: {
-    marginBottom: 16,
-  },
-  sheetButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
-  sheetButton: {
-    flex: 1,
-  },
-  detailSection: {
-    alignItems: 'center',
-    paddingVertical: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-    marginBottom: 16,
-  },
-  detailLabel: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-  },
-  detailValueLarge: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: COLORS.success,
-    marginTop: 4,
-  },
-  detailRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  detailValue: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  confrontoSection: {
-    marginTop: 20,
-    paddingTop: 16,
-    borderTopWidth: 2,
-    borderTopColor: COLORS.primary,
-  },
-  confrontoTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  pdfSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${COLORS.primary}10`,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  pdfFileName: {
-    fontSize: 14,
-    color: COLORS.primary,
-    marginLeft: 8,
-    flex: 1,
-  },
-  editButton: {
-    marginTop: 24,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    addButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    list: {
+      paddingHorizontal: 16,
+      paddingBottom: 100,
+    },
+    bustaCard: {
+      marginBottom: 12,
+    },
+    bustaHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    bustaIconContainer: {
+      width: 48,
+      height: 48,
+      borderRadius: 12,
+      backgroundColor: `${colors.primary}15`,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    bustaInfo: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    bustaPeriodo: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    pdfBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 4,
+    },
+    pdfText: {
+      fontSize: 12,
+      color: colors.primary,
+      marginLeft: 4,
+    },
+    bustaAmounts: {
+      alignItems: 'flex-end',
+    },
+    bustaNetto: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.success,
+    },
+    bustaLordo: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    discrepancyBanner: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: `${colors.error}10`,
+      paddingVertical: 8,
+      paddingHorizontal: 12,
+      borderRadius: 8,
+      marginTop: 12,
+    },
+    discrepancyText: {
+      fontSize: 13,
+      color: colors.error,
+      fontWeight: '500',
+      marginLeft: 8,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+    },
+    emptyText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text,
+      marginTop: 16,
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    periodRow: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    halfInput: {
+      flex: 1,
+    },
+    uploadButton: {
+      marginBottom: 16,
+    },
+    sheetButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+    },
+    sheetButton: {
+      flex: 1,
+    },
+    detailSection: {
+      alignItems: 'center',
+      paddingVertical: 20,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+      marginBottom: 16,
+    },
+    detailLabel: {
+      fontSize: 14,
+      color: colors.textSecondary,
+    },
+    detailValueLarge: {
+      fontSize: 36,
+      fontWeight: '700',
+      color: colors.success,
+      marginTop: 4,
+    },
+    detailRow: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    detailValue: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    confrontoSection: {
+      marginTop: 20,
+      paddingTop: 16,
+      borderTopWidth: 2,
+      borderTopColor: colors.primary,
+    },
+    confrontoTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.primary,
+      marginBottom: 8,
+    },
+    pdfSection: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: `${colors.primary}10`,
+      padding: 12,
+      borderRadius: 8,
+      marginTop: 16,
+    },
+    pdfFileName: {
+      fontSize: 14,
+      color: colors.primary,
+      marginLeft: 8,
+      flex: 1,
+    },
+    editButton: {
+      marginTop: 24,
+    },
+  });

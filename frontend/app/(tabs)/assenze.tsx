@@ -11,20 +11,30 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField } from '../../src/components';
-import { COLORS } from '../../src/utils/colors';
 import * as api from '../../src/services/api';
 import { formatDate, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
 import { Assenza } from '../../src/types';
+import { useAppTheme } from '../../src/hooks/useAppTheme';
 
-const TIPO_OPTIONS = [
-  { value: 'ferie', label: 'Ferie', icon: 'airplane', color: COLORS.ferie },
-  { value: 'malattia', label: 'Malattia', icon: 'medkit', color: COLORS.malattia },
-  { value: 'permesso_rol', label: 'Permesso ROL', icon: 'time', color: COLORS.primary },
-  { value: 'permesso_non_retribuito', label: 'Permesso non retribuito', icon: 'cash', color: COLORS.warning },
-  { value: 'altro', label: 'Altro', icon: 'ellipsis-horizontal', color: COLORS.textSecondary },
+type TipoOption = {
+  value: string;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  color: string;
+};
+
+const getTipoOptions = (colors: ReturnType<typeof useAppTheme>['colors']): TipoOption[] => [
+  { value: 'ferie', label: 'Ferie', icon: 'airplane', color: colors.ferie },
+  { value: 'malattia', label: 'Malattia', icon: 'medkit', color: colors.malattia },
+  { value: 'permesso_rol', label: 'Permesso ROL', icon: 'time', color: colors.primary },
+  { value: 'permesso_non_retribuito', label: 'Permesso non retribuito', icon: 'cash', color: colors.warning },
+  { value: 'altro', label: 'Altro', icon: 'ellipsis-horizontal', color: colors.textSecondary },
 ];
 
 export default function AssenzeScreen() {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+  const tipoOptions = getTipoOptions(colors);
   const [assenze, setAssenze] = useState<Assenza[]>([]);
   const [ferieData, setFerieData] = useState<any>(null);
   const [comporto, setComporto] = useState<any>(null);
@@ -126,11 +136,11 @@ export default function AssenzeScreen() {
   };
 
   const getIconForTipo = (tipo: string) => {
-    return TIPO_OPTIONS.find(t => t.value === tipo)?.icon || 'ellipsis-horizontal';
+    return tipoOptions.find((option) => option.value === tipo)?.icon || 'ellipsis-horizontal';
   };
 
   const getColorForTipo = (tipo: string) => {
-    return TIPO_OPTIONS.find(t => t.value === tipo)?.color || COLORS.textSecondary;
+    return tipoOptions.find((option) => option.value === tipo)?.color || colors.textSecondary;
   };
 
   if (loading) {
@@ -157,7 +167,7 @@ export default function AssenzeScreen() {
         {item.note && <Text style={styles.assenzaNote}>{item.note}</Text>}
         {item.certificato_nome && (
           <View style={styles.certificatoBadge}>
-            <Ionicons name="attach" size={14} color={COLORS.primary} />
+            <Ionicons name="attach" size={14} color={colors.primary} />
             <Text style={styles.certificatoText}>{item.certificato_nome}</Text>
           </View>
         )}
@@ -177,7 +187,7 @@ export default function AssenzeScreen() {
           }}
           testID="assenze-add-button"
         >
-          <Ionicons name="add" size={24} color={COLORS.textWhite} />
+          <Ionicons name="add" size={24} color={colors.textWhite} />
         </TouchableOpacity>
       </View>
 
@@ -185,10 +195,10 @@ export default function AssenzeScreen() {
       <View style={styles.summaryContainer}>
         <Card style={styles.summaryCard}>
           <View style={styles.summaryIconContainer}>
-            <Ionicons name="airplane" size={20} color={COLORS.ferie} />
+            <Ionicons name="airplane" size={20} color={colors.ferie} />
           </View>
           <Text style={styles.summaryLabel}>Ferie</Text>
-          <Text style={[styles.summaryValue, { color: COLORS.ferie }]} testID="assenze-ferie-value">
+          <Text style={[styles.summaryValue, { color: colors.ferie }]} testID="assenze-ferie-value">
             {ferieData?.saldo_attuale?.toFixed(1) || '0'}h
           </Text>
           <Text style={styles.summarySubtext}>disponibili</Text>
@@ -196,14 +206,14 @@ export default function AssenzeScreen() {
         
         <Card style={styles.summaryCard}>
           <View style={styles.summaryIconContainer}>
-            <Ionicons name="medkit" size={20} color={COLORS.malattia} />
+            <Ionicons name="medkit" size={20} color={colors.malattia} />
           </View>
           <Text style={styles.summaryLabel}>Comporto</Text>
           <Text style={[
             styles.summaryValue,
-            comporto?.alert_critico && { color: COLORS.error },
-            comporto?.alert_attenzione && !comporto?.alert_critico && { color: COLORS.warning },
-            !comporto?.alert_attenzione && { color: COLORS.success },
+            comporto?.alert_critico && { color: colors.error },
+            comporto?.alert_attenzione && !comporto?.alert_critico && { color: colors.warning },
+            !comporto?.alert_attenzione && { color: colors.success },
           ]}>
             {comporto?.giorni_malattia_3_anni || 0}
           </Text>
@@ -217,12 +227,12 @@ export default function AssenzeScreen() {
         renderItem={renderAssenza}
         contentContainerStyle={styles.list}
         refreshControl={
-          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+          <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
         }
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="calendar-outline" size={64} color={COLORS.border} />
+            <Ionicons name="calendar-outline" size={64} color={colors.border} />
             <Text style={styles.emptyText}>Nessuna assenza registrata</Text>
           </View>
         }
@@ -239,10 +249,10 @@ export default function AssenzeScreen() {
       >
         <TouchableOpacity style={styles.tipoSelector} onPress={() => setShowTipoSheet(true)}>
           <View style={[styles.tipoIcon, { backgroundColor: `${getColorForTipo(selectedTipo)}15` }]}>
-            <Ionicons name={getIconForTipo(selectedTipo) as any} size={20} color={getColorForTipo(selectedTipo)} />
+            <Ionicons name={getIconForTipo(selectedTipo)} size={20} color={getColorForTipo(selectedTipo)} />
           </View>
           <Text style={styles.tipoText}>{getTipoAssenzaLabel(selectedTipo)}</Text>
-          <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+          <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
 
         <DatePickerField
@@ -300,12 +310,12 @@ export default function AssenzeScreen() {
         title="Seleziona Tipo"
         height="50%"
       >
-        {TIPO_OPTIONS.map((option) => (
+        {tipoOptions.map((option) => (
           <TouchableOpacity
             key={option.value}
             style={[
               styles.tipoOption,
-              selectedTipo === option.value && styles.tipoOptionSelected,
+              selectedTipo === option.value && { ...styles.tipoOptionSelected, backgroundColor: `${colors.primary}10` },
             ]}
             onPress={() => {
               setSelectedTipo(option.value);
@@ -313,11 +323,11 @@ export default function AssenzeScreen() {
             }}
           >
             <View style={[styles.tipoOptionIcon, { backgroundColor: `${option.color}15` }]}>
-              <Ionicons name={option.icon as any} size={20} color={option.color} />
+              <Ionicons name={option.icon} size={20} color={option.color} />
             </View>
             <Text style={styles.tipoOptionText}>{option.label}</Text>
             {selectedTipo === option.value && (
-              <Ionicons name="checkmark-circle" size={24} color={COLORS.primary} />
+              <Ionicons name="checkmark-circle" size={24} color={colors.primary} />
             )}
           </TouchableOpacity>
         ))}
@@ -326,182 +336,182 @@ export default function AssenzeScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  summaryContainer: {
-    flexDirection: 'row',
-    paddingHorizontal: 16,
-    gap: 12,
-    marginBottom: 16,
-  },
-  summaryCard: {
-    flex: 1,
-    alignItems: 'center',
-    paddingVertical: 16,
-  },
-  summaryIconContainer: {
-    marginBottom: 8,
-  },
-  summaryLabel: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-  },
-  summaryValue: {
-    fontSize: 28,
-    fontWeight: '700',
-    marginTop: 4,
-  },
-  summarySubtext: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  assenzaCard: {
-    marginBottom: 12,
-  },
-  assenzaHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  assenzaIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  assenzaInfo: {
-    flex: 1,
-    marginLeft: 12,
-  },
-  assenzaTipo: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  assenzaDate: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-  },
-  assenzaHours: {
-    alignItems: 'flex-end',
-  },
-  assenzaHoursValue: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  assenzaNote: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 12,
-    fontStyle: 'italic',
-  },
-  certificatoBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: 12,
-    paddingVertical: 6,
-    paddingHorizontal: 10,
-    backgroundColor: `${COLORS.primary}10`,
-    borderRadius: 8,
-    alignSelf: 'flex-start',
-  },
-  certificatoText: {
-    fontSize: 12,
-    color: COLORS.primary,
-    marginLeft: 6,
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginTop: 16,
-  },
-  tipoSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardDark,
-    padding: 12,
-    borderRadius: 12,
-    marginBottom: 16,
-  },
-  tipoIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tipoText: {
-    flex: 1,
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text,
-    marginLeft: 12,
-  },
-  tipoOption: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  tipoOptionSelected: {
-    backgroundColor: `${COLORS.primary}10`,
-    marginHorizontal: -20,
-    paddingHorizontal: 20,
-  },
-  tipoOptionIcon: {
-    width: 40,
-    height: 40,
-    borderRadius: 12,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tipoOptionText: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text,
-    marginLeft: 12,
-  },
-  sheetButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
-  sheetButton: {
-    flex: 1,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    addButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    summaryContainer: {
+      flexDirection: 'row',
+      paddingHorizontal: 16,
+      gap: 12,
+      marginBottom: 16,
+    },
+    summaryCard: {
+      flex: 1,
+      alignItems: 'center',
+      paddingVertical: 16,
+    },
+    summaryIconContainer: {
+      marginBottom: 8,
+    },
+    summaryLabel: {
+      fontSize: 13,
+      color: colors.textSecondary,
+    },
+    summaryValue: {
+      fontSize: 28,
+      fontWeight: '700',
+      marginTop: 4,
+    },
+    summarySubtext: {
+      fontSize: 12,
+      color: colors.textSecondary,
+    },
+    list: {
+      paddingHorizontal: 16,
+      paddingBottom: 100,
+    },
+    assenzaCard: {
+      marginBottom: 12,
+    },
+    assenzaHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    assenzaIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    assenzaInfo: {
+      flex: 1,
+      marginLeft: 12,
+    },
+    assenzaTipo: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    assenzaDate: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+    },
+    assenzaHours: {
+      alignItems: 'flex-end',
+    },
+    assenzaHoursValue: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    assenzaNote: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 12,
+      fontStyle: 'italic',
+    },
+    certificatoBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      marginTop: 12,
+      paddingVertical: 6,
+      paddingHorizontal: 10,
+      backgroundColor: `${colors.primary}10`,
+      borderRadius: 8,
+      alignSelf: 'flex-start',
+    },
+    certificatoText: {
+      fontSize: 12,
+      color: colors.primary,
+      marginLeft: 6,
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      marginTop: 16,
+    },
+    tipoSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardDark,
+      padding: 12,
+      borderRadius: 12,
+      marginBottom: 16,
+    },
+    tipoIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    tipoText: {
+      flex: 1,
+      fontSize: 16,
+      fontWeight: '500',
+      color: colors.text,
+      marginLeft: 12,
+    },
+    tipoOption: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 12,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    tipoOptionSelected: {
+      marginHorizontal: -20,
+      paddingHorizontal: 20,
+    },
+    tipoOptionIcon: {
+      width: 40,
+      height: 40,
+      borderRadius: 12,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    tipoOptionText: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.text,
+      marginLeft: 12,
+    },
+    sheetButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+    },
+    sheetButton: {
+      flex: 1,
+    },
+  });

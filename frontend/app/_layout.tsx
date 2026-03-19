@@ -12,8 +12,9 @@ import {
   KeyboardAvoidingView,
 } from 'react-native';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
-import { COLORS } from '../src/utils/colors';
 import { useAppStore } from '../src/store/appStore';
+import { useAppTheme } from '../src/hooks/useAppTheme';
+import { createElevation } from '../src/utils/shadows';
 
 export default function RootLayout() {
   const [isReady, setIsReady] = useState(false);
@@ -22,6 +23,8 @@ export default function RootLayout() {
   const [pinError, setPinError] = useState('');
   const [canUseBiometric, setCanUseBiometric] = useState(false);
   const { isAuthenticated, setAuthenticated } = useAppStore();
+  const { colors, isDark } = useAppTheme();
+  const styles = createStyles(colors);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -119,10 +122,10 @@ export default function RootLayout() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" />
+      <StatusBar style={isDark ? 'light' : 'dark'} />
       {!isReady ? (
         <View style={styles.loading}>
-          <ActivityIndicator size="large" color={COLORS.primary} />
+          <ActivityIndicator size="large" color={colors.primary} />
         </View>
       ) : showPinUnlock ? (
         <KeyboardAvoidingView
@@ -144,7 +147,7 @@ export default function RootLayout() {
                 if (pinError) setPinError('');
               }}
               placeholder="PIN"
-              placeholderTextColor={COLORS.textLight}
+              placeholderTextColor={colors.textLight}
               keyboardType="number-pad"
               secureTextEntry
               maxLength={6}
@@ -171,7 +174,7 @@ export default function RootLayout() {
         <Stack
           screenOptions={{
             headerShown: false,
-            contentStyle: { backgroundColor: COLORS.background },
+            contentStyle: { backgroundColor: colors.background },
           }}
         >
           <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
@@ -181,96 +184,99 @@ export default function RootLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  loading: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: COLORS.background,
-  },
-  unlockScreen: {
-    flex: 1,
-    justifyContent: 'center',
-    paddingHorizontal: 24,
-    backgroundColor: COLORS.background,
-  },
-  unlockCard: {
-    backgroundColor: COLORS.card,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 24,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 8 },
-    shadowOpacity: 0.04,
-    shadowRadius: 16,
-    elevation: 2,
-  },
-  unlockEyebrow: {
-    fontSize: 12,
-    fontWeight: '700',
-    letterSpacing: 0.8,
-    textTransform: 'uppercase',
-    color: COLORS.primary,
-    marginBottom: 8,
-  },
-  unlockTitle: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  unlockBody: {
-    fontSize: 15,
-    lineHeight: 22,
-    color: COLORS.textSecondary,
-    marginTop: 10,
-    marginBottom: 20,
-  },
-  pinInput: {
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    borderRadius: 14,
-    backgroundColor: COLORS.cardDark,
-    paddingHorizontal: 16,
-    paddingVertical: 14,
-    fontSize: 22,
-    fontWeight: '600',
-    letterSpacing: 6,
-    color: COLORS.text,
-    textAlign: 'center',
-  },
-  pinInputError: {
-    borderColor: COLORS.error,
-  },
-  pinErrorText: {
-    fontSize: 13,
-    color: COLORS.error,
-    marginTop: 10,
-  },
-  primaryButton: {
-    marginTop: 18,
-    borderRadius: 14,
-    backgroundColor: COLORS.primary,
-    paddingVertical: 14,
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    fontSize: 15,
-    fontWeight: '700',
-    color: COLORS.textWhite,
-  },
-  secondaryButton: {
-    marginTop: 10,
-    borderRadius: 14,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingVertical: 14,
-    alignItems: 'center',
-    backgroundColor: COLORS.surface,
-  },
-  secondaryButtonText: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    loading: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: colors.background,
+    },
+    unlockScreen: {
+      flex: 1,
+      justifyContent: 'center',
+      paddingHorizontal: 24,
+      backgroundColor: colors.background,
+    },
+    unlockCard: {
+      backgroundColor: colors.card,
+      borderRadius: 20,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 24,
+      ...createElevation({
+        color: colors.shadowMedium,
+        offsetY: 8,
+        blur: 16,
+        opacity: 0.24,
+        elevation: 4,
+      }),
+    },
+    unlockEyebrow: {
+      fontSize: 12,
+      fontWeight: '700',
+      letterSpacing: 0.8,
+      textTransform: 'uppercase',
+      color: colors.primary,
+      marginBottom: 8,
+    },
+    unlockTitle: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    unlockBody: {
+      fontSize: 15,
+      lineHeight: 22,
+      color: colors.textSecondary,
+      marginTop: 10,
+      marginBottom: 20,
+    },
+    pinInput: {
+      borderWidth: 1,
+      borderColor: colors.border,
+      borderRadius: 14,
+      backgroundColor: colors.cardDark,
+      paddingHorizontal: 16,
+      paddingVertical: 14,
+      fontSize: 22,
+      fontWeight: '600',
+      letterSpacing: 6,
+      color: colors.text,
+      textAlign: 'center',
+    },
+    pinInputError: {
+      borderColor: colors.error,
+    },
+    pinErrorText: {
+      fontSize: 13,
+      color: colors.error,
+      marginTop: 10,
+    },
+    primaryButton: {
+      marginTop: 18,
+      borderRadius: 14,
+      backgroundColor: colors.primary,
+      paddingVertical: 14,
+      alignItems: 'center',
+    },
+    primaryButtonText: {
+      fontSize: 15,
+      fontWeight: '700',
+      color: colors.textWhite,
+    },
+    secondaryButton: {
+      marginTop: 10,
+      borderRadius: 14,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingVertical: 14,
+      alignItems: 'center',
+      backgroundColor: colors.surface,
+    },
+    secondaryButtonText: {
+      fontSize: 15,
+      fontWeight: '600',
+      color: colors.text,
+    },
+  });

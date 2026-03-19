@@ -1,9 +1,9 @@
 import React, { useState } from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Modal, ScrollView } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../utils/colors';
 import { format, getDaysInMonth, startOfMonth, getDay } from 'date-fns';
 import { it } from 'date-fns/locale';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 interface DatePickerFieldProps {
   label?: string;
@@ -22,6 +22,8 @@ export const DatePickerField: React.FC<DatePickerFieldProps> = ({
   minimumDate,
   maximumDate,
 }) => {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [showPicker, setShowPicker] = useState(false);
   const [viewDate, setViewDate] = useState(() => {
     if (value) {
@@ -91,11 +93,11 @@ export const DatePickerField: React.FC<DatePickerFieldProps> = ({
         onPress={() => setShowPicker(true)}
         activeOpacity={0.7}
       >
-        <Ionicons name="calendar" size={20} color={COLORS.textSecondary} style={styles.icon} />
+        <Ionicons name="calendar" size={20} color={colors.textSecondary} style={styles.icon} />
         <Text style={[styles.inputText, !value && styles.placeholder]}>
           {displayValue}
         </Text>
-        <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+        <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal
@@ -112,13 +114,13 @@ export const DatePickerField: React.FC<DatePickerFieldProps> = ({
           <View style={styles.calendarContainer} onStartShouldSetResponder={() => true}>
             <View style={styles.calendarHeader}>
               <TouchableOpacity onPress={prevMonth} style={styles.navButton}>
-                <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
+                <Ionicons name="chevron-back" size={24} color={colors.primary} />
               </TouchableOpacity>
               <Text style={styles.monthYearText}>
                 {format(viewDate, 'MMMM yyyy', { locale: it })}
               </Text>
               <TouchableOpacity onPress={nextMonth} style={styles.navButton}>
-                <Ionicons name="chevron-forward" size={24} color={COLORS.primary} />
+                <Ionicons name="chevron-forward" size={24} color={colors.primary} />
               </TouchableOpacity>
             </View>
 
@@ -183,6 +185,8 @@ export const TimePickerField: React.FC<TimePickerFieldProps> = ({
   onChange,
   placeholder = 'Seleziona ora',
 }) => {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [showPicker, setShowPicker] = useState(false);
   const [selectedHour, setSelectedHour] = useState(() => {
     if (value) {
@@ -216,11 +220,11 @@ export const TimePickerField: React.FC<TimePickerFieldProps> = ({
         onPress={() => setShowPicker(true)}
         activeOpacity={0.7}
       >
-        <Ionicons name="time" size={20} color={COLORS.textSecondary} style={styles.icon} />
+        <Ionicons name="time" size={20} color={colors.textSecondary} style={styles.icon} />
         <Text style={[styles.inputText, !value && styles.placeholder]}>
           {displayValue}
         </Text>
-        <Ionicons name="chevron-down" size={20} color={COLORS.textSecondary} />
+        <Ionicons name="chevron-down" size={20} color={colors.textSecondary} />
       </TouchableOpacity>
 
       <Modal
@@ -318,215 +322,219 @@ export const TimePickerField: React.FC<TimePickerFieldProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardDark,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12,
-    minHeight: 48,
-  },
-  icon: {
-    marginRight: 10,
-  },
-  inputText: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text,
-    paddingVertical: 12,
-  },
-  placeholder: {
-    color: COLORS.textLight,
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  calendarContainer: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 20,
-    width: '90%',
-    maxWidth: 360,
-  },
-  calendarHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 20,
-  },
-  navButton: {
-    padding: 8,
-  },
-  monthYearText: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    textTransform: 'capitalize',
-  },
-  weekDaysRow: {
-    flexDirection: 'row',
-    marginBottom: 10,
-  },
-  weekDayText: {
-    flex: 1,
-    textAlign: 'center',
-    fontSize: 12,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  daysGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-  },
-  dayCell: {
-    width: '14.28%',
-    aspectRatio: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 20,
-  },
-  dayCellSelected: {
-    backgroundColor: COLORS.primary,
-  },
-  dayCellToday: {
-    borderWidth: 2,
-    borderColor: COLORS.primary,
-  },
-  dayText: {
-    fontSize: 14,
-    color: COLORS.text,
-  },
-  dayTextSelected: {
-    color: COLORS.textWhite,
-    fontWeight: '600',
-  },
-  dayTextToday: {
-    color: COLORS.primary,
-    fontWeight: '600',
-  },
-  closeButton: {
-    marginTop: 20,
-    paddingVertical: 12,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  closeButtonText: {
-    color: COLORS.textWhite,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  // Time picker styles
-  timeContainer: {
-    backgroundColor: COLORS.card,
-    borderRadius: 16,
-    padding: 20,
-    width: '80%',
-    maxWidth: 320,
-  },
-  timeTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: COLORS.text,
-    textAlign: 'center',
-    marginBottom: 20,
-  },
-  timePickerRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  timeColumn: {
-    alignItems: 'center',
-  },
-  timeColumnLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginBottom: 8,
-  },
-  timeScrollView: {
-    height: 150,
-    width: 70,
-  },
-  timeSeparator: {
-    fontSize: 32,
-    fontWeight: '700',
-    color: COLORS.text,
-    marginHorizontal: 16,
-  },
-  timeOption: {
-    paddingVertical: 10,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    marginVertical: 2,
-    alignItems: 'center',
-  },
-  timeOptionSelected: {
-    backgroundColor: COLORS.primary,
-  },
-  timeOptionText: {
-    fontSize: 18,
-    color: COLORS.text,
-  },
-  timeOptionTextSelected: {
-    color: COLORS.textWhite,
-    fontWeight: '600',
-  },
-  timePreview: {
-    marginTop: 20,
-    paddingVertical: 16,
-    backgroundColor: COLORS.cardDark,
-    borderRadius: 12,
-    alignItems: 'center',
-  },
-  timePreviewText: {
-    fontSize: 36,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  timeButtons: {
-    flexDirection: 'row',
-    marginTop: 20,
-    gap: 12,
-  },
-  timeCancelButton: {
-    flex: 1,
-    paddingVertical: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: COLORS.border,
-    alignItems: 'center',
-  },
-  timeCancelText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    fontWeight: '600',
-  },
-  timeConfirmButton: {
-    flex: 1,
-    paddingVertical: 12,
-    backgroundColor: COLORS.primary,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  timeConfirmText: {
-    color: COLORS.textWhite,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardDark,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      minHeight: 48,
+    },
+    icon: {
+      marginRight: 10,
+    },
+    inputText: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.text,
+      paddingVertical: 12,
+    },
+    placeholder: {
+      color: colors.textLight,
+    },
+    modalOverlay: {
+      flex: 1,
+      backgroundColor: colors.overlay,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    calendarContainer: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 20,
+      width: '90%',
+      maxWidth: 360,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    calendarHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      marginBottom: 20,
+    },
+    navButton: {
+      padding: 8,
+    },
+    monthYearText: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text,
+      textTransform: 'capitalize',
+    },
+    weekDaysRow: {
+      flexDirection: 'row',
+      marginBottom: 10,
+    },
+    weekDayText: {
+      flex: 1,
+      textAlign: 'center',
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    daysGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+    },
+    dayCell: {
+      width: '14.28%',
+      aspectRatio: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      borderRadius: 20,
+    },
+    dayCellSelected: {
+      backgroundColor: colors.primary,
+    },
+    dayCellToday: {
+      borderWidth: 2,
+      borderColor: colors.primary,
+    },
+    dayText: {
+      fontSize: 14,
+      color: colors.text,
+    },
+    dayTextSelected: {
+      color: colors.textWhite,
+      fontWeight: '600',
+    },
+    dayTextToday: {
+      color: colors.primary,
+      fontWeight: '600',
+    },
+    closeButton: {
+      marginTop: 20,
+      paddingVertical: 12,
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    closeButtonText: {
+      color: colors.textWhite,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+    timeContainer: {
+      backgroundColor: colors.card,
+      borderRadius: 16,
+      padding: 20,
+      width: '80%',
+      maxWidth: 320,
+      borderWidth: 1,
+      borderColor: colors.border,
+    },
+    timeTitle: {
+      fontSize: 18,
+      fontWeight: '600',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 20,
+    },
+    timePickerRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    timeColumn: {
+      alignItems: 'center',
+    },
+    timeColumnLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginBottom: 8,
+    },
+    timeScrollView: {
+      height: 150,
+      width: 70,
+    },
+    timeSeparator: {
+      fontSize: 32,
+      fontWeight: '700',
+      color: colors.text,
+      marginHorizontal: 16,
+    },
+    timeOption: {
+      paddingVertical: 10,
+      paddingHorizontal: 16,
+      borderRadius: 8,
+      marginVertical: 2,
+      alignItems: 'center',
+    },
+    timeOptionSelected: {
+      backgroundColor: colors.primary,
+    },
+    timeOptionText: {
+      fontSize: 18,
+      color: colors.text,
+    },
+    timeOptionTextSelected: {
+      color: colors.textWhite,
+      fontWeight: '600',
+    },
+    timePreview: {
+      marginTop: 20,
+      paddingVertical: 16,
+      backgroundColor: colors.cardDark,
+      borderRadius: 12,
+      alignItems: 'center',
+    },
+    timePreviewText: {
+      fontSize: 36,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    timeButtons: {
+      flexDirection: 'row',
+      marginTop: 20,
+      gap: 12,
+    },
+    timeCancelButton: {
+      flex: 1,
+      paddingVertical: 12,
+      borderRadius: 8,
+      borderWidth: 2,
+      borderColor: colors.border,
+      alignItems: 'center',
+    },
+    timeCancelText: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      fontWeight: '600',
+    },
+    timeConfirmButton: {
+      flex: 1,
+      paddingVertical: 12,
+      backgroundColor: colors.primary,
+      borderRadius: 8,
+      alignItems: 'center',
+    },
+    timeConfirmText: {
+      color: colors.textWhite,
+      fontSize: 16,
+      fontWeight: '600',
+    },
+  });

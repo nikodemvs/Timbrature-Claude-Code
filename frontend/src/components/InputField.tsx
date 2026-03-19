@@ -1,7 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TextInput, TextInputProps } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../utils/colors';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 interface InputFieldProps extends TextInputProps {
   label?: string;
@@ -18,16 +18,19 @@ export const InputField: React.FC<InputFieldProps> = ({
   style,
   ...props
 }) => {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
+
   return (
     <View style={styles.container}>
       {label && <Text style={styles.label}>{label}</Text>}
       <View style={[styles.inputContainer, error && styles.inputError]}>
         {icon && (
-          <Ionicons name={icon} size={20} color={COLORS.textSecondary} style={styles.icon} />
+          <Ionicons name={icon} size={20} color={colors.textSecondary} style={styles.icon} />
         )}
         <TextInput
           style={[styles.input, style]}
-          placeholderTextColor={COLORS.textLight}
+          placeholderTextColor={colors.textLight}
           {...props}
         />
         {rightElement}
@@ -37,41 +40,42 @@ export const InputField: React.FC<InputFieldProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  container: {
-    marginBottom: 16,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.text,
-    marginBottom: 8,
-  },
-  inputContainer: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: COLORS.cardDark,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    paddingHorizontal: 12,
-    minHeight: 48,
-  },
-  inputError: {
-    borderColor: COLORS.error,
-  },
-  icon: {
-    marginRight: 10,
-  },
-  input: {
-    flex: 1,
-    fontSize: 16,
-    color: COLORS.text,
-    paddingVertical: 12,
-  },
-  errorText: {
-    fontSize: 12,
-    color: COLORS.error,
-    marginTop: 4,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      marginBottom: 16,
+    },
+    label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.text,
+      marginBottom: 8,
+    },
+    inputContainer: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: colors.cardDark,
+      borderRadius: 12,
+      borderWidth: 1,
+      borderColor: colors.border,
+      paddingHorizontal: 12,
+      minHeight: 48,
+    },
+    inputError: {
+      borderColor: colors.error,
+    },
+    icon: {
+      marginRight: 10,
+    },
+    input: {
+      flex: 1,
+      fontSize: 16,
+      color: colors.text,
+      paddingVertical: 12,
+    },
+    errorText: {
+      fontSize: 12,
+      color: colors.error,
+      marginTop: 4,
+    },
+  });

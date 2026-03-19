@@ -1,7 +1,7 @@
 import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { COLORS } from '../utils/colors';
+import { useAppTheme } from '../hooks/useAppTheme';
 
 interface ButtonProps {
   title: string;
@@ -32,23 +32,26 @@ export const Button: React.FC<ButtonProps> = ({
   fullWidth,
   testID,
 }) => {
+  const { colors } = useAppTheme();
+  const styles = createStyles();
+
   const getBackgroundColor = () => {
-    if (disabled) return COLORS.border;
+    if (disabled) return colors.borderDark;
     switch (variant) {
-      case 'primary': return COLORS.primary;
-      case 'secondary': return COLORS.secondary;
-      case 'danger': return COLORS.error;
-      case 'success': return COLORS.success;
+      case 'primary': return colors.primary;
+      case 'secondary': return colors.secondary;
+      case 'danger': return colors.error;
+      case 'success': return colors.success;
       case 'outline': return 'transparent';
-      default: return COLORS.primary;
+      default: return colors.primary;
     }
   };
 
   const getTextColor = () => {
-    if (disabled) return COLORS.textSecondary;
+    if (disabled) return colors.textSecondary;
     switch (variant) {
-      case 'outline': return COLORS.primary;
-      default: return COLORS.textWhite;
+      case 'outline': return colors.primary;
+      default: return colors.textWhite;
     }
   };
 
@@ -76,7 +79,7 @@ export const Button: React.FC<ButtonProps> = ({
         styles.button,
         getPadding(),
         { backgroundColor: getBackgroundColor() },
-        variant === 'outline' && { borderWidth: 2, borderColor: COLORS.primary },
+        variant === 'outline' && { borderWidth: 2, borderColor: colors.primary },
         fullWidth && { width: '100%' },
         style,
       ]}
@@ -104,21 +107,22 @@ export const Button: React.FC<ButtonProps> = ({
   );
 };
 
-const styles = StyleSheet.create({
-  button: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 12,
-    minHeight: 44,
-  },
-  text: {
-    fontWeight: '600',
-  },
-  iconLeft: {
-    marginRight: 8,
-  },
-  iconRight: {
-    marginLeft: 8,
-  },
-});
+const createStyles = () =>
+  StyleSheet.create({
+    button: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      borderRadius: 12,
+      minHeight: 44,
+    },
+    text: {
+      fontWeight: '600',
+    },
+    iconLeft: {
+      marginRight: 8,
+    },
+    iconRight: {
+      marginLeft: 8,
+    },
+  });

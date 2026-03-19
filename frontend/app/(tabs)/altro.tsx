@@ -14,16 +14,45 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
-import { COLORS } from '../../src/utils/colors';
-import { useAppStore, THEMES, ThemeKey, getThemeColors } from '../../src/store/appStore';
+import { useAppStore, THEMES, ThemeKey, ColorSchemePreference } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
 import { formatCurrency, formatDate, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import { Alert as AlertType, ChatMessage, Reperibilita, Timbratura } from '../../src/types';
+import { useAppTheme } from '../../src/hooks/useAppTheme';
 
 type TabType = 'menu' | 'chat' | 'alerts' | 'stats' | 'reperibilita' | 'settings';
 type StatsZoom = 'giorno' | 'settimana' | 'mese' | 'anno' | 'tutti';
 
+const COLOR_SCHEME_OPTIONS: {
+  value: ColorSchemePreference;
+  label: string;
+  icon: keyof typeof Ionicons.glyphMap;
+  description: string;
+}[] = [
+  {
+    value: 'system',
+    label: 'Sistema',
+    icon: 'phone-portrait',
+    description: 'Segue il tema del dispositivo',
+  },
+  {
+    value: 'light',
+    label: 'Chiaro',
+    icon: 'sunny',
+    description: 'Tema sempre chiaro',
+  },
+  {
+    value: 'dark',
+    label: 'Scuro',
+    icon: 'moon',
+    description: 'Tema sempre scuro',
+  },
+];
+
 export default function AltroScreen() {
+  const { colors, themeColors, colorSchemePreference, setColorSchemePreference, resolvedScheme } =
+    useAppTheme();
+  const styles = createStyles(colors);
   const [activeTab, setActiveTab] = useState<TabType>('menu');
   
   // Chat state
@@ -63,6 +92,7 @@ export default function AltroScreen() {
   
   // Settings state
   const [showPinSheet, setShowPinSheet] = useState(false);
+  const [showAppearanceSheet, setShowAppearanceSheet] = useState(false);
   const [showThemeSheet, setShowThemeSheet] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
   const [newPin, setNewPin] = useState('');
@@ -77,7 +107,12 @@ export default function AltroScreen() {
   const [editScatti, setEditScatti] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
 
-  const themeColors = getThemeColors(theme);
+  const activeSchemeLabel =
+    colorSchemePreference === 'system'
+      ? `Sistema (${resolvedScheme === 'dark' ? 'Scuro' : 'Chiaro'})`
+      : colorSchemePreference === 'dark'
+        ? 'Scuro'
+        : 'Chiaro';
 
   const loadChatHistory = useCallback(async () => {
     try {
@@ -338,29 +373,29 @@ export default function AltroScreen() {
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('alerts')} testID="altro-menu-alerts">
-          <View style={[styles.menuIcon, { backgroundColor: `${COLORS.warning}15` }]}>
-            <Ionicons name="notifications" size={28} color={COLORS.warning} />
+          <View style={[styles.menuIcon, { backgroundColor: `${colors.warning}15` }]}>
+            <Ionicons name="notifications" size={28} color={colors.warning} />
           </View>
           <Text style={styles.menuLabel}>Avvisi</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('stats')} testID="altro-menu-stats">
-          <View style={[styles.menuIcon, { backgroundColor: `${COLORS.success}15` }]}>
-            <Ionicons name="stats-chart" size={28} color={COLORS.success} />
+          <View style={[styles.menuIcon, { backgroundColor: `${colors.success}15` }]}>
+            <Ionicons name="stats-chart" size={28} color={colors.success} />
           </View>
           <Text style={styles.menuLabel}>Statistiche</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('reperibilita')} testID="altro-menu-reperibilita">
-          <View style={[styles.menuIcon, { backgroundColor: `${COLORS.reperibilita}15` }]}>
-            <Ionicons name="call" size={28} color={COLORS.reperibilita} />
+          <View style={[styles.menuIcon, { backgroundColor: `${colors.reperibilita}15` }]}>
+            <Ionicons name="call" size={28} color={colors.reperibilita} />
           </View>
           <Text style={styles.menuLabel}>Reperibilità</Text>
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('settings')} testID="altro-menu-settings">
-          <View style={[styles.menuIcon, { backgroundColor: `${COLORS.textSecondary}15` }]}>
-            <Ionicons name="settings" size={28} color={COLORS.textSecondary} />
+          <View style={[styles.menuIcon, { backgroundColor: `${colors.textSecondary}15` }]}>
+            <Ionicons name="settings" size={28} color={colors.textSecondary} />
           </View>
           <Text style={styles.menuLabel}>Impostazioni</Text>
         </TouchableOpacity>
@@ -400,7 +435,7 @@ export default function AltroScreen() {
         showsVerticalScrollIndicator={false}
         ListEmptyComponent={
           <View style={styles.chatEmpty}>
-            <Ionicons name="chatbubbles-outline" size={64} color={COLORS.border} />
+            <Ionicons name="chatbubbles-outline" size={64} color={colors.border} />
             <Text style={styles.chatEmptyText}>Ciao! Come posso aiutarti?</Text>
           </View>
         }
@@ -421,11 +456,11 @@ export default function AltroScreen() {
           value={inputText}
           onChangeText={setInputText}
           placeholder="Scrivi un messaggio..."
-          placeholderTextColor={COLORS.textLight}
+          placeholderTextColor={colors.textLight}
           multiline
         />
         <TouchableOpacity style={[styles.chatSendButton, { backgroundColor: themeColors.primary }]} onPress={sendMessage}>
-          <Ionicons name="send" size={20} color={COLORS.textWhite} />
+          <Ionicons name="send" size={20} color={colors.textWhite} />
         </TouchableOpacity>
       </View>
     </KeyboardAvoidingView>
@@ -510,7 +545,7 @@ export default function AltroScreen() {
             </View>
             <View style={styles.totalItem}>
               <Text style={styles.totalLabel}>Straordinari</Text>
-              <Text style={[styles.totalValue, { color: COLORS.overtime }]}>{statsData.reduce((s, m) => s + m.ore_straordinarie, 0).toFixed(1)}h</Text>
+              <Text style={[styles.totalValue, { color: colors.overtime }]}>{statsData.reduce((s, m) => s + m.ore_straordinarie, 0).toFixed(1)}h</Text>
             </View>
           </View>
         </Card>
@@ -537,15 +572,15 @@ export default function AltroScreen() {
         contentContainerStyle={styles.repList}
         ListEmptyComponent={
           <View style={styles.emptyContainer}>
-            <Ionicons name="call-outline" size={64} color={COLORS.border} />
+            <Ionicons name="call-outline" size={64} color={colors.border} />
             <Text style={styles.emptyText}>Nessuna reperibilità</Text>
           </View>
         }
         renderItem={({ item }) => (
           <Card style={styles.repCard}>
             <View style={styles.repHeader}>
-              <View style={[styles.repTypeBadge, { backgroundColor: item.tipo === 'attiva' ? `${COLORS.error}15` : `${COLORS.reperibilita}15` }]}>
-                <Text style={[styles.repTypeText, { color: item.tipo === 'attiva' ? COLORS.error : COLORS.reperibilita }]}>
+              <View style={[styles.repTypeBadge, { backgroundColor: item.tipo === 'attiva' ? `${colors.error}15` : `${colors.reperibilita}15` }]}>
+                <Text style={[styles.repTypeText, { color: item.tipo === 'attiva' ? colors.error : colors.reperibilita }]}>
                   {item.tipo === 'attiva' ? 'ATTIVA' : 'PASSIVA'}
                 </Text>
               </View>
@@ -558,7 +593,7 @@ export default function AltroScreen() {
       />
       
       <TouchableOpacity style={[styles.fabButton, { backgroundColor: themeColors.primary }]} onPress={() => setShowRepSheet(true)}>
-        <Ionicons name="add" size={28} color={COLORS.textWhite} />
+        <Ionicons name="add" size={28} color={colors.textWhite} />
       </TouchableOpacity>
 
       <BottomSheet visible={showRepSheet} onClose={() => setShowRepSheet(false)} title="Nuova Reperibilità" height="70%">
@@ -588,17 +623,32 @@ export default function AltroScreen() {
   const renderSettings = () => (
     <ScrollView style={styles.settingsContainer} showsVerticalScrollIndicator={false} testID="altro-settings-screen">
       <Card>
+        <TouchableOpacity style={styles.settingItem} onPress={() => setShowAppearanceSheet(true)} testID="altro-settings-appearance-button">
+          <Ionicons name={resolvedScheme === 'dark' ? 'moon' : 'sunny'} size={22} color={themeColors.primary} />
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingText}>Aspetto</Text>
+            <Text style={styles.settingHint}>{activeSchemeLabel}</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
+        </TouchableOpacity>
+
         <TouchableOpacity style={styles.settingItem} onPress={() => setShowThemeSheet(true)} testID="altro-settings-theme-button">
           <Ionicons name="color-palette" size={22} color={themeColors.primary} />
-          <Text style={styles.settingText}>Tema Colore</Text>
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingText}>Tema Colore</Text>
+            <Text style={styles.settingHint}>{THEMES[theme].name}</Text>
+          </View>
           <View style={[styles.themePreview, { backgroundColor: themeColors.primary }]} />
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
         
         <TouchableOpacity style={styles.settingItem} onPress={() => setShowPinSheet(true)} testID="altro-settings-pin-button">
           <Ionicons name="lock-closed" size={22} color={themeColors.primary} />
-          <Text style={styles.settingText}>Cambia PIN</Text>
-          <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingText}>Cambia PIN</Text>
+            <Text style={styles.settingHint}>Protezione app</Text>
+          </View>
+          <Ionicons name="chevron-forward" size={20} color={colors.textSecondary} />
         </TouchableOpacity>
       </Card>
 
@@ -621,13 +671,47 @@ export default function AltroScreen() {
         <View style={styles.infoRow}><Text style={styles.infoLabel}>Scatti Anzianità</Text><Text style={styles.infoValue}>{formatCurrency(dashboard?.settings?.scatti_anzianita || 0)}</Text></View>
       </Card>
 
+      <BottomSheet visible={showAppearanceSheet} onClose={() => setShowAppearanceSheet(false)} title="Aspetto" height="46%">
+        <View style={styles.appearanceList}>
+          {COLOR_SCHEME_OPTIONS.map((option) => {
+            const selected = colorSchemePreference === option.value;
+            return (
+              <TouchableOpacity
+                key={option.value}
+                style={[
+                  styles.appearanceItem,
+                  selected && { borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}10` },
+                ]}
+                onPress={() => {
+                  setColorSchemePreference(option.value);
+                  setShowAppearanceSheet(false);
+                }}
+              >
+                <View style={[styles.appearanceIcon, { backgroundColor: selected ? `${themeColors.primary}18` : colors.cardDark }]}>
+                  <Ionicons
+                    name={option.icon}
+                    size={20}
+                    color={selected ? themeColors.primary : colors.textSecondary}
+                  />
+                </View>
+                <View style={styles.appearanceCopy}>
+                  <Text style={styles.appearanceLabel}>{option.label}</Text>
+                  <Text style={styles.appearanceDescription}>{option.description}</Text>
+                </View>
+                {selected && <Ionicons name="checkmark-circle" size={22} color={themeColors.primary} />}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      </BottomSheet>
+
       {/* Theme Sheet */}
       <BottomSheet visible={showThemeSheet} onClose={() => setShowThemeSheet(false)} title="Scegli Tema" height="50%">
         <View style={styles.themeGrid}>
           {(Object.keys(THEMES) as ThemeKey[]).map((key) => (
             <TouchableOpacity
               key={key}
-              style={[styles.themeItem, theme === key && styles.themeItemSelected]}
+              style={[styles.themeItem, theme === key && { ...styles.themeItemSelected, borderColor: themeColors.primary, backgroundColor: `${themeColors.primary}10` }]}
               onPress={() => { setTheme(key); setShowThemeSheet(false); }}
             >
               <View style={[styles.themeCircle, { backgroundColor: THEMES[key].primary }]} />
@@ -669,11 +753,11 @@ export default function AltroScreen() {
       data={alerts}
       keyExtractor={(item) => item.id}
       contentContainerStyle={styles.alertsList}
-      ListEmptyComponent={<View style={styles.emptyContainer}><Ionicons name="notifications-off-outline" size={64} color={COLORS.border} /><Text style={styles.emptyText}>Nessun avviso</Text></View>}
+      ListEmptyComponent={<View style={styles.emptyContainer}><Ionicons name="notifications-off-outline" size={64} color={colors.border} /><Text style={styles.emptyText}>Nessun avviso</Text></View>}
       renderItem={({ item }) => (
         <Card style={[styles.alertCard, !item.letto && styles.alertCardUnread]}>
           <View style={styles.alertHeader}>
-            <Ionicons name="alert-circle" size={20} color={COLORS.warning} />
+            <Ionicons name="alert-circle" size={20} color={colors.warning} />
             <Text style={styles.alertTitle}>{item.titolo}</Text>
           </View>
           <Text style={styles.alertMessage}>{item.messaggio}</Text>
@@ -698,14 +782,14 @@ export default function AltroScreen() {
       <View style={styles.header}>
         {activeTab !== 'menu' && (
           <TouchableOpacity style={styles.backButton} onPress={handleBack} testID="altro-back-button">
-            <Ionicons name="arrow-back" size={24} color={COLORS.text} />
+            <Ionicons name="arrow-back" size={24} color={colors.text} />
           </TouchableOpacity>
         )}
         <Text style={styles.title}>
           {activeTab === 'menu' ? 'Altro' : activeTab === 'chat' ? 'Assistente AI' : activeTab === 'alerts' ? 'Avvisi' : activeTab === 'stats' ? 'Statistiche' : activeTab === 'reperibilita' ? 'Reperibilità' : 'Impostazioni'}
         </Text>
         {activeTab === 'chat' && messages.length > 0 && (
-          <TouchableOpacity onPress={clearChat}><Ionicons name="trash-outline" size={22} color={COLORS.error} /></TouchableOpacity>
+          <TouchableOpacity onPress={clearChat}><Ionicons name="trash-outline" size={22} color={colors.error} /></TouchableOpacity>
         )}
       </View>
       {renderContent()}
@@ -713,100 +797,109 @@ export default function AltroScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: COLORS.background },
-  header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16 },
-  backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: COLORS.card, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
-  title: { flex: 1, fontSize: 28, fontWeight: '700', color: COLORS.text },
-  menuContainer: { flex: 1, paddingHorizontal: 16 },
-  menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 },
-  menuItem: { width: '28%', alignItems: 'center' },
-  menuIcon: { width: 64, height: 64, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
-  menuLabel: { fontSize: 12, color: COLORS.text, textAlign: 'center' },
-  profileCard: { marginBottom: 20 },
-  profileHeader: { flexDirection: 'row', alignItems: 'center' },
-  profileAvatar: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
-  profileInitials: { fontSize: 20, fontWeight: '700', color: COLORS.textWhite },
-  profileInfo: { flex: 1, marginLeft: 16 },
-  profileName: { fontSize: 18, fontWeight: '600', color: COLORS.text },
-  profileRole: { fontSize: 14, color: COLORS.textSecondary, marginTop: 2 },
-  profileCompany: { fontSize: 13, color: COLORS.textLight, marginTop: 2 },
-  chatContainer: { flex: 1 },
-  chatMessages: { paddingHorizontal: 16, paddingBottom: 16 },
-  chatEmpty: { alignItems: 'center', paddingVertical: 60 },
-  chatEmptyText: { fontSize: 18, fontWeight: '600', color: COLORS.text, marginTop: 16 },
-  chatBubble: { maxWidth: '80%', padding: 12, borderRadius: 16, marginVertical: 4 },
-  chatBubbleUser: { alignSelf: 'flex-end', backgroundColor: COLORS.primary, borderBottomRightRadius: 4 },
-  chatBubbleAssistant: { alignSelf: 'flex-start', backgroundColor: COLORS.card, borderBottomLeftRadius: 4 },
-  chatBubbleText: { fontSize: 15, lineHeight: 22 },
-  chatBubbleTextUser: { color: COLORS.textWhite },
-  chatBubbleTextAssistant: { color: COLORS.text },
-  chatTyping: { paddingHorizontal: 16, paddingVertical: 8 },
-  chatTypingText: { fontSize: 13, color: COLORS.textSecondary, fontStyle: 'italic' },
-  chatInputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, backgroundColor: COLORS.card, borderTopWidth: 1, borderTopColor: COLORS.border },
-  chatInput: { flex: 1, backgroundColor: COLORS.cardDark, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: COLORS.text, maxHeight: 100 },
-  chatSendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
-  statsContainer: { flex: 1, paddingHorizontal: 16 },
-  zoomCard: { marginBottom: 16 },
-  zoomTitle: { fontSize: 14, fontWeight: '600', color: COLORS.text, marginBottom: 12 },
-  zoomButtons: { flexDirection: 'row', gap: 8 },
-  zoomButton: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: COLORS.cardDark, alignItems: 'center' },
-  zoomButtonText: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  zoomButtonTextActive: { color: COLORS.textWhite },
-  periodSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
-  periodText: { fontSize: 18, fontWeight: '600', color: COLORS.text, marginHorizontal: 20 },
-  dailyStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  dailyStatItem: { width: '18%', alignItems: 'center', padding: 8, backgroundColor: COLORS.cardDark, borderRadius: 8 },
-  dailyStatDate: { fontSize: 14, fontWeight: '700', color: COLORS.text },
-  dailyStatHours: { fontSize: 12, fontWeight: '600', marginTop: 4 },
-  statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
-  statItem: { width: '25%', alignItems: 'center', paddingVertical: 8 },
-  statMonth: { fontSize: 12, fontWeight: '600', color: COLORS.textSecondary },
-  statHours: { fontSize: 14, fontWeight: '700', marginTop: 4 },
-  statOvertime: { fontSize: 11, color: COLORS.overtime },
-  totalsGrid: { flexDirection: 'row', justifyContent: 'space-around' },
-  totalItem: { alignItems: 'center' },
-  totalLabel: { fontSize: 12, color: COLORS.textSecondary },
-  totalValue: { fontSize: 18, fontWeight: '700', marginTop: 4 },
-  yearCard: { backgroundColor: COLORS.cardDark, padding: 16, borderRadius: 12, marginBottom: 12 },
-  yearTitle: { fontSize: 20, fontWeight: '700' },
-  yearHours: { fontSize: 16, color: COLORS.text, marginTop: 4 },
-  repContainer: { flex: 1 },
-  repList: { paddingHorizontal: 16, paddingBottom: 100 },
-  repCard: { marginBottom: 12 },
-  repHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  repTypeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
-  repTypeText: { fontSize: 11, fontWeight: '700' },
-  repCompenso: { fontSize: 18, fontWeight: '700', color: COLORS.success },
-  repDate: { fontSize: 15, fontWeight: '600', color: COLORS.text },
-  repTime: { fontSize: 14, color: COLORS.textSecondary, marginTop: 4 },
-  fabButton: { position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
-  tipoToggle: { flexDirection: 'row', marginBottom: 16, gap: 12 },
-  tipoOption: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: COLORS.border, alignItems: 'center' },
-  tipoOptionText: { fontSize: 14, fontWeight: '500', color: COLORS.textSecondary },
-  settingsContainer: { flex: 1, paddingHorizontal: 16 },
-  settingItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  settingText: { flex: 1, fontSize: 16, color: COLORS.text, marginLeft: 12 },
-  themePreview: { width: 24, height: 24, borderRadius: 12, marginRight: 8 },
-  cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
-  cardTitle: { fontSize: 16, fontWeight: '600', color: COLORS.text },
-  editButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: COLORS.cardDark, justifyContent: 'center', alignItems: 'center' },
-  infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: COLORS.border },
-  infoLabel: { fontSize: 14, color: COLORS.textSecondary },
-  infoValue: { fontSize: 14, fontWeight: '500', color: COLORS.text, maxWidth: '60%', textAlign: 'right' },
-  themeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
-  themeItem: { width: '30%', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 2, borderColor: COLORS.border },
-  themeItemSelected: { borderColor: COLORS.primary, backgroundColor: `${COLORS.primary}10` },
-  themeCircle: { width: 40, height: 40, borderRadius: 20, marginBottom: 8 },
-  themeName: { fontSize: 12, color: COLORS.text },
-  alertsList: { paddingHorizontal: 16, paddingBottom: 100 },
-  alertCard: { marginBottom: 12 },
-  alertCardUnread: { borderLeftWidth: 3, borderLeftColor: COLORS.warning },
-  alertHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
-  alertTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: COLORS.text, marginLeft: 10 },
-  alertMessage: { fontSize: 14, color: COLORS.textSecondary, lineHeight: 20 },
-  emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
-  emptyText: { fontSize: 16, color: COLORS.textSecondary, marginTop: 16 },
-  sheetButtons: { flexDirection: 'row', gap: 12, marginTop: 24 },
-  sheetButton: { flex: 1 },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: { flex: 1, backgroundColor: colors.background },
+    header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16 },
+    backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+    title: { flex: 1, fontSize: 28, fontWeight: '700', color: colors.text },
+    menuContainer: { flex: 1, paddingHorizontal: 16 },
+    menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 },
+    menuItem: { width: '28%', alignItems: 'center' },
+    menuIcon: { width: 64, height: 64, borderRadius: 16, justifyContent: 'center', alignItems: 'center', marginBottom: 8 },
+    menuLabel: { fontSize: 12, color: colors.text, textAlign: 'center' },
+    profileCard: { marginBottom: 20 },
+    profileHeader: { flexDirection: 'row', alignItems: 'center' },
+    profileAvatar: { width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+    profileInitials: { fontSize: 20, fontWeight: '700', color: colors.textWhite },
+    profileInfo: { flex: 1, marginLeft: 16 },
+    profileName: { fontSize: 18, fontWeight: '600', color: colors.text },
+    profileRole: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
+    profileCompany: { fontSize: 13, color: colors.textLight, marginTop: 2 },
+    chatContainer: { flex: 1 },
+    chatMessages: { paddingHorizontal: 16, paddingBottom: 16 },
+    chatEmpty: { alignItems: 'center', paddingVertical: 60 },
+    chatEmptyText: { fontSize: 18, fontWeight: '600', color: colors.text, marginTop: 16 },
+    chatBubble: { maxWidth: '80%', padding: 12, borderRadius: 16, marginVertical: 4 },
+    chatBubbleUser: { alignSelf: 'flex-end', backgroundColor: colors.primary, borderBottomRightRadius: 4 },
+    chatBubbleAssistant: { alignSelf: 'flex-start', backgroundColor: colors.card, borderBottomLeftRadius: 4 },
+    chatBubbleText: { fontSize: 15, lineHeight: 22 },
+    chatBubbleTextUser: { color: colors.textWhite },
+    chatBubbleTextAssistant: { color: colors.text },
+    chatTyping: { paddingHorizontal: 16, paddingVertical: 8 },
+    chatTypingText: { fontSize: 13, color: colors.textSecondary, fontStyle: 'italic' },
+    chatInputContainer: { flexDirection: 'row', alignItems: 'flex-end', padding: 12, backgroundColor: colors.card, borderTopWidth: 1, borderTopColor: colors.border },
+    chatInput: { flex: 1, backgroundColor: colors.cardDark, borderRadius: 20, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: colors.text, maxHeight: 100 },
+    chatSendButton: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginLeft: 8 },
+    statsContainer: { flex: 1, paddingHorizontal: 16 },
+    zoomCard: { marginBottom: 16 },
+    zoomTitle: { fontSize: 14, fontWeight: '600', color: colors.text, marginBottom: 12 },
+    zoomButtons: { flexDirection: 'row', gap: 8 },
+    zoomButton: { flex: 1, paddingVertical: 10, borderRadius: 8, backgroundColor: colors.cardDark, alignItems: 'center' },
+    zoomButtonText: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    zoomButtonTextActive: { color: colors.textWhite },
+    periodSelector: { flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 16 },
+    periodText: { fontSize: 18, fontWeight: '600', color: colors.text, marginHorizontal: 20 },
+    dailyStatsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
+    dailyStatItem: { width: '18%', alignItems: 'center', padding: 8, backgroundColor: colors.cardDark, borderRadius: 8 },
+    dailyStatDate: { fontSize: 14, fontWeight: '700', color: colors.text },
+    dailyStatHours: { fontSize: 12, fontWeight: '600', marginTop: 4 },
+    statsGrid: { flexDirection: 'row', flexWrap: 'wrap' },
+    statItem: { width: '25%', alignItems: 'center', paddingVertical: 8 },
+    statMonth: { fontSize: 12, fontWeight: '600', color: colors.textSecondary },
+    statHours: { fontSize: 14, fontWeight: '700', marginTop: 4 },
+    statOvertime: { fontSize: 11, color: colors.overtime },
+    totalsGrid: { flexDirection: 'row', justifyContent: 'space-around' },
+    totalItem: { alignItems: 'center' },
+    totalLabel: { fontSize: 12, color: colors.textSecondary },
+    totalValue: { fontSize: 18, fontWeight: '700', marginTop: 4 },
+    yearCard: { backgroundColor: colors.cardDark, padding: 16, borderRadius: 12, marginBottom: 12 },
+    yearTitle: { fontSize: 20, fontWeight: '700' },
+    yearHours: { fontSize: 16, color: colors.text, marginTop: 4 },
+    repContainer: { flex: 1 },
+    repList: { paddingHorizontal: 16, paddingBottom: 100 },
+    repCard: { marginBottom: 12 },
+    repHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+    repTypeBadge: { paddingHorizontal: 10, paddingVertical: 4, borderRadius: 6 },
+    repTypeText: { fontSize: 11, fontWeight: '700' },
+    repCompenso: { fontSize: 18, fontWeight: '700', color: colors.success },
+    repDate: { fontSize: 15, fontWeight: '600', color: colors.text },
+    repTime: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
+    fabButton: { position: 'absolute', bottom: 20, right: 20, width: 56, height: 56, borderRadius: 28, justifyContent: 'center', alignItems: 'center' },
+    tipoToggle: { flexDirection: 'row', marginBottom: 16, gap: 12 },
+    tipoOption: { flex: 1, paddingVertical: 12, borderRadius: 12, borderWidth: 2, borderColor: colors.border, alignItems: 'center' },
+    tipoOptionText: { fontSize: 14, fontWeight: '500', color: colors.textSecondary },
+    settingsContainer: { flex: 1, paddingHorizontal: 16 },
+    settingItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
+    settingCopy: { flex: 1, marginLeft: 12 },
+    settingText: { fontSize: 16, color: colors.text },
+    settingHint: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
+    themePreview: { width: 24, height: 24, borderRadius: 12, marginRight: 8 },
+    cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
+    cardTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
+    editButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.cardDark, justifyContent: 'center', alignItems: 'center' },
+    infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
+    infoLabel: { fontSize: 14, color: colors.textSecondary },
+    infoValue: { fontSize: 14, fontWeight: '500', color: colors.text, maxWidth: '60%', textAlign: 'right' },
+    appearanceList: { gap: 12 },
+    appearanceItem: { flexDirection: 'row', alignItems: 'center', padding: 14, borderRadius: 14, borderWidth: 1, borderColor: colors.border, backgroundColor: colors.card },
+    appearanceIcon: { width: 42, height: 42, borderRadius: 14, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
+    appearanceCopy: { flex: 1 },
+    appearanceLabel: { fontSize: 15, fontWeight: '600', color: colors.text },
+    appearanceDescription: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
+    themeGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 12 },
+    themeItem: { width: '30%', alignItems: 'center', padding: 12, borderRadius: 12, borderWidth: 2, borderColor: colors.border },
+    themeItemSelected: { borderColor: colors.primary, backgroundColor: `${colors.primary}10` },
+    themeCircle: { width: 40, height: 40, borderRadius: 20, marginBottom: 8 },
+    themeName: { fontSize: 12, color: colors.text },
+    alertsList: { paddingHorizontal: 16, paddingBottom: 100 },
+    alertCard: { marginBottom: 12 },
+    alertCardUnread: { borderLeftWidth: 3, borderLeftColor: colors.warning },
+    alertHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 8 },
+    alertTitle: { flex: 1, fontSize: 16, fontWeight: '600', color: colors.text, marginLeft: 10 },
+    alertMessage: { fontSize: 14, color: colors.textSecondary, lineHeight: 20 },
+    emptyContainer: { alignItems: 'center', justifyContent: 'center', paddingVertical: 60 },
+    emptyText: { fontSize: 16, color: colors.textSecondary, marginTop: 16 },
+    sheetButtons: { flexDirection: 'row', gap: 12, marginTop: 24 },
+    sheetButton: { flex: 1 },
+  });

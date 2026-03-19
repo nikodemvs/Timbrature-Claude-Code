@@ -13,10 +13,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
-import { COLORS } from '../../src/utils/colors';
 import * as api from '../../src/services/api';
 import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
 import { Timbratura, WeeklySummary } from '../../src/types';
+import { useAppTheme } from '../../src/hooks/useAppTheme';
 
 type TabType = 'personali' | 'aziendali' | 'confronto';
 
@@ -43,6 +43,8 @@ interface TimbraturaAziendale {
 }
 
 export default function TimbraturaScreen() {
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
   const [activeTab, setActiveTab] = useState<TabType>('personali');
   const [timbrature, setTimbrature] = useState<Timbratura[]>([]);
   const [timbratureAziendali, setTimbratureAziendali] = useState<TimbraturaAziendale[]>([]);
@@ -249,26 +251,26 @@ export default function TimbraturaScreen() {
           <Text style={styles.timbraturaHoursValue}>{item.ore_arrotondate.toFixed(1)}h</Text>
           {item.is_reperibilita_attiva && (
             <View style={styles.reperibilitaBadge}>
-              <Ionicons name="call" size={12} color={COLORS.reperibilita} />
+              <Ionicons name="call" size={12} color={colors.reperibilita} />
             </View>
           )}
         </View>
       </View>
       <View style={styles.timbraturaBody}>
         <View style={styles.timeSlot}>
-          <Ionicons name="log-in" size={16} color={COLORS.success} />
+          <Ionicons name="log-in" size={16} color={colors.success} />
           <Text style={styles.timeValue}>{item.ora_entrata || '--:--'}</Text>
         </View>
         <View style={styles.timeLine} />
         <View style={styles.timeSlot}>
-          <Ionicons name="log-out" size={16} color={COLORS.error} />
+          <Ionicons name="log-out" size={16} color={colors.error} />
           <Text style={styles.timeValue}>{item.ora_uscita || '--:--'}</Text>
         </View>
       </View>
       {item.note && <Text style={styles.timbraturaNote}>{item.note}</Text>}
       <View style={styles.inlineActions}>
         <TouchableOpacity style={styles.inlineActionButton} onPress={() => editTimbratura(item)} activeOpacity={0.8}>
-          <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+          <Ionicons name="create-outline" size={16} color={colors.primary} />
           <Text style={styles.inlineActionText}>Modifica</Text>
         </TouchableOpacity>
         <TouchableOpacity
@@ -276,7 +278,7 @@ export default function TimbraturaScreen() {
           onPress={() => handleDelete(item.data)}
           activeOpacity={0.8}
         >
-          <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+          <Ionicons name="trash-outline" size={16} color={colors.error} />
           <Text style={[styles.inlineActionText, styles.inlineActionDangerText]}>Elimina</Text>
         </TouchableOpacity>
       </View>
@@ -291,17 +293,17 @@ export default function TimbraturaScreen() {
           <Text style={styles.timbraturaDay}>{getGiornoSettimana(item.data)}</Text>
         </View>
         <View style={styles.timbraturaHours}>
-          <Text style={[styles.timbraturaHoursValue, { color: COLORS.secondary }]}>{item.ore_lavorate.toFixed(1)}h</Text>
+          <Text style={[styles.timbraturaHoursValue, { color: colors.secondary }]}>{item.ore_lavorate.toFixed(1)}h</Text>
         </View>
       </View>
       <View style={styles.timbraturaBody}>
         <View style={styles.timeSlot}>
-          <Ionicons name="log-in" size={16} color={COLORS.secondary} />
+          <Ionicons name="log-in" size={16} color={colors.secondary} />
           <Text style={styles.timeValue}>{item.ora_entrata || '--:--'}</Text>
         </View>
         <View style={styles.timeLine} />
         <View style={styles.timeSlot}>
-          <Ionicons name="log-out" size={16} color={COLORS.secondary} />
+          <Ionicons name="log-out" size={16} color={colors.secondary} />
           <Text style={styles.timeValue}>{item.ora_uscita || '--:--'}</Text>
         </View>
       </View>
@@ -318,7 +320,7 @@ export default function TimbraturaScreen() {
         </View>
         {item.has_discrepancy && (
           <View style={styles.warningBadge}>
-            <Ionicons name="warning" size={16} color={COLORS.warning} />
+            <Ionicons name="warning" size={16} color={colors.warning} />
             <Text style={styles.warningText}>{item.differenza_ore > 0 ? '+' : ''}{item.differenza_ore.toFixed(1)}h</Text>
           </View>
         )}
@@ -330,7 +332,7 @@ export default function TimbraturaScreen() {
         <Text style={styles.confrontoValue}>
           {item.personale_entrata || '--:--'} - {item.personale_uscita || '--:--'}
         </Text>
-        <Text style={[styles.confrontoOre, { color: COLORS.primary }]}>{item.personale_ore.toFixed(1)}h</Text>
+        <Text style={[styles.confrontoOre, { color: colors.primary }]}>{item.personale_ore.toFixed(1)}h</Text>
       </View>
       
       {/* Aziendale */}
@@ -339,7 +341,7 @@ export default function TimbraturaScreen() {
         <Text style={styles.confrontoValue}>
           {item.aziendale_entrata || '--:--'} - {item.aziendale_uscita || '--:--'}
         </Text>
-        <Text style={[styles.confrontoOre, { color: COLORS.secondary }]}>{item.aziendale_ore.toFixed(1)}h</Text>
+        <Text style={[styles.confrontoOre, { color: colors.secondary }]}>{item.aziendale_ore.toFixed(1)}h</Text>
       </View>
       
       {item.aziendale_descrizione && (
@@ -350,7 +352,7 @@ export default function TimbraturaScreen() {
 
   const renderEmptyAziendali = () => (
     <View style={styles.emptyContainer}>
-      <Ionicons name="cloud-upload-outline" size={64} color={COLORS.border} />
+      <Ionicons name="cloud-upload-outline" size={64} color={colors.border} />
       <Text style={styles.emptyText}>Nessuna timbratura aziendale</Text>
       <Text style={styles.emptySubtext}>Carica un PDF per importare i dati aziendali</Text>
       <Button
@@ -381,7 +383,7 @@ export default function TimbraturaScreen() {
             disabled={uploading}
             testID="timbrature-upload-button"
           >
-            <Ionicons name="cloud-upload" size={22} color={COLORS.textWhite} />
+            <Ionicons name="cloud-upload" size={22} color={colors.textWhite} />
           </TouchableOpacity>
           <TouchableOpacity
             style={styles.addButton}
@@ -391,7 +393,7 @@ export default function TimbraturaScreen() {
             }}
             testID="timbrature-add-button"
           >
-            <Ionicons name="add" size={24} color={COLORS.textWhite} />
+            <Ionicons name="add" size={24} color={colors.textWhite} />
           </TouchableOpacity>
         </View>
       </View>
@@ -410,7 +412,7 @@ export default function TimbraturaScreen() {
             }
           }}
         >
-          <Ionicons name="chevron-back" size={24} color={COLORS.primary} />
+          <Ionicons name="chevron-back" size={24} color={colors.primary} />
         </TouchableOpacity>
         
         <View style={styles.monthDisplay}>
@@ -436,7 +438,7 @@ export default function TimbraturaScreen() {
           <Ionicons 
             name="chevron-forward" 
             size={24} 
-            color={meseSelezionato === (new Date().getMonth() + 1) && annoSelezionato === new Date().getFullYear() ? COLORS.border : COLORS.primary} 
+            color={meseSelezionato === (new Date().getMonth() + 1) && annoSelezionato === new Date().getFullYear() ? colors.border : colors.primary} 
           />
         </TouchableOpacity>
       </View>
@@ -488,13 +490,13 @@ export default function TimbraturaScreen() {
                   <Text style={styles.summaryLabel}>Ore Totali</Text>
                 </View>
                 <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryValue, { color: COLORS.success }]}>
+                  <Text style={[styles.summaryValue, { color: colors.success }]}>
                     {weeklySummary.ore_ordinarie.toFixed(1)}
                   </Text>
                   <Text style={styles.summaryLabel}>Ordinarie</Text>
                 </View>
                 <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryValue, { color: COLORS.overtime }]}>
+                  <Text style={[styles.summaryValue, { color: colors.overtime }]}>
                     {weeklySummary.ore_straordinarie.toFixed(1)}
                   </Text>
                   <Text style={styles.summaryLabel}>Straordinari</Text>
@@ -508,12 +510,12 @@ export default function TimbraturaScreen() {
             renderItem={renderTimbratura}
             contentContainerStyle={styles.list}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
             }
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Ionicons name="time-outline" size={64} color={COLORS.border} />
+                <Ionicons name="time-outline" size={64} color={colors.border} />
                 <Text style={styles.emptyText}>Nessuna timbratura questo mese</Text>
               </View>
             }
@@ -528,7 +530,7 @@ export default function TimbraturaScreen() {
           renderItem={renderTimbraturaAziendale}
           contentContainerStyle={styles.list}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
           }
           showsVerticalScrollIndicator={false}
           ListEmptyComponent={renderEmptyAziendali}
@@ -546,7 +548,7 @@ export default function TimbraturaScreen() {
                   <Text style={styles.summaryLabel}>Mie Ore</Text>
                 </View>
                 <View style={styles.summaryStat}>
-                  <Text style={[styles.summaryValue, { color: COLORS.secondary }]}>
+                  <Text style={[styles.summaryValue, { color: colors.secondary }]}>
                     {confrontoRiepilogo.ore_aziendali_totali?.toFixed(1) || '0.0'}
                   </Text>
                   <Text style={styles.summaryLabel}>Ore Azienda</Text>
@@ -554,7 +556,7 @@ export default function TimbraturaScreen() {
                 <View style={styles.summaryStat}>
                   <Text style={[
                     styles.summaryValue,
-                    { color: confrontoRiepilogo.differenza_ore_totale > 0 ? COLORS.success : confrontoRiepilogo.differenza_ore_totale < 0 ? COLORS.error : COLORS.text }
+                    { color: confrontoRiepilogo.differenza_ore_totale > 0 ? colors.success : confrontoRiepilogo.differenza_ore_totale < 0 ? colors.error : colors.text }
                   ]}>
                     {confrontoRiepilogo.differenza_ore_totale > 0 ? '+' : ''}{confrontoRiepilogo.differenza_ore_totale?.toFixed(1) || '0.0'}
                   </Text>
@@ -563,7 +565,7 @@ export default function TimbraturaScreen() {
               </View>
               {confrontoRiepilogo.giorni_con_discrepanza > 0 && (
                 <View style={styles.alertBox}>
-                  <Ionicons name="alert-circle" size={20} color={COLORS.warning} />
+                  <Ionicons name="alert-circle" size={20} color={colors.warning} />
                   <Text style={styles.alertText}>
                     {confrontoRiepilogo.giorni_con_discrepanza} giorni con discrepanze
                   </Text>
@@ -577,12 +579,12 @@ export default function TimbraturaScreen() {
             renderItem={renderConfronto}
             contentContainerStyle={styles.list}
             refreshControl={
-              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[COLORS.primary]} />
+              <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />
             }
             showsVerticalScrollIndicator={false}
             ListEmptyComponent={
               <View style={styles.emptyContainer}>
-                <Ionicons name="git-compare-outline" size={64} color={COLORS.border} />
+                <Ionicons name="git-compare-outline" size={64} color={colors.border} />
                 <Text style={styles.emptyText}>Nessun confronto disponibile</Text>
                 <Text style={styles.emptySubtext}>Carica le timbrature aziendali per confrontarle</Text>
               </View>
@@ -636,14 +638,14 @@ export default function TimbraturaScreen() {
         {/* Reperibilità Toggle */}
         <View style={styles.reperibilitaToggle}>
           <View style={styles.reperibilitaLabel}>
-            <Ionicons name="call" size={20} color={isReperibilita ? COLORS.warning : COLORS.textSecondary} />
+            <Ionicons name="call" size={20} color={isReperibilita ? colors.warning : colors.textSecondary} />
             <Text style={styles.reperibilitaText}>Reperibilità</Text>
           </View>
           <Switch
             value={isReperibilita}
             onValueChange={setIsReperibilita}
-            trackColor={{ false: COLORS.border, true: `${COLORS.warning}50` }}
-            thumbColor={isReperibilita ? COLORS.warning : COLORS.surface}
+            trackColor={{ false: colors.border, true: `${colors.warning}50` }}
+            thumbColor={isReperibilita ? colors.warning : colors.surface}
           />
         </View>
         
@@ -668,348 +670,347 @@ export default function TimbraturaScreen() {
   );
 }
 
-const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: COLORS.background,
-  },
-  header: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 16,
-  },
-  title: {
-    fontSize: 28,
-    fontWeight: '700',
-    color: COLORS.text,
-  },
-  headerButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  uploadButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.secondary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  addButton: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: COLORS.primary,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  tabBar: {
-    flexDirection: 'row',
-    marginHorizontal: 16,
-    marginBottom: 10,
-    backgroundColor: COLORS.cardDark,
-    borderRadius: 14,
-    padding: 6,
-  },
-  tab: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 10,
-    borderRadius: 10,
-  },
-  tabActive: {
-    backgroundColor: `${COLORS.primary}14`,
-    borderWidth: 1,
-    borderColor: `${COLORS.primary}30`,
-  },
-  tabText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: COLORS.textSecondary,
-  },
-  tabTextActive: {
-    color: COLORS.primary,
-  },
-  badge: {
-    backgroundColor: COLORS.warning,
-    borderRadius: 10,
-    minWidth: 20,
-    height: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginLeft: 6,
-    paddingHorizontal: 6,
-  },
-  badgeText: {
-    color: '#FFF',
-    fontSize: 11,
-    fontWeight: '700',
-  },
-  summaryCard: {
-    marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: COLORS.surface,
-  },
-  summaryTitle: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  summarySubtitle: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 2,
-    marginBottom: 16,
-  },
-  summaryStats: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
-  },
-  summaryStat: {
-    alignItems: 'center',
-  },
-  summaryValue: {
-    fontSize: 24,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  summaryLabel: {
-    fontSize: 12,
-    color: COLORS.textSecondary,
-    marginTop: 4,
-  },
-  alertBox: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${COLORS.warning}15`,
-    padding: 12,
-    borderRadius: 8,
-    marginTop: 16,
-  },
-  alertText: {
-    color: COLORS.warning,
-    fontWeight: '600',
-    marginLeft: 8,
-  },
-  list: {
-    paddingHorizontal: 16,
-    paddingBottom: 100,
-  },
-  sectionHint: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.textSecondary,
-    marginHorizontal: 16,
-    marginBottom: 12,
-  },
-  timbraturaCard: {
-    marginBottom: 12,
-  },
-  discrepancyCard: {
-    borderLeftWidth: 4,
-    borderLeftColor: COLORS.warning,
-  },
-  timbraturaHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  timbraturaDate: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  timbraturaDay: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    textTransform: 'capitalize',
-  },
-  timbraturaHours: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timbraturaHoursValue: {
-    fontSize: 20,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  reperibilitaBadge: {
-    marginLeft: 8,
-    padding: 4,
-    backgroundColor: `${COLORS.reperibilita}15`,
-    borderRadius: 6,
-  },
-  warningBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: `${COLORS.warning}15`,
-    paddingHorizontal: 8,
-    paddingVertical: 4,
-    borderRadius: 6,
-  },
-  warningText: {
-    color: COLORS.warning,
-    fontWeight: '600',
-    fontSize: 13,
-    marginLeft: 4,
-  },
-  timbraturaBody: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timeSlot: {
-    flexDirection: 'row',
-    alignItems: 'center',
-  },
-  timeValue: {
-    fontSize: 16,
-    fontWeight: '500',
-    color: COLORS.text,
-    marginLeft: 8,
-  },
-  timeLine: {
-    flex: 1,
-    height: 2,
-    backgroundColor: COLORS.border,
-    marginHorizontal: 16,
-    borderRadius: 1,
-  },
-  timbraturaNote: {
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    marginTop: 12,
-    fontStyle: 'italic',
-  },
-  inlineActions: {
-    flexDirection: 'row',
-    gap: 10,
-    marginTop: 14,
-  },
-  inlineActionButton: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 6,
-    paddingVertical: 10,
-    borderRadius: 12,
-    backgroundColor: `${COLORS.primary}10`,
-  },
-  inlineActionDanger: {
-    backgroundColor: `${COLORS.error}10`,
-  },
-  inlineActionText: {
-    fontSize: 13,
-    fontWeight: '700',
-    color: COLORS.primary,
-  },
-  inlineActionDangerText: {
-    color: COLORS.error,
-  },
-  confrontoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: COLORS.border,
-  },
-  confrontoLabel: {
-    width: 70,
-    fontSize: 13,
-    color: COLORS.textSecondary,
-    fontWeight: '500',
-  },
-  confrontoValue: {
-    flex: 1,
-    fontSize: 14,
-    color: COLORS.text,
-  },
-  confrontoOre: {
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  emptyContainer: {
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 60,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: COLORS.textSecondary,
-    marginTop: 16,
-  },
-  emptySubtext: {
-    fontSize: 14,
-    color: COLORS.textSecondary,
-    marginTop: 8,
-    textAlign: 'center',
-    paddingHorizontal: 32,
-  },
-  sheetButtons: {
-    flexDirection: 'row',
-    gap: 12,
-    marginTop: 24,
-  },
-  sheetButton: {
-    flex: 1,
-  },
-  // Month Selector styles
-  monthSelector: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    backgroundColor: COLORS.surface,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    marginHorizontal: 16,
-    borderRadius: 14,
-    marginBottom: 12,
-  },
-  monthNavButton: {
-    padding: 8,
-  },
-  monthDisplay: {
-    flex: 1,
-    alignItems: 'center',
-  },
-  monthText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: COLORS.text,
-  },
-  // Reperibilità toggle
-  reperibilitaToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: COLORS.cardDark,
-    borderWidth: 1,
-    borderColor: COLORS.border,
-    padding: 16,
-    borderRadius: 14,
-    marginBottom: 16,
-  },
-  reperibilitaLabel: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-  },
-  reperibilitaText: {
-    fontSize: 15,
-    color: COLORS.text,
-    fontWeight: '500',
-  },
-  sheetHint: {
-    fontSize: 13,
-    lineHeight: 19,
-    color: COLORS.textSecondary,
-    marginBottom: 16,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    container: {
+      flex: 1,
+      backgroundColor: colors.background,
+    },
+    header: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'center',
+      paddingHorizontal: 16,
+      paddingVertical: 16,
+    },
+    title: {
+      fontSize: 28,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    headerButtons: {
+      flexDirection: 'row',
+      gap: 12,
+    },
+    uploadButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.secondary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    addButton: {
+      width: 44,
+      height: 44,
+      borderRadius: 22,
+      backgroundColor: colors.primary,
+      justifyContent: 'center',
+      alignItems: 'center',
+    },
+    tabBar: {
+      flexDirection: 'row',
+      marginHorizontal: 16,
+      marginBottom: 10,
+      backgroundColor: colors.cardDark,
+      borderRadius: 14,
+      padding: 6,
+    },
+    tab: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 10,
+      borderRadius: 10,
+    },
+    tabActive: {
+      backgroundColor: `${colors.primary}14`,
+      borderWidth: 1,
+      borderColor: `${colors.primary}30`,
+    },
+    tabText: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.textSecondary,
+    },
+    tabTextActive: {
+      color: colors.primary,
+    },
+    badge: {
+      backgroundColor: colors.warning,
+      borderRadius: 10,
+      minWidth: 20,
+      height: 20,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginLeft: 6,
+      paddingHorizontal: 6,
+    },
+    badgeText: {
+      color: colors.textWhite,
+      fontSize: 11,
+      fontWeight: '700',
+    },
+    summaryCard: {
+      marginHorizontal: 16,
+      marginBottom: 16,
+      backgroundColor: colors.surface,
+    },
+    summaryTitle: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    summarySubtitle: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 2,
+      marginBottom: 16,
+    },
+    summaryStats: {
+      flexDirection: 'row',
+      justifyContent: 'space-around',
+    },
+    summaryStat: {
+      alignItems: 'center',
+    },
+    summaryValue: {
+      fontSize: 24,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    summaryLabel: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    alertBox: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: `${colors.warning}15`,
+      padding: 12,
+      borderRadius: 8,
+      marginTop: 16,
+    },
+    alertText: {
+      color: colors.warning,
+      fontWeight: '600',
+      marginLeft: 8,
+    },
+    list: {
+      paddingHorizontal: 16,
+      paddingBottom: 100,
+    },
+    sectionHint: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textSecondary,
+      marginHorizontal: 16,
+      marginBottom: 12,
+    },
+    timbraturaCard: {
+      marginBottom: 12,
+    },
+    discrepancyCard: {
+      borderLeftWidth: 4,
+      borderLeftColor: colors.warning,
+    },
+    timbraturaHeader: {
+      flexDirection: 'row',
+      justifyContent: 'space-between',
+      alignItems: 'flex-start',
+      marginBottom: 12,
+    },
+    timbraturaDate: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    timbraturaDay: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      textTransform: 'capitalize',
+    },
+    timbraturaHours: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    timbraturaHoursValue: {
+      fontSize: 20,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    reperibilitaBadge: {
+      marginLeft: 8,
+      padding: 4,
+      backgroundColor: `${colors.reperibilita}15`,
+      borderRadius: 6,
+    },
+    warningBadge: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      backgroundColor: `${colors.warning}15`,
+      paddingHorizontal: 8,
+      paddingVertical: 4,
+      borderRadius: 6,
+    },
+    warningText: {
+      color: colors.warning,
+      fontWeight: '600',
+      fontSize: 13,
+      marginLeft: 4,
+    },
+    timbraturaBody: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    timeSlot: {
+      flexDirection: 'row',
+      alignItems: 'center',
+    },
+    timeValue: {
+      fontSize: 16,
+      fontWeight: '500',
+      color: colors.text,
+      marginLeft: 8,
+    },
+    timeLine: {
+      flex: 1,
+      height: 2,
+      backgroundColor: colors.border,
+      marginHorizontal: 16,
+      borderRadius: 1,
+    },
+    timbraturaNote: {
+      fontSize: 13,
+      color: colors.textSecondary,
+      marginTop: 12,
+      fontStyle: 'italic',
+    },
+    inlineActions: {
+      flexDirection: 'row',
+      gap: 10,
+      marginTop: 14,
+    },
+    inlineActionButton: {
+      flex: 1,
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: `${colors.primary}10`,
+    },
+    inlineActionDanger: {
+      backgroundColor: `${colors.error}10`,
+    },
+    inlineActionText: {
+      fontSize: 13,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    inlineActionDangerText: {
+      color: colors.error,
+    },
+    confrontoRow: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      paddingVertical: 6,
+      borderBottomWidth: 1,
+      borderBottomColor: colors.border,
+    },
+    confrontoLabel: {
+      width: 70,
+      fontSize: 13,
+      color: colors.textSecondary,
+      fontWeight: '500',
+    },
+    confrontoValue: {
+      flex: 1,
+      fontSize: 14,
+      color: colors.text,
+    },
+    confrontoOre: {
+      fontSize: 14,
+      fontWeight: '600',
+    },
+    emptyContainer: {
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 60,
+    },
+    emptyText: {
+      fontSize: 16,
+      color: colors.textSecondary,
+      marginTop: 16,
+    },
+    emptySubtext: {
+      fontSize: 14,
+      color: colors.textSecondary,
+      marginTop: 8,
+      textAlign: 'center',
+      paddingHorizontal: 32,
+    },
+    sheetButtons: {
+      flexDirection: 'row',
+      gap: 12,
+      marginTop: 24,
+    },
+    sheetButton: {
+      flex: 1,
+    },
+    monthSelector: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      paddingVertical: 8,
+      paddingHorizontal: 16,
+      backgroundColor: colors.surface,
+      borderWidth: 1,
+      borderColor: colors.border,
+      marginHorizontal: 16,
+      borderRadius: 14,
+      marginBottom: 12,
+    },
+    monthNavButton: {
+      padding: 8,
+    },
+    monthDisplay: {
+      flex: 1,
+      alignItems: 'center',
+    },
+    monthText: {
+      fontSize: 16,
+      fontWeight: '600',
+      color: colors.text,
+    },
+    reperibilitaToggle: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      backgroundColor: colors.cardDark,
+      borderWidth: 1,
+      borderColor: colors.border,
+      padding: 16,
+      borderRadius: 14,
+      marginBottom: 16,
+    },
+    reperibilitaLabel: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    reperibilitaText: {
+      fontSize: 15,
+      color: colors.text,
+      fontWeight: '500',
+    },
+    sheetHint: {
+      fontSize: 13,
+      lineHeight: 19,
+      color: colors.textSecondary,
+      marginBottom: 16,
+    },
+  });

@@ -2,19 +2,21 @@ import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Platform } from 'react-native';
-import { COLORS } from '../../src/utils/colors';
-import { getThemeColors, useAppStore } from '../../src/store/appStore';
+import { useAppStore } from '../../src/store/appStore';
+import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { createElevation } from '../../src/utils/shadows';
 
 export default function TabLayout() {
-  const { unreadAlerts, theme } = useAppStore();
-  const themeColors = getThemeColors(theme);
+  const { unreadAlerts } = useAppStore();
+  const { colors } = useAppTheme();
+  const styles = createStyles(colors);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: themeColors.primary,
-        tabBarInactiveTintColor: COLORS.textSecondary,
+        tabBarActiveTintColor: colors.primary,
+        tabBarInactiveTintColor: colors.textSecondary,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabBarLabel,
         tabBarItemStyle: styles.tabBarItem,
@@ -77,34 +79,37 @@ export default function TabLayout() {
   );
 }
 
-const styles = StyleSheet.create({
-  tabBar: {
-    backgroundColor: COLORS.card,
-    borderTopWidth: 1,
-    borderTopColor: COLORS.border,
-    paddingTop: 10,
-    paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-    height: Platform.OS === 'ios' ? 88 : 64,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.02,
-    shadowRadius: 6,
-    elevation: 3,
-  },
-  tabBarLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-  },
-  tabBarItem: {
-    paddingVertical: 2,
-  },
-  badge: {
-    position: 'absolute',
-    right: -4,
-    top: -2,
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: COLORS.error,
-  },
-});
+const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
+  StyleSheet.create({
+    tabBar: {
+      backgroundColor: colors.card,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+      paddingTop: 10,
+      paddingBottom: Platform.OS === 'ios' ? 24 : 8,
+      height: Platform.OS === 'ios' ? 88 : 64,
+      ...createElevation({
+        color: colors.shadowMedium,
+        offsetY: -2,
+        blur: 8,
+        opacity: 0.24,
+        elevation: 6,
+      }),
+    },
+    tabBarLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    tabBarItem: {
+      paddingVertical: 2,
+    },
+    badge: {
+      position: 'absolute',
+      right: -4,
+      top: -2,
+      width: 8,
+      height: 8,
+      borderRadius: 4,
+      backgroundColor: colors.error,
+    },
+  });

@@ -64,27 +64,30 @@ export default function BustePagaScreen() {
       return;
     }
 
+    const parsedMese = parseInt(mese, 10);
+    const parsedAnno = parseInt(anno, 10);
+    if (!parsedMese || parsedMese < 1 || parsedMese > 12 || !parsedAnno) {
+      Alert.alert('Errore', 'Inserisci un periodo valido');
+      return;
+    }
+
     setSaving(true);
     try {
-      const existing = bustePaga.find(b => b.mese === parseInt(mese) && b.anno === parseInt(anno));
+      const payload = {
+        mese: parsedMese,
+        anno: parsedAnno,
+        lordo: lordo ? parseFloat(lordo) : undefined,
+        netto: netto ? parseFloat(netto) : undefined,
+        straordinari_ore: straordinariOre ? parseFloat(straordinariOre) : undefined,
+        straordinari_importo: straordinariImporto ? parseFloat(straordinariImporto) : undefined,
+        trattenute_totali: trattenuteTotali ? parseFloat(trattenuteTotali) : undefined,
+      };
+      const existing = bustePaga.find(b => b.mese === parsedMese && b.anno === parsedAnno);
       
       if (existing) {
-        await api.updateBustaPaga(parseInt(anno), parseInt(mese), {
-          mese: parseInt(mese),
-          anno: parseInt(anno),
-          lordo: lordo ? parseFloat(lordo) : undefined,
-          netto: netto ? parseFloat(netto) : undefined,
-          straordinari_ore: straordinariOre ? parseFloat(straordinariOre) : undefined,
-          straordinari_importo: straordinariImporto ? parseFloat(straordinariImporto) : undefined,
-          trattenute_totali: trattenuteTotali ? parseFloat(trattenuteTotali) : undefined,
-        });
+        await api.updateBustaPaga(parsedAnno, parsedMese, payload);
       } else {
-        await api.createBustaPaga({
-          mese: parseInt(mese),
-          anno: parseInt(anno),
-          lordo: lordo ? parseFloat(lordo) : undefined,
-          netto: netto ? parseFloat(netto) : undefined,
-        });
+        await api.createBustaPaga(payload);
       }
       
       setShowAddSheet(false);

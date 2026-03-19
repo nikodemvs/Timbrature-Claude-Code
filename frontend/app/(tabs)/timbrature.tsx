@@ -53,6 +53,7 @@ export default function TimbraturaScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showAddSheet, setShowAddSheet] = useState(false);
+  const [editingDate, setEditingDate] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [oraEntrata, setOraEntrata] = useState('');
   const [oraUscita, setOraUscita] = useState('');
@@ -153,22 +154,26 @@ export default function TimbraturaScreen() {
       return;
     }
 
+    if (editingDate && editingDate !== selectedDate) {
+      Alert.alert('Data non modificabile', 'Per cambiare giorno crea una nuova timbratura.');
+      return;
+    }
+
     setSaving(true);
     try {
-      const existing = timbrature.find(t => t.data === selectedDate);
+      const payload = {
+        ora_entrata: oraEntrata || undefined,
+        ora_uscita: oraUscita || undefined,
+        is_reperibilita_attiva: isReperibilita,
+        note: note || undefined,
+      };
       
-      if (existing) {
-        await api.updateTimbratura(selectedDate, {
-          ora_entrata: oraEntrata || undefined,
-          ora_uscita: oraUscita || undefined,
-          note: note || undefined,
-        });
+      if (editingDate) {
+        await api.updateTimbratura(editingDate, payload);
       } else {
         await api.createTimbratura({
           data: selectedDate,
-          ora_entrata: oraEntrata || undefined,
-          ora_uscita: oraUscita || undefined,
-          note: note || undefined,
+          ...payload,
         });
       }
       
@@ -205,7 +210,13 @@ export default function TimbraturaScreen() {
     );
   };
 
+  const closeAddSheet = () => {
+    setShowAddSheet(false);
+    resetForm();
+  };
+
   const resetForm = () => {
+    setEditingDate(null);
     setSelectedDate(getTodayString());
     setOraEntrata('');
     setOraUscita('');
@@ -214,6 +225,7 @@ export default function TimbraturaScreen() {
   };
 
   const editTimbratura = (item: Timbratura) => {
+    setEditingDate(item.data);
     setSelectedDate(item.data);
     setOraEntrata(item.ora_entrata || '');
     setOraUscita(item.ora_uscita || '');
@@ -227,36 +239,48 @@ export default function TimbraturaScreen() {
   }
 
   const renderTimbratura = ({ item }: { item: Timbratura }) => (
-    <TouchableOpacity onPress={() => editTimbratura(item)} onLongPress={() => handleDelete(item.data)}>
-      <Card style={styles.timbraturaCard}>
-        <View style={styles.timbraturaHeader}>
-          <View>
-            <Text style={styles.timbraturaDate}>{formatDate(item.data, 'dd MMM yyyy')}</Text>
-            <Text style={styles.timbraturaDay}>{getGiornoSettimana(item.data)}</Text>
-          </View>
-          <View style={styles.timbraturaHours}>
-            <Text style={styles.timbraturaHoursValue}>{item.ore_arrotondate.toFixed(1)}h</Text>
-            {item.is_reperibilita_attiva && (
-              <View style={styles.reperibilitaBadge}>
-                <Ionicons name="call" size={12} color={COLORS.reperibilita} />
-              </View>
-            )}
-          </View>
+    <Card style={styles.timbraturaCard}>
+      <View style={styles.timbraturaHeader}>
+        <View>
+          <Text style={styles.timbraturaDate}>{formatDate(item.data, 'dd MMM yyyy')}</Text>
+          <Text style={styles.timbraturaDay}>{getGiornoSettimana(item.data)}</Text>
         </View>
-        <View style={styles.timbraturaBody}>
-          <View style={styles.timeSlot}>
-            <Ionicons name="log-in" size={16} color={COLORS.success} />
-            <Text style={styles.timeValue}>{item.ora_entrata || '--:--'}</Text>
-          </View>
-          <View style={styles.timeLine} />
-          <View style={styles.timeSlot}>
-            <Ionicons name="log-out" size={16} color={COLORS.error} />
-            <Text style={styles.timeValue}>{item.ora_uscita || '--:--'}</Text>
-          </View>
+        <View style={styles.timbraturaHours}>
+          <Text style={styles.timbraturaHoursValue}>{item.ore_arrotondate.toFixed(1)}h</Text>
+          {item.is_reperibilita_attiva && (
+            <View style={styles.reperibilitaBadge}>
+              <Ionicons name="call" size={12} color={COLORS.reperibilita} />
+            </View>
+          )}
         </View>
-        {item.note && <Text style={styles.timbraturaNote}>{item.note}</Text>}
-      </Card>
-    </TouchableOpacity>
+      </View>
+      <View style={styles.timbraturaBody}>
+        <View style={styles.timeSlot}>
+          <Ionicons name="log-in" size={16} color={COLORS.success} />
+          <Text style={styles.timeValue}>{item.ora_entrata || '--:--'}</Text>
+        </View>
+        <View style={styles.timeLine} />
+        <View style={styles.timeSlot}>
+          <Ionicons name="log-out" size={16} color={COLORS.error} />
+          <Text style={styles.timeValue}>{item.ora_uscita || '--:--'}</Text>
+        </View>
+      </View>
+      {item.note && <Text style={styles.timbraturaNote}>{item.note}</Text>}
+      <View style={styles.inlineActions}>
+        <TouchableOpacity style={styles.inlineActionButton} onPress={() => editTimbratura(item)} activeOpacity={0.8}>
+          <Ionicons name="create-outline" size={16} color={COLORS.primary} />
+          <Text style={styles.inlineActionText}>Modifica</Text>
+        </TouchableOpacity>
+        <TouchableOpacity
+          style={[styles.inlineActionButton, styles.inlineActionDanger]}
+          onPress={() => handleDelete(item.data)}
+          activeOpacity={0.8}
+        >
+          <Ionicons name="trash-outline" size={16} color={COLORS.error} />
+          <Text style={[styles.inlineActionText, styles.inlineActionDangerText]}>Elimina</Text>
+        </TouchableOpacity>
+      </View>
+    </Card>
   );
 
   const renderTimbraturaAziendale = ({ item }: { item: TimbraturaAziendale }) => (
@@ -339,8 +363,15 @@ export default function TimbraturaScreen() {
     </View>
   );
 
+  const sectionHintText =
+    activeTab === 'personali'
+      ? 'Modifica ed elimina le timbrature dalle azioni visibili su ogni scheda.'
+      : activeTab === 'aziendali'
+        ? 'Importa il PDF del mese attivo per popolare le timbrature ufficiali.'
+        : 'Controlla subito le discrepanze e confronta le ore tra dati personali e aziendali.';
+
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="timbrature-screen">
       <View style={styles.header}>
         <Text style={styles.title}>Timbrature</Text>
         <View style={styles.headerButtons}>
@@ -348,6 +379,7 @@ export default function TimbraturaScreen() {
             style={styles.uploadButton}
             onPress={handleUploadPDF}
             disabled={uploading}
+            testID="timbrature-upload-button"
           >
             <Ionicons name="cloud-upload" size={22} color={COLORS.textWhite} />
           </TouchableOpacity>
@@ -357,6 +389,7 @@ export default function TimbraturaScreen() {
               resetForm();
               setShowAddSheet(true);
             }}
+            testID="timbrature-add-button"
           >
             <Ionicons name="add" size={24} color={COLORS.textWhite} />
           </TouchableOpacity>
@@ -367,6 +400,7 @@ export default function TimbraturaScreen() {
       <View style={styles.monthSelector}>
         <TouchableOpacity 
           style={styles.monthNavButton}
+          testID="timbrature-month-prev"
           onPress={() => {
             if (meseSelezionato === 1) {
               setMeseSelezionato(12);
@@ -385,6 +419,7 @@ export default function TimbraturaScreen() {
         
         <TouchableOpacity 
           style={styles.monthNavButton}
+          testID="timbrature-month-next"
           onPress={() => {
             const now = new Date();
             const isCurrentMonth = meseSelezionato === (now.getMonth() + 1) && annoSelezionato === now.getFullYear();
@@ -411,18 +446,21 @@ export default function TimbraturaScreen() {
         <TouchableOpacity
           style={[styles.tab, activeTab === 'personali' && styles.tabActive]}
           onPress={() => setActiveTab('personali')}
+          testID="timbrature-tab-personali"
         >
           <Text style={[styles.tabText, activeTab === 'personali' && styles.tabTextActive]}>Mie</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'aziendali' && styles.tabActive]}
           onPress={() => setActiveTab('aziendali')}
+          testID="timbrature-tab-aziendali"
         >
           <Text style={[styles.tabText, activeTab === 'aziendali' && styles.tabTextActive]}>Azienda</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.tab, activeTab === 'confronto' && styles.tabActive]}
           onPress={() => setActiveTab('confronto')}
+          testID="timbrature-tab-confronto"
         >
           <Text style={[styles.tabText, activeTab === 'confronto' && styles.tabTextActive]}>Confronto</Text>
           {confrontoRiepilogo?.giorni_con_discrepanza > 0 && (
@@ -433,11 +471,13 @@ export default function TimbraturaScreen() {
         </TouchableOpacity>
       </View>
 
+      <Text style={styles.sectionHint}>{sectionHintText}</Text>
+
       {/* Tab Content */}
       {activeTab === 'personali' && (
         <>
           {weeklySummary && (
-            <Card style={styles.summaryCard}>
+            <Card style={styles.summaryCard} testID="timbrature-weekly-summary">
               <Text style={styles.summaryTitle}>Settimana Corrente</Text>
               <Text style={styles.summarySubtitle}>
                 {formatDate(weeklySummary.settimana_inizio, 'dd MMM')} - {formatDate(weeklySummary.settimana_fine, 'dd MMM')}
@@ -554,10 +594,17 @@ export default function TimbraturaScreen() {
       {/* Add/Edit Sheet */}
       <BottomSheet
         visible={showAddSheet}
-        onClose={() => setShowAddSheet(false)}
-        title="Registra Timbratura"
-        height="65%"
+        onClose={closeAddSheet}
+        title={editingDate ? 'Modifica Timbratura' : 'Nuova Timbratura'}
+        height="68%"
+        testID="timbrature-add-sheet"
+        closeButtonTestID="timbrature-add-sheet-close"
       >
+        <Text style={styles.sheetHint}>
+          {editingDate
+            ? 'Aggiorna orari, note e reperibilità della giornata selezionata.'
+            : 'Inserisci rapidamente una timbratura manuale per il giorno scelto.'}
+        </Text>
         <DatePickerField
           label="Data"
           value={selectedDate}
@@ -604,14 +651,16 @@ export default function TimbraturaScreen() {
           <Button
             title="Annulla"
             variant="outline"
-            onPress={() => setShowAddSheet(false)}
+            onPress={closeAddSheet}
             style={styles.sheetButton}
+            testID="timbrature-cancel-button"
           />
           <Button
             title="Salva"
             onPress={handleSave}
             loading={saving}
             style={styles.sheetButton}
+            testID="timbrature-save-button"
           />
         </View>
       </BottomSheet>
@@ -659,10 +708,10 @@ const styles = StyleSheet.create({
   tabBar: {
     flexDirection: 'row',
     marginHorizontal: 16,
-    marginBottom: 16,
-    backgroundColor: COLORS.surface,
-    borderRadius: 12,
-    padding: 4,
+    marginBottom: 10,
+    backgroundColor: COLORS.cardDark,
+    borderRadius: 14,
+    padding: 6,
   },
   tab: {
     flex: 1,
@@ -670,10 +719,12 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingVertical: 10,
-    borderRadius: 8,
+    borderRadius: 10,
   },
   tabActive: {
-    backgroundColor: COLORS.primary,
+    backgroundColor: `${COLORS.primary}14`,
+    borderWidth: 1,
+    borderColor: `${COLORS.primary}30`,
   },
   tabText: {
     fontSize: 14,
@@ -681,7 +732,7 @@ const styles = StyleSheet.create({
     color: COLORS.textSecondary,
   },
   tabTextActive: {
-    color: COLORS.textWhite,
+    color: COLORS.primary,
   },
   badge: {
     backgroundColor: COLORS.warning,
@@ -701,6 +752,7 @@ const styles = StyleSheet.create({
   summaryCard: {
     marginHorizontal: 16,
     marginBottom: 16,
+    backgroundColor: COLORS.surface,
   },
   summaryTitle: {
     fontSize: 16,
@@ -746,6 +798,13 @@ const styles = StyleSheet.create({
   list: {
     paddingHorizontal: 16,
     paddingBottom: 100,
+  },
+  sectionHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
+    marginHorizontal: 16,
+    marginBottom: 12,
   },
   timbraturaCard: {
     marginBottom: 12,
@@ -826,6 +885,32 @@ const styles = StyleSheet.create({
     marginTop: 12,
     fontStyle: 'italic',
   },
+  inlineActions: {
+    flexDirection: 'row',
+    gap: 10,
+    marginTop: 14,
+  },
+  inlineActionButton: {
+    flex: 1,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    paddingVertical: 10,
+    borderRadius: 12,
+    backgroundColor: `${COLORS.primary}10`,
+  },
+  inlineActionDanger: {
+    backgroundColor: `${COLORS.error}10`,
+  },
+  inlineActionText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: COLORS.primary,
+  },
+  inlineActionDangerText: {
+    color: COLORS.error,
+  },
   confrontoRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -881,8 +966,10 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 16,
     backgroundColor: COLORS.surface,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     marginHorizontal: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 12,
   },
   monthNavButton: {
@@ -902,9 +989,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    backgroundColor: COLORS.surface,
+    backgroundColor: COLORS.cardDark,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     padding: 16,
-    borderRadius: 12,
+    borderRadius: 14,
     marginBottom: 16,
   },
   reperibilitaLabel: {
@@ -916,5 +1005,11 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: COLORS.text,
     fontWeight: '500',
+  },
+  sheetHint: {
+    fontSize: 13,
+    lineHeight: 19,
+    color: COLORS.textSecondary,
+    marginBottom: 16,
   },
 });

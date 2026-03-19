@@ -10,6 +10,8 @@ interface BottomSheetProps {
   title?: string;
   children: React.ReactNode;
   height?: number | string;
+  testID?: string;
+  closeButtonTestID?: string;
 }
 
 export const BottomSheet: React.FC<BottomSheetProps> = ({
@@ -18,6 +20,8 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
   title,
   children,
   height = '50%',
+  testID,
+  closeButtonTestID,
 }) => {
   const insets = useSafeAreaInsets();
 
@@ -32,13 +36,16 @@ export const BottomSheet: React.FC<BottomSheetProps> = ({
         <View style={styles.overlay} />
       </TouchableWithoutFeedback>
       
-      <View style={[styles.container, { height: height as any, paddingBottom: insets.bottom + 16 }]}>
+      <View
+        style={[styles.container, { height: height as any, paddingBottom: insets.bottom + 16 }]}
+        testID={testID}
+      >
         <View style={styles.handle} />
         
         {title && (
           <View style={styles.header}>
             <Text style={styles.title}>{title}</Text>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <TouchableOpacity onPress={onClose} style={styles.closeButton} testID={closeButtonTestID}>
               <Ionicons name="close" size={24} color={COLORS.textSecondary} />
             </TouchableOpacity>
           </View>

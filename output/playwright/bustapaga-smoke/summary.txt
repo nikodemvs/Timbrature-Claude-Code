@@ -1,0 +1,9 @@
+Workflow completato con successo
+BaseUrl: http://localhost:8081/
+Avvio: 2026-03-18T18:12:17.788Z
+Fine: 2026-03-18T18:12:19.698Z
+Screenshot:
+ - 01-home-tab.png
+ - 02-timbrature-tab.png
+ - 03-altro-menu.png
+ - 04-impostazioni.png

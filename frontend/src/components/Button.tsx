@@ -15,6 +15,7 @@ interface ButtonProps {
   style?: StyleProp<ViewStyle>;
   textStyle?: StyleProp<TextStyle>;
   fullWidth?: boolean;
+  testID?: string;
 }
 
 export const Button: React.FC<ButtonProps> = ({
@@ -29,6 +30,7 @@ export const Button: React.FC<ButtonProps> = ({
   style,
   textStyle,
   fullWidth,
+  testID,
 }) => {
   const getBackgroundColor = () => {
     if (disabled) return COLORS.border;
@@ -81,6 +83,7 @@ export const Button: React.FC<ButtonProps> = ({
       onPress={onPress}
       disabled={disabled || loading}
       activeOpacity={0.7}
+      testID={testID}
     >
       {loading ? (
         <ActivityIndicator size="small" color={getTextColor()} />

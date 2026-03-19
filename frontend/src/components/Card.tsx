@@ -13,6 +13,7 @@ interface CardProps {
   style?: StyleProp<ViewStyle>;
   loading?: boolean;
   rightElement?: React.ReactNode;
+  testID?: string;
 }
 
 export const Card: React.FC<CardProps> = ({
@@ -25,11 +26,12 @@ export const Card: React.FC<CardProps> = ({
   style,
   loading,
   rightElement,
+  testID,
 }) => {
   const Wrapper = onPress ? TouchableOpacity : View;
 
   return (
-    <Wrapper style={[styles.card, style]} onPress={onPress} activeOpacity={0.7}>
+    <Wrapper style={[styles.card, style]} onPress={onPress} activeOpacity={0.7} testID={testID}>
       {loading ? (
         <ActivityIndicator size="small" color={COLORS.primary} />
       ) : (
@@ -63,11 +65,13 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     padding: 16,
     marginBottom: 12,
+    borderWidth: 1,
+    borderColor: COLORS.border,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 2,
+    shadowOpacity: 0.03,
+    shadowRadius: 6,
+    elevation: 1,
   },
   header: {
     flexDirection: 'row',

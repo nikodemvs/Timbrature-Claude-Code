@@ -30,7 +30,14 @@ export default function AltroScreen() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputText, setInputText] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
-  const { chatSessionId, setChatSessionId, theme, setTheme } = useAppStore();
+  const {
+    chatSessionId,
+    setChatSessionId,
+    theme,
+    setTheme,
+    dashboard,
+    setDashboard,
+  } = useAppStore();
   const chatScrollRef = useRef<FlatList>(null);
   
   // Alerts state
@@ -55,7 +62,6 @@ export default function AltroScreen() {
   const [allYearsStats, setAllYearsStats] = useState<any[]>([]);
   
   // Settings state
-  const { dashboard } = useAppStore();
   const [showPinSheet, setShowPinSheet] = useState(false);
   const [showThemeSheet, setShowThemeSheet] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
@@ -252,6 +258,15 @@ export default function AltroScreen() {
     setShowEditSheet(true);
   };
 
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const response = await api.getDashboard();
+      setDashboard(response.data);
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+    }
+  }, [setDashboard]);
+
   const saveSettings = () => {
     Alert.alert(
       'Conferma Modifica',
@@ -272,6 +287,7 @@ export default function AltroScreen() {
                 superminimo: parseFloat(editSuperminimo) || undefined,
                 scatti_anzianita: parseFloat(editScatti) || undefined,
               });
+              await refreshDashboard();
               setShowEditSheet(false);
               Alert.alert('Successo', 'Dati aggiornati correttamente');
             } catch {
@@ -285,40 +301,64 @@ export default function AltroScreen() {
     );
   };
 
+  const savePin = async () => {
+    const normalizedPin = newPin.trim();
+    if (!/^\d{4,6}$/.test(normalizedPin)) {
+      Alert.alert('Errore', 'Inserisci un PIN numerico di 4-6 cifre');
+      return;
+    }
+
+    try {
+      await api.updateSettings({ pin_hash: normalizedPin });
+
+      if (Platform.OS !== 'web') {
+        const SecureStore = await import('expo-secure-store');
+        await SecureStore.setItemAsync('bustapaga_pin', normalizedPin);
+      }
+
+      setShowPinSheet(false);
+      setNewPin('');
+      Alert.alert('Successo', 'PIN aggiornato e blocco app attivato');
+    } catch (error) {
+      console.error('Error saving pin:', error);
+      Alert.alert('Errore', 'Impossibile aggiornare il PIN');
+    }
+  };
+
   const handleBack = () => setActiveTab('menu');
 
   const renderMenu = () => (
     <ScrollView style={styles.menuContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.menuGrid}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('chat')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('chat')} testID="altro-menu-chat">
           <View style={[styles.menuIcon, { backgroundColor: `${themeColors.primary}15` }]}>
             <Ionicons name="chatbubble-ellipses" size={28} color={themeColors.primary} />
           </View>
           <Text style={styles.menuLabel}>Assistente AI</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('alerts')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('alerts')} testID="altro-menu-alerts">
           <View style={[styles.menuIcon, { backgroundColor: `${COLORS.warning}15` }]}>
             <Ionicons name="notifications" size={28} color={COLORS.warning} />
           </View>
           <Text style={styles.menuLabel}>Avvisi</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('stats')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('stats')} testID="altro-menu-stats">
           <View style={[styles.menuIcon, { backgroundColor: `${COLORS.success}15` }]}>
             <Ionicons name="stats-chart" size={28} color={COLORS.success} />
           </View>
           <Text style={styles.menuLabel}>Statistiche</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('reperibilita')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('reperibilita')} testID="altro-menu-reperibilita">
           <View style={[styles.menuIcon, { backgroundColor: `${COLORS.reperibilita}15` }]}>
             <Ionicons name="call" size={28} color={COLORS.reperibilita} />
           </View>
           <Text style={styles.menuLabel}>Reperibilità</Text>
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('settings')}>
+        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('settings')} testID="altro-menu-settings">
           <View style={[styles.menuIcon, { backgroundColor: `${COLORS.textSecondary}15` }]}>
             <Ionicons name="settings" size={28} color={COLORS.textSecondary} />
           </View>
@@ -346,7 +386,12 @@ export default function AltroScreen() {
   );
 
   const renderChat = () => (
-    <KeyboardAvoidingView style={styles.chatContainer} behavior={Platform.OS === 'ios' ? 'padding' : 'height'} keyboardVerticalOffset={100}>
+    <KeyboardAvoidingView
+      style={styles.chatContainer}
+      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+      keyboardVerticalOffset={100}
+      testID="altro-chat-screen"
+    >
       <FlatList
         ref={chatScrollRef}
         data={messages}
@@ -387,7 +432,7 @@ export default function AltroScreen() {
   );
 
   const renderStats = () => (
-    <ScrollView style={styles.statsContainer} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.statsContainer} showsVerticalScrollIndicator={false} testID="altro-stats-screen">
       <Card style={styles.zoomCard}>
         <Text style={styles.zoomTitle}>Livello di dettaglio</Text>
         <View style={styles.zoomButtons}>
@@ -485,7 +530,7 @@ export default function AltroScreen() {
   );
 
   const renderReperibilita = () => (
-    <View style={styles.repContainer}>
+    <View style={styles.repContainer} testID="altro-reperibilita-screen">
       <FlatList
         data={reperibilita}
         keyExtractor={(item) => item.id}
@@ -541,26 +586,26 @@ export default function AltroScreen() {
   );
 
   const renderSettings = () => (
-    <ScrollView style={styles.settingsContainer} showsVerticalScrollIndicator={false}>
+    <ScrollView style={styles.settingsContainer} showsVerticalScrollIndicator={false} testID="altro-settings-screen">
       <Card>
-        <TouchableOpacity style={styles.settingItem} onPress={() => setShowThemeSheet(true)}>
+        <TouchableOpacity style={styles.settingItem} onPress={() => setShowThemeSheet(true)} testID="altro-settings-theme-button">
           <Ionicons name="color-palette" size={22} color={themeColors.primary} />
           <Text style={styles.settingText}>Tema Colore</Text>
           <View style={[styles.themePreview, { backgroundColor: themeColors.primary }]} />
           <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
         
-        <TouchableOpacity style={styles.settingItem} onPress={() => setShowPinSheet(true)}>
+        <TouchableOpacity style={styles.settingItem} onPress={() => setShowPinSheet(true)} testID="altro-settings-pin-button">
           <Ionicons name="lock-closed" size={22} color={themeColors.primary} />
           <Text style={styles.settingText}>Cambia PIN</Text>
           <Ionicons name="chevron-forward" size={20} color={COLORS.textSecondary} />
         </TouchableOpacity>
       </Card>
 
-      <Card style={{ marginTop: 16 }}>
+      <Card style={{ marginTop: 16 }} testID="altro-settings-contract-card">
         <View style={styles.cardHeaderRow}>
           <Text style={styles.cardTitle}>Dati Contrattuali</Text>
-          <TouchableOpacity style={styles.editButton} onPress={openEditSettings}>
+          <TouchableOpacity style={styles.editButton} onPress={openEditSettings} testID="altro-settings-edit-button">
             <Ionicons name="pencil" size={20} color={themeColors.primary} />
           </TouchableOpacity>
         </View>
@@ -598,14 +643,7 @@ export default function AltroScreen() {
         <InputField label="Nuovo PIN" value={newPin} onChangeText={setNewPin} keyboardType="numeric" secureTextEntry />
         <View style={styles.sheetButtons}>
           <Button title="Annulla" variant="outline" onPress={() => setShowPinSheet(false)} style={styles.sheetButton} />
-          <Button title="Salva" onPress={async () => {
-            if (newPin.length >= 4) {
-              await api.updateSettings({ pin_hash: newPin });
-              setShowPinSheet(false);
-              setNewPin('');
-              Alert.alert('Successo', 'PIN aggiornato');
-            }
-          }} style={styles.sheetButton} />
+          <Button title="Salva" onPress={savePin} style={styles.sheetButton} />
         </View>
       </BottomSheet>
 
@@ -656,10 +694,10 @@ export default function AltroScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="altro-screen">
       <View style={styles.header}>
         {activeTab !== 'menu' && (
-          <TouchableOpacity style={styles.backButton} onPress={handleBack}>
+          <TouchableOpacity style={styles.backButton} onPress={handleBack} testID="altro-back-button">
             <Ionicons name="arrow-back" size={24} color={COLORS.text} />
           </TouchableOpacity>
         )}

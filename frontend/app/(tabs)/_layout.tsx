@@ -3,16 +3,17 @@ import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Platform } from 'react-native';
 import { COLORS } from '../../src/utils/colors';
-import { useAppStore } from '../../src/store/appStore';
+import { getThemeColors, useAppStore } from '../../src/store/appStore';
 
 export default function TabLayout() {
-  const { unreadAlerts } = useAppStore();
+  const { unreadAlerts, theme } = useAppStore();
+  const themeColors = getThemeColors(theme);
 
   return (
     <Tabs
       screenOptions={{
         headerShown: false,
-        tabBarActiveTintColor: COLORS.primary,
+        tabBarActiveTintColor: themeColors.primary,
         tabBarInactiveTintColor: COLORS.textSecondary,
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabBarLabel,
@@ -23,6 +24,7 @@ export default function TabLayout() {
         name="index"
         options={{
           title: 'Home',
+          tabBarButtonTestID: 'tab-home',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="home" size={size} color={color} />
           ),
@@ -32,6 +34,7 @@ export default function TabLayout() {
         name="timbrature"
         options={{
           title: 'Timbrature',
+          tabBarButtonTestID: 'tab-timbrature',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="time" size={size} color={color} />
           ),
@@ -41,6 +44,7 @@ export default function TabLayout() {
         name="assenze"
         options={{
           title: 'Assenze',
+          tabBarButtonTestID: 'tab-assenze',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="calendar" size={size} color={color} />
           ),
@@ -50,6 +54,7 @@ export default function TabLayout() {
         name="buste-paga"
         options={{
           title: 'Buste Paga',
+          tabBarButtonTestID: 'tab-buste-paga',
           tabBarIcon: ({ color, size }) => (
             <Ionicons name="document-text" size={size} color={color} />
           ),
@@ -59,6 +64,7 @@ export default function TabLayout() {
         name="altro"
         options={{
           title: 'Altro',
+          tabBarButtonTestID: 'tab-altro',
           tabBarIcon: ({ color, size }) => (
             <View>
               <Ionicons name="ellipsis-horizontal" size={size} color={color} />
@@ -76,21 +82,21 @@ const styles = StyleSheet.create({
     backgroundColor: COLORS.card,
     borderTopWidth: 1,
     borderTopColor: COLORS.border,
-    paddingTop: 8,
+    paddingTop: 10,
     paddingBottom: Platform.OS === 'ios' ? 24 : 8,
     height: Platform.OS === 'ios' ? 88 : 64,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: -2 },
-    shadowOpacity: 0.05,
-    shadowRadius: 8,
-    elevation: 8,
+    shadowOpacity: 0.02,
+    shadowRadius: 6,
+    elevation: 3,
   },
   tabBarLabel: {
-    fontSize: 11,
-    fontWeight: '500',
+    fontSize: 12,
+    fontWeight: '600',
   },
   tabBarItem: {
-    paddingVertical: 4,
+    paddingVertical: 2,
   },
   badge: {
     position: 'absolute',

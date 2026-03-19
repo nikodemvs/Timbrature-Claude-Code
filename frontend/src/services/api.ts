@@ -63,7 +63,15 @@ export const deleteReperibilita = (id: string) => api.delete(`/reperibilita/${id
 // Buste Paga
 export const getBustePaga = (anno?: number) => api.get<BustaPaga[]>('/buste-paga', { params: { anno } });
 export const getBustaPaga = (anno: number, mese: number) => api.get<BustaPaga>(`/buste-paga/${anno}/${mese}`);
-export const createBustaPaga = (data: { mese: number; anno: number; lordo?: number; netto?: number }) =>
+export const createBustaPaga = (data: {
+  mese: number;
+  anno: number;
+  lordo?: number;
+  netto?: number;
+  straordinari_ore?: number;
+  straordinari_importo?: number;
+  trattenute_totali?: number;
+}) =>
   api.post<BustaPaga>('/buste-paga', data);
 export const uploadBustaPaga = (anno: number, mese: number, file: FormData) =>
   api.post(`/buste-paga/${anno}/${mese}/upload`, file, {

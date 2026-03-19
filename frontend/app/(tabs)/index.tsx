@@ -214,12 +214,13 @@ export default function DashboardScreen() {
     switch (key) {
       case 'timbratura':
         return (
-          <Card style={[styles.clockCard, editMode && styles.cardEditMode]}>
+          <Card style={[styles.clockCard, editMode && styles.cardEditMode]} testID="dashboard-quick-clock-card">
             <View style={styles.cardHeaderRow}>
               <TouchableOpacity
                 style={styles.clockHeaderTouchable}
                 onPress={() => toggle('timbratura')}
                 activeOpacity={editMode ? 1 : 0.7}
+                testID="dashboard-quick-clock-toggle"
               >
                 <Ionicons name="finger-print" size={24} color={themeColors.primary} />
                 <Text style={[styles.clockTitle, { flex: 1 }]}>Timbratura Rapida</Text>
@@ -295,6 +296,7 @@ export default function DashboardScreen() {
                   style={[styles.clockButton, entrataActive ? styles.clockButtonEntrata : styles.clockButtonDisabled]}
                   onPress={onPressEntrata}
                   activeOpacity={entrataActive ? 0.7 : 1}
+                  testID="dashboard-clock-in-button"
                 >
                   {timbraturaLoading ? (
                     <ActivityIndicator size="small" color={entrataActive ? COLORS.textWhite : COLORS.textSecondary} />
@@ -311,6 +313,7 @@ export default function DashboardScreen() {
                   style={[styles.clockButton, uscitaActive ? styles.clockButtonUscita : styles.clockButtonDisabled]}
                   onPress={onPressUscita}
                   activeOpacity={uscitaActive ? 0.7 : 1}
+                  testID="dashboard-clock-out-button"
                 >
                   {timbraturaLoading ? (
                     <ActivityIndicator size="small" color={uscitaActive ? COLORS.textWhite : COLORS.textSecondary} />
@@ -487,7 +490,7 @@ export default function DashboardScreen() {
   };
 
   return (
-    <SafeAreaView style={styles.container} edges={['top']}>
+    <SafeAreaView style={styles.container} edges={['top']} testID="dashboard-screen">
       {/* Header */}
       <View style={styles.header}>
         <View>

@@ -8,6 +8,8 @@ from google.genai import types as genai_types
 import os
 import logging
 import json
+import hashlib
+import hmac
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -416,6 +418,14 @@ def _settings_from_row(row: dict) -> dict:
     row['use_biometric'] = bool(row.get('use_biometric', 1))
     return row
 
+def _public_settings_from_row(row: dict) -> dict:
+    settings = _settings_from_row(row)
+    if not settings:
+        return None
+    safe = dict(settings)
+    safe['pin_hash'] = None
+    return safe
+
 def _alert_from_row(row: dict) -> dict:
     if not row:
         return None
@@ -439,6 +449,47 @@ def _safe_busta_paga(busta_data):
         return None
     safe = _safe_busta_paga_data(busta_data)
     return BustaPaga(**safe).dict()
+
+def _hash_pin(pin: str) -> str:
+    return hashlib.sha256(pin.encode('utf-8')).hexdigest()
+
+def _looks_like_sha256(value: str) -> bool:
+    if not isinstance(value, str) or len(value) != 64:
+        return False
+    return all(ch in "0123456789abcdef" for ch in value.lower())
+
+def _pin_matches(stored_pin: str, provided_pin: str) -> bool:
+    if not stored_pin:
+        return False
+    if _looks_like_sha256(stored_pin):
+        return hmac.compare_digest(stored_pin, _hash_pin(provided_pin))
+    return hmac.compare_digest(stored_pin, provided_pin)
+
+def _build_manual_marcature(
+    ora_entrata: Optional[str],
+    ora_uscita: Optional[str],
+    is_reperibilita: bool = False,
+    created_at: Optional[str] = None
+) -> List[Dict[str, Any]]:
+    timestamp = created_at or datetime.utcnow().isoformat()
+    marcature: List[Dict[str, Any]] = []
+    if ora_entrata:
+        marcature.append({
+            "id": str(uuid.uuid4()),
+            "tipo": "entrata",
+            "ora": ora_entrata,
+            "is_reperibilita": is_reperibilita,
+            "created_at": timestamp,
+        })
+    if ora_uscita:
+        marcature.append({
+            "id": str(uuid.uuid4()),
+            "tipo": "uscita",
+            "ora": ora_uscita,
+            "is_reperibilita": is_reperibilita,
+            "created_at": timestamp,
+        })
+    return marcature
 
 def arrotonda_quarti_ora(minuti: int) -> int:
     if minuti == 0:
@@ -549,12 +600,15 @@ async def get_settings():
              d['created_at'].isoformat(), d['updated_at'].isoformat()]
         )
         await _db.commit()
-        return default
-    return UserSettings(**_settings_from_row(row))
+        return UserSettings(**_public_settings_from_row(default.dict()))
+    return UserSettings(**_public_settings_from_row(row))
 
 @api_router.put("/settings", response_model=UserSettings)
 async def update_settings(updates: UserSettingsUpdate):
     update_data = {k: v for k, v in updates.dict().items() if v is not None}
+    if 'pin_hash' in update_data:
+        pin_value = (update_data['pin_hash'] or '').strip()
+        update_data['pin_hash'] = _hash_pin(pin_value) if pin_value else None
     if 'use_biometric' in update_data:
         update_data['use_biometric'] = int(update_data['use_biometric'])
     update_data['updated_at'] = datetime.utcnow().isoformat()
@@ -585,7 +639,7 @@ async def update_settings(updates: UserSettingsUpdate):
 
     cur = await _db.execute("SELECT * FROM settings LIMIT 1")
     row = _row(await cur.fetchone())
-    return UserSettings(**_settings_from_row(row))
+    return UserSettings(**_public_settings_from_row(row))
 
 @api_router.post("/settings/verify-pin")
 async def verify_pin(pin: str):
@@ -593,7 +647,7 @@ async def verify_pin(pin: str):
     row = await cur.fetchone()
     if not row or not row['pin_hash']:
         return {"valid": True, "message": "Nessun PIN configurato"}
-    if row['pin_hash'] == pin:
+    if _pin_matches(row['pin_hash'], pin):
         return {"valid": True}
     return {"valid": False, "message": "PIN non valido"}
 
@@ -662,10 +716,17 @@ async def create_timbratura(input: TimbraturaCreate):
     if await cur.fetchone():
         raise HTTPException(status_code=400, detail="Timbratura già esistente per questa data")
     ore_lavorate, ore_arrotondate = calcola_ore_lavorate(input.ora_entrata, input.ora_uscita)
+    marcature = _build_manual_marcature(
+        input.ora_entrata,
+        input.ora_uscita,
+        input.is_reperibilita_attiva
+    )
     t = Timbratura(
         **input.dict(),
+        marcature=marcature,
         ore_lavorate=ore_lavorate,
-        ore_arrotondate=ore_arrotondate
+        ore_arrotondate=ore_arrotondate,
+        ore_reperibilita=calcola_ore_reperibilita(marcature)
     )
     await _db.execute(
         "INSERT INTO timbrature VALUES (?,?,?,?,?,?,?,?,?,?,?)",
@@ -679,7 +740,7 @@ async def create_timbratura(input: TimbraturaCreate):
 @api_router.put("/timbrature/{data}", response_model=Timbratura)
 async def update_timbratura(data: str, updates: TimbraturaUpdate):
     cur = await _db.execute("SELECT * FROM timbrature WHERE data = ?", [data])
-    row = _row(await cur.fetchone())
+    row = _timbratura_from_row(_row(await cur.fetchone()))
     if not row:
         raise HTTPException(status_code=404, detail="Timbratura non trovata")
     update_data = {k: v for k, v in updates.dict().items() if v is not None}
@@ -688,6 +749,15 @@ async def update_timbratura(data: str, updates: TimbraturaUpdate):
     ore_lavorate, ore_arrotondate = calcola_ore_lavorate(ora_entrata, ora_uscita)
     update_data["ore_lavorate"] = ore_lavorate
     update_data["ore_arrotondate"] = ore_arrotondate
+    if any(k in update_data for k in ("ora_entrata", "ora_uscita", "is_reperibilita_attiva")):
+        manual_marcature = _build_manual_marcature(
+            ora_entrata,
+            ora_uscita,
+            bool(update_data.get("is_reperibilita_attiva", row.get("is_reperibilita_attiva", False))),
+            row.get("created_at")
+        )
+        update_data["marcature"] = json.dumps(manual_marcature)
+        update_data["ore_reperibilita"] = calcola_ore_reperibilita(manual_marcature)
     if 'is_reperibilita_attiva' in update_data:
         update_data['is_reperibilita_attiva'] = int(update_data['is_reperibilita_attiva'])
     set_clause = ", ".join(f"{k} = ?" for k in update_data.keys())
@@ -741,6 +811,17 @@ async def timbra(tipo: str, is_reperibilita: bool = False):
                     "ora": existing["ora_uscita"], "is_reperibilita": False,
                     "created_at": existing.get("created_at", now.isoformat())
                 })
+        if marcature and marcature[-1]["tipo"] == tipo:
+            expected = "uscita" if tipo == "entrata" else "entrata"
+            raise HTTPException(
+                status_code=400,
+                detail=f"Sequenza non valida: registra prima {expected}"
+            )
+        if not marcature and tipo == "uscita":
+            raise HTTPException(
+                status_code=400,
+                detail="Non puoi registrare un'uscita senza un'entrata"
+            )
         marcature.append(nuova_marcatura)
         ore_totali = calcola_ore_da_marcature(marcature)
         ore_reperibilita = calcola_ore_reperibilita(marcature)
@@ -987,9 +1068,6 @@ async def upload_busta_paga(anno: int, mese: int, file: UploadFile = File(...)):
     if parse_result["success"]:
         if parse_result.get("netto"):
             update_fields["netto"] = parse_result["netto"]
-        elementi = parse_result.get("elementi_retributivi", {})
-        if elementi.get("paga_base"):
-            update_fields["paga_base"] = elementi["paga_base"]
         ore = parse_result.get("ore", {})
         if ore.get("straordinarie"):
             update_fields["straordinari_ore"] = ore["straordinarie"]
@@ -1367,7 +1445,7 @@ async def get_dashboard():
         "comporto": comporto_data,
         "ultima_busta": _safe_busta_paga(last_busta_row) if last_busta_row else None,
         "alerts_non_letti": alerts_count,
-        "settings": UserSettings(**settings).dict()
+        "settings": UserSettings(**_public_settings_from_row(settings)).dict()
     }
 
 # --- Statistiche ---

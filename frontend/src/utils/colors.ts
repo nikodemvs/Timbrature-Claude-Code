@@ -23,7 +23,7 @@ export const COLORS = {
   
   // Text
   text: '#0F172A',
-  textSecondary: '#64748B',
+  textSecondary: '#475569',
   textLight: '#94A3B8',
   textWhite: '#FFFFFF',
   
@@ -40,8 +40,8 @@ export const COLORS = {
   
   // Transparency
   overlay: 'rgba(15, 23, 42, 0.5)',
-  shadowLight: 'rgba(0, 0, 0, 0.05)',
-  shadowMedium: 'rgba(0, 0, 0, 0.1)',
+  shadowLight: 'rgba(15, 23, 42, 0.04)',
+  shadowMedium: 'rgba(15, 23, 42, 0.08)',
 };
 
 export const GRADIENTS = {

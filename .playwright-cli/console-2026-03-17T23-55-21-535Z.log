@@ -1,0 +1,2 @@
+[      13ms] Cannot use import statement outside a module
+[     513ms] [ERROR] Failed to load resource: the server responded with a status of 404 () @ https://applicazione-timbratura.onrender.com/api/timbrature/2026-03-18:0

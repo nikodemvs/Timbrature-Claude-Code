@@ -27,6 +27,16 @@ export interface PdfUploadResponse {
   sottotipo?: string;
 }
 
+export interface CancellaDatiPersonaliResponse {
+  message: string;
+  cancellati: Record<string, number>;
+}
+
+export interface EliminaAccountResponse {
+  message: string;
+  settings_reset: boolean;
+}
+
 export interface TimbraturaAziendalePayload {
   data: string;
   ora_entrata?: string | null;
@@ -50,6 +60,10 @@ const api = axios.create({
 export const getSettings = () => api.get<UserSettings>('/settings');
 export const updateSettings = (data: Partial<UserSettings>) => api.put<UserSettings>('/settings', data);
 export const verifyPin = (pin: string) => api.post('/settings/verify-pin', null, { params: { pin } });
+export const deletePersonalData = (conferma = true) =>
+  api.post<CancellaDatiPersonaliResponse>('/dati-personali/cancella', { conferma });
+export const deleteAccount = (conferma = true) =>
+  api.post<EliminaAccountResponse>('/account/elimina', { conferma });
 
 // Timbrature
 export const getTimbrature = (params?: { mese?: number; anno?: number; data_inizio?: string; data_fine?: string }) =>

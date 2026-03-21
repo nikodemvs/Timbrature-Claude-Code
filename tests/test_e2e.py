@@ -190,6 +190,70 @@ def test_e2e_buste_paga_mostra_struttura_compatta_e_tab_cud(browser, stack_appli
         context.close()
 
 
+def test_e2e_altro_mostra_doppia_cancellazione_con_popup(browser, stack_applicazione):
+    context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
+    try:
+        page.route(
+            "**/api/dati-personali/cancella",
+            lambda route: route.fulfill(
+                status=200,
+                json={
+                    "message": "Dati personali cancellati",
+                    "cancellati": {"timbrature": 0},
+                },
+            ),
+        )
+        page.route(
+            "**/api/account/elimina",
+            lambda route: route.fulfill(
+                status=200,
+                json={"message": "Account eliminato", "settings_reset": True, "pin_eliminato": True},
+            ),
+        )
+
+        page.get_by_test_id("tab-altro").click()
+        page.get_by_test_id("altro-screen").wait_for(timeout=30000)
+        page.get_by_test_id("altro-menu-settings").click()
+        page.get_by_test_id("altro-settings-screen").wait_for(timeout=30000)
+
+        expect(page.get_by_test_id("altro-settings-delete-personal-button")).to_be_visible()
+        expect(page.get_by_test_id("altro-settings-delete-account-button")).to_be_visible()
+
+        page.get_by_test_id("altro-settings-delete-personal-button").click()
+        page.get_by_test_id("altro-settings-delete-personal-sheet").wait_for(timeout=10000)
+        expect(page.get_by_test_id("altro-settings-delete-personal-cancel-button")).to_be_visible()
+        expect(page.get_by_test_id("altro-settings-delete-personal-confirm-button")).to_be_visible()
+        expect(page.get_by_text("Verranno eliminati solo PDF, buste paga, timbrature, tredicesime, CUD, report e documenti.")).to_be_visible()
+
+        page.get_by_test_id("altro-settings-delete-personal-cancel-button").click()
+        page.get_by_test_id("altro-settings-delete-personal-sheet").wait_for(state="hidden", timeout=10000)
+
+        page.get_by_test_id("altro-settings-delete-personal-button").click()
+        page.get_by_test_id("altro-settings-delete-personal-sheet").wait_for(timeout=10000)
+        page.get_by_test_id("altro-settings-delete-personal-confirm-button").click()
+        page.wait_for_timeout(1500)
+
+        page.get_by_test_id("altro-settings-delete-personal-sheet").wait_for(state="hidden", timeout=10000)
+
+        page.get_by_test_id("altro-settings-delete-account-button").click()
+        page.get_by_test_id("altro-settings-delete-account-sheet").wait_for(timeout=10000)
+        expect(page.get_by_test_id("altro-settings-delete-account-cancel-button")).to_be_visible()
+        expect(page.get_by_test_id("altro-settings-delete-account-confirm-button")).to_be_visible()
+        expect(page.get_by_text("Verranno eliminati il profilo, i dati descrittivi dell’account, il PIN salvato sul dispositivo e la protezione biometrica. I dati operativi restano invariati.")).to_be_visible()
+
+        page.get_by_test_id("altro-settings-delete-account-cancel-button").click()
+        page.get_by_test_id("altro-settings-delete-account-sheet").wait_for(state="hidden", timeout=10000)
+
+        page.get_by_test_id("altro-settings-delete-account-button").click()
+        page.get_by_test_id("altro-settings-delete-account-sheet").wait_for(timeout=10000)
+        page.get_by_test_id("altro-settings-delete-account-confirm-button").click()
+        page.wait_for_timeout(1500)
+
+        page.get_by_test_id("altro-settings-delete-account-sheet").wait_for(state="hidden", timeout=10000)
+    finally:
+        context.close()
+
+
 def test_e2e_importa_cartella_annidata_instrada_pdf_e_ignora_file_non_supportati(browser, stack_applicazione):
     context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
     try:

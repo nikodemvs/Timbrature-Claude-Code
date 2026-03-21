@@ -5,6 +5,16 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Mitigazione log SSL di Responsively
+Cosa: rafforzato il launcher frontend quando apre Responsively App, isolando meglio il processo Electron e reindirizzando stdout/stderr su file runtime dedicati per evitare che i warning SSL net_error -202 finiscano nel terminale
+Perché: mantenere pulito l'output del tasto Start quando il frontend viene aperto in Responsively senza toccare l'app Expo
+File: start-frontend.ps1, tests/test_unit.py, CHANGELOG.md
+
+## 2026-03-21 — Separazione cancellazione dati operativi e account
+Cosa: aggiunti due flussi distinti nelle impostazioni con conferma esplicita: Cancella dati personali elimina solo PDF, timbrature, buste paga, tredicesime, CUD e documenti; Elimina account azzera solo profilo, dati descrittivi e PIN locale
+Perché: distinguere in modo netto i dati operativi caricati dai dati dell'account ed evitare cancellazioni troppo estese o ambigue durante i test dell'app
+File: backend/server.py, frontend/app/(tabs)/altro.tsx, frontend/src/services/api.ts, tests/test_api.py, tests/test_e2e.py
+
 ## 2026-03-21 — Riorganizzazione schermata buste paga
 Cosa: ridisegnata la scheda Buste Paga con azioni rapide compattate, riepilogo iniziale e storico raggruppato per anno con sezioni espandibili separate per Cedolini, Archivio PDF e CUD
 Perché: ridurre il carico cognitivo, accorciare lo scroll e rendere più leggibile la gestione dei documenti senza cambiare i flussi esistenti

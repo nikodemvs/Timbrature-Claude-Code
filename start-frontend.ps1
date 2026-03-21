@@ -15,6 +15,8 @@ $runtimeDir = Join-Path $env:TEMP "Timbrature-Codex-runtime"
 $pidPath = Join-Path $runtimeDir "frontend.pid"
 $logPath = Join-Path $runtimeDir "frontend.log"
 $errorLogPath = Join-Path $runtimeDir "frontend.err.log"
+$responsivelyLogPath = Join-Path $runtimeDir "responsively.log"
+$responsivelyErrorLogPath = Join-Path $runtimeDir "responsively.err.log"
 
 function Get-ExistingProcess {
     param([string]$PidFile)
@@ -156,7 +158,22 @@ function Open-InResponsively {
     }
 
     try {
-        Start-Process -FilePath $launcher.Target -ArgumentList @($Url) | Out-Null
+        $previousElectronLogging = $env:ELECTRON_ENABLE_LOGGING
+        $env:ELECTRON_ENABLE_LOGGING = "0"
+        try {
+            Start-Process `
+                -FilePath $launcher.Target `
+                -ArgumentList @($Url) `
+                -WindowStyle Hidden `
+                -RedirectStandardOutput $responsivelyLogPath `
+                -RedirectStandardError $responsivelyErrorLogPath | Out-Null
+        } finally {
+            if ($null -eq $previousElectronLogging) {
+                Remove-Item Env:ELECTRON_ENABLE_LOGGING -ErrorAction SilentlyContinue
+            } else {
+                $env:ELECTRON_ENABLE_LOGGING = $previousElectronLogging
+            }
+        }
         return $true
     } catch {
         Write-Warning "Impossibile avviare Responsively App con $($launcher.Target). URL disponibile: $Url"

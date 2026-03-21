@@ -293,6 +293,15 @@ class ChatRequest(AppBaseModel):
     message: str
     session_id: Optional[str] = None
 
+
+class CancellaDatiPersonaliRequest(AppBaseModel):
+    conferma: bool = False
+
+
+class EliminaAccountRequest(AppBaseModel):
+    conferma: bool = False
+
+
 class Alert(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     tipo: str
@@ -917,6 +926,134 @@ def _public_settings_from_row(row: dict) -> dict:
     safe['pin_hash'] = None
     return safe
 
+
+def _settings_personali_vuote() -> UserSettings:
+    return UserSettings(
+        nome="",
+        qualifica="",
+        livello=0,
+        azienda="",
+        sede="",
+        ccnl="",
+        data_assunzione="",
+        orario_tipo="",
+        ore_giornaliere=0,
+        paga_base=0.0,
+        scatti_anzianita=0.0,
+        superminimo=0.0,
+        premio_incarico=0.0,
+        divisore_orario=0,
+        divisore_giornaliero=0,
+        ticket_valore=0.0,
+        pin_hash=None,
+        use_biometric=False,
+    )
+
+
+async def _scrivi_settings_neutre() -> None:
+    settings_vuote = _settings_personali_vuote().model_dump()
+    cur = await _db.execute("SELECT id FROM settings LIMIT 1")
+    settings_esistenti = await cur.fetchone()
+    if settings_esistenti:
+        await _db.execute(
+            """
+            UPDATE settings
+            SET nome = ?,
+                qualifica = ?,
+                livello = ?,
+                azienda = ?,
+                sede = ?,
+                ccnl = ?,
+                data_assunzione = ?,
+                orario_tipo = ?,
+                ore_giornaliere = ?,
+                paga_base = ?,
+                scatti_anzianita = ?,
+                superminimo = ?,
+                premio_incarico = ?,
+                divisore_orario = ?,
+                divisore_giornaliero = ?,
+                ticket_valore = ?,
+                pin_hash = ?,
+                use_biometric = ?,
+                created_at = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            [
+                settings_vuote["nome"],
+                settings_vuote["qualifica"],
+                settings_vuote["livello"],
+                settings_vuote["azienda"],
+                settings_vuote["sede"],
+                settings_vuote["ccnl"],
+                settings_vuote["data_assunzione"],
+                settings_vuote["orario_tipo"],
+                settings_vuote["ore_giornaliere"],
+                settings_vuote["paga_base"],
+                settings_vuote["scatti_anzianita"],
+                settings_vuote["superminimo"],
+                settings_vuote["premio_incarico"],
+                settings_vuote["divisore_orario"],
+                settings_vuote["divisore_giornaliero"],
+                settings_vuote["ticket_valore"],
+                settings_vuote["pin_hash"],
+                int(settings_vuote["use_biometric"]),
+                settings_vuote["created_at"].isoformat(),
+                settings_vuote["updated_at"].isoformat(),
+                settings_esistenti["id"],
+            ],
+        )
+    else:
+        await _db.execute(
+            """
+            INSERT INTO settings VALUES (
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            )
+            """,
+            [
+                settings_vuote["id"],
+                settings_vuote["nome"],
+                settings_vuote["qualifica"],
+                settings_vuote["livello"],
+                settings_vuote["azienda"],
+                settings_vuote["sede"],
+                settings_vuote["ccnl"],
+                settings_vuote["data_assunzione"],
+                settings_vuote["orario_tipo"],
+                settings_vuote["ore_giornaliere"],
+                settings_vuote["paga_base"],
+                settings_vuote["scatti_anzianita"],
+                settings_vuote["superminimo"],
+                settings_vuote["premio_incarico"],
+                settings_vuote["divisore_orario"],
+                settings_vuote["divisore_giornaliero"],
+                settings_vuote["ticket_valore"],
+                settings_vuote["pin_hash"],
+                int(settings_vuote["use_biometric"]),
+                settings_vuote["created_at"].isoformat(),
+                settings_vuote["updated_at"].isoformat(),
+            ],
+        )
+
+
+async def _svuota_dati_operativi_personali() -> Dict[str, int]:
+    tabelle_da_svuotare = [
+        "timbrature",
+        "timbrature_aziendali",
+        "buste_paga",
+        "documenti",
+    ]
+    cancellati: Dict[str, int] = {}
+    for tabella in tabelle_da_svuotare:
+        cur = await _db.execute(f"SELECT COUNT(1) AS totale FROM {tabella}")
+        riga = await cur.fetchone()
+        cancellati[tabella] = int(riga["totale"]) if riga else 0
+        await _db.execute(f"DELETE FROM {tabella}")
+    await _db.commit()
+    return cancellati
+
+
 def _alert_from_row(row: dict) -> dict:
     if not row:
         return None
@@ -1141,6 +1278,37 @@ async def verify_pin(pin: str):
     if _pin_matches(row['pin_hash'], pin):
         return {"valid": True}
     return {"valid": False, "message": "PIN non valido"}
+
+
+@api_router.post("/dati-personali/cancella")
+async def cancella_dati_personali(richiesta: CancellaDatiPersonaliRequest):
+    if not richiesta.conferma:
+        raise HTTPException(
+            status_code=400,
+            detail="Conferma richiesta per cancellare i dati personali operativi.",
+        )
+
+    cancellati = await _svuota_dati_operativi_personali()
+    return {
+        "message": "Dati personali operativi cancellati.",
+        "cancellati": cancellati,
+    }
+
+
+@api_router.post("/account/elimina")
+async def elimina_account(richiesta: EliminaAccountRequest):
+    if not richiesta.conferma:
+        raise HTTPException(
+            status_code=400,
+            detail="Conferma richiesta per eliminare l'account.",
+        )
+
+    await _scrivi_settings_neutre()
+    await _db.commit()
+    return {
+        "message": "Account eliminato e profilo azzerato.",
+        "settings_reset": True,
+    }
 
 # --- Timbrature ---
 

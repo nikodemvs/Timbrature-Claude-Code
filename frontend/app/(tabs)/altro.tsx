@@ -60,12 +60,13 @@ export default function AltroScreen() {
   const [inputText, setInputText] = useState('');
   const [chatLoading, setChatLoading] = useState(false);
   const {
-    chatSessionId,
-    setChatSessionId,
-    theme,
-    setTheme,
-    dashboard,
-    setDashboard,
+      chatSessionId,
+      setChatSessionId,
+      theme,
+      setTheme,
+      dashboard,
+      setDashboard,
+      setTodayTimbratura,
   } = useAppStore();
   const chatScrollRef = useRef<FlatList>(null);
   
@@ -95,6 +96,8 @@ export default function AltroScreen() {
   const [showAppearanceSheet, setShowAppearanceSheet] = useState(false);
   const [showThemeSheet, setShowThemeSheet] = useState(false);
   const [showEditSheet, setShowEditSheet] = useState(false);
+  const [showDeleteOperationalSheet, setShowDeleteOperationalSheet] = useState(false);
+  const [showDeleteAccountSheet, setShowDeleteAccountSheet] = useState(false);
   const [newPin, setNewPin] = useState('');
   
   // Edit settings state
@@ -106,6 +109,8 @@ export default function AltroScreen() {
   const [editSuperminimo, setEditSuperminimo] = useState('');
   const [editScatti, setEditScatti] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
+  const [deletingOperationalData, setDeletingOperationalData] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const activeSchemeLabel =
     colorSchemePreference === 'system'
@@ -301,6 +306,53 @@ export default function AltroScreen() {
       console.error('Error refreshing dashboard:', error);
     }
   }, [setDashboard]);
+
+  const openDeleteOperationalSheet = () => {
+    setShowDeleteOperationalSheet(true);
+  };
+
+  const openDeleteAccountSheet = () => {
+    setShowDeleteAccountSheet(true);
+  };
+
+  const clearOperationalData = async () => {
+    setDeletingOperationalData(true);
+    try {
+      const response = await api.deletePersonalData(true);
+      await refreshDashboard();
+      setStatsData([]);
+      setDailyStats([]);
+      setAllYearsStats([]);
+      setTodayTimbratura(null);
+      setShowDeleteOperationalSheet(false);
+      Alert.alert('Dati operativi cancellati', response.data.message || 'Dati operativi cancellati.');
+    } catch (error) {
+      console.error('Error deleting operational data:', error);
+      Alert.alert('Errore', 'Impossibile cancellare i dati operativi');
+    } finally {
+      setDeletingOperationalData(false);
+    }
+  };
+
+  const deleteAccount = async () => {
+    setDeletingAccount(true);
+    try {
+      const response = await api.deleteAccount(true);
+      if (Platform.OS !== 'web') {
+        const SecureStore = await import('expo-secure-store');
+        await SecureStore.deleteItemAsync('bustapaga_pin');
+      }
+      await refreshDashboard();
+      setNewPin('');
+      setShowDeleteAccountSheet(false);
+      Alert.alert('Account eliminato', response.data.message || 'Account eliminato correttamente.');
+    } catch (error) {
+      console.error('Error deleting account:', error);
+      Alert.alert('Errore', 'Impossibile eliminare l’account');
+    } finally {
+      setDeletingAccount(false);
+    }
+  };
 
   const saveSettings = () => {
     Alert.alert(
@@ -671,6 +723,50 @@ export default function AltroScreen() {
         <View style={styles.infoRow}><Text style={styles.infoLabel}>Scatti Anzianità</Text><Text style={styles.infoValue}>{formatCurrency(dashboard?.settings?.scatti_anzianita || 0)}</Text></View>
       </Card>
 
+      <Card style={styles.dangerCard}>
+        <View style={styles.cardHeaderRow}>
+        <View style={styles.dangerHeaderCopy}>
+            <Text style={styles.dangerTitle}>Cancella dati personali</Text>
+            <Text style={styles.dangerHint}>
+              Elimina solo PDF, buste paga, timbrature, tredicesime, CUD, report e documenti.
+            </Text>
+          </View>
+          <View style={styles.dangerIcon}>
+            <Ionicons name="warning" size={20} color={colors.error} />
+          </View>
+        </View>
+          <Button
+            title="Cancella dati personali"
+            icon="trash"
+            variant="danger"
+            onPress={openDeleteOperationalSheet}
+            testID="altro-settings-delete-personal-button"
+            fullWidth
+          />
+        </Card>
+
+      <Card style={styles.dangerCardAlt}>
+        <View style={styles.cardHeaderRow}>
+          <View style={styles.dangerHeaderCopy}>
+            <Text style={styles.dangerTitle}>Elimina account</Text>
+            <Text style={styles.dangerHint}>
+              Elimina profilo, dati descrittivi e PIN locale dal dispositivo. Questa azione è irreversibile.
+            </Text>
+          </View>
+          <View style={styles.dangerIcon}>
+            <Ionicons name="person-remove" size={20} color={colors.error} />
+          </View>
+        </View>
+        <Button
+          title="Elimina account"
+          icon="person-remove"
+          variant="danger"
+          onPress={openDeleteAccountSheet}
+          testID="altro-settings-delete-account-button"
+          fullWidth
+        />
+      </Card>
+
       <BottomSheet visible={showAppearanceSheet} onClose={() => setShowAppearanceSheet(false)} title="Aspetto" height="46%">
         <View style={styles.appearanceList}>
           {COLOR_SCHEME_OPTIONS.map((option) => {
@@ -743,6 +839,68 @@ export default function AltroScreen() {
         <View style={styles.sheetButtons}>
           <Button title="Annulla" variant="outline" onPress={() => setShowEditSheet(false)} style={styles.sheetButton} />
           <Button title="Salva" onPress={saveSettings} loading={savingSettings} style={styles.sheetButton} />
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={showDeleteOperationalSheet} onClose={() => !deletingOperationalData && setShowDeleteOperationalSheet(false)} title="Cancella dati personali" height="52%" testID="altro-settings-delete-personal-sheet">
+        <View style={styles.dangerSheetContent}>
+          <View style={styles.dangerSheetIcon}>
+            <Ionicons name="warning" size={24} color={colors.error} />
+          </View>
+          <Text style={styles.dangerSheetTitle}>Cancella solo i dati operativi</Text>
+          <Text style={styles.dangerSheetText}>
+            Verranno eliminati solo PDF, buste paga, timbrature, tredicesime, CUD, report e documenti.
+            Il PIN locale, il profilo, le assenze e la reperibilità restano invariati.
+          </Text>
+          <View style={styles.sheetButtons}>
+            <Button
+              title="Annulla"
+              variant="outline"
+              onPress={() => setShowDeleteOperationalSheet(false)}
+              disabled={deletingOperationalData}
+              style={styles.sheetButton}
+              testID="altro-settings-delete-personal-cancel-button"
+            />
+            <Button
+              title="Conferma"
+              variant="danger"
+              onPress={clearOperationalData}
+              loading={deletingOperationalData}
+              style={styles.sheetButton}
+              testID="altro-settings-delete-personal-confirm-button"
+            />
+          </View>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet visible={showDeleteAccountSheet} onClose={() => !deletingAccount && setShowDeleteAccountSheet(false)} title="Elimina account" height="56%" testID="altro-settings-delete-account-sheet">
+        <View style={styles.dangerSheetContent}>
+          <View style={styles.dangerSheetIcon}>
+            <Ionicons name="trash" size={24} color={colors.error} />
+          </View>
+          <Text style={styles.dangerSheetTitle}>Elimina account e PIN locale</Text>
+          <Text style={styles.dangerSheetText}>
+            Verranno eliminati il profilo, i dati descrittivi dell’account, il PIN salvato sul dispositivo
+            e la protezione biometrica. I dati operativi restano invariati.
+          </Text>
+          <View style={styles.sheetButtons}>
+            <Button
+              title="Annulla"
+              variant="outline"
+              onPress={() => setShowDeleteAccountSheet(false)}
+              disabled={deletingAccount}
+              style={styles.sheetButton}
+              testID="altro-settings-delete-account-cancel-button"
+            />
+            <Button
+              title="Conferma"
+              variant="danger"
+              onPress={deleteAccount}
+              loading={deletingAccount}
+              style={styles.sheetButton}
+              testID="altro-settings-delete-account-confirm-button"
+            />
+          </View>
         </View>
       </BottomSheet>
     </ScrollView>
@@ -875,9 +1033,25 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     settingText: { fontSize: 16, color: colors.text },
     settingHint: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
     themePreview: { width: 24, height: 24, borderRadius: 12, marginRight: 8 },
+    dangerCard: {
+      marginTop: 16,
+      borderWidth: 1,
+      borderColor: `${colors.error}40`,
+      backgroundColor: `${colors.error}08`,
+    },
+    dangerCardAlt: {
+      marginTop: 12,
+      borderWidth: 1,
+      borderColor: `${colors.error}40`,
+      backgroundColor: `${colors.error}0A`,
+    },
     cardHeaderRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 },
     cardTitle: { fontSize: 16, fontWeight: '600', color: colors.text },
     editButton: { width: 36, height: 36, borderRadius: 18, backgroundColor: colors.cardDark, justifyContent: 'center', alignItems: 'center' },
+    dangerHeaderCopy: { flex: 1, paddingRight: 12 },
+    dangerTitle: { fontSize: 16, fontWeight: '700', color: colors.error },
+    dangerHint: { fontSize: 12, lineHeight: 18, color: colors.textSecondary, marginTop: 4 },
+    dangerIcon: { width: 36, height: 36, borderRadius: 18, backgroundColor: `${colors.error}14`, justifyContent: 'center', alignItems: 'center' },
     infoRow: { flexDirection: 'row', justifyContent: 'space-between', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: colors.border },
     infoLabel: { fontSize: 14, color: colors.textSecondary },
     infoValue: { fontSize: 14, fontWeight: '500', color: colors.text, maxWidth: '60%', textAlign: 'right' },
@@ -902,4 +1076,17 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     emptyText: { fontSize: 16, color: colors.textSecondary, marginTop: 16 },
     sheetButtons: { flexDirection: 'row', gap: 12, marginTop: 24 },
     sheetButton: { flex: 1 },
+    dangerSheetContent: { paddingBottom: 8 },
+    dangerSheetIcon: {
+      width: 56,
+      height: 56,
+      borderRadius: 28,
+      alignSelf: 'center',
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: `${colors.error}12`,
+      marginBottom: 16,
+    },
+    dangerSheetTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+    dangerSheetText: { fontSize: 14, lineHeight: 21, color: colors.textSecondary, textAlign: 'center', marginTop: 10 },
   });

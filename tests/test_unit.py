@@ -337,6 +337,11 @@ def test_unit_script_avvio_locale_esistono_e_puntano_ai_comandi_attesi():
     assert "RESPONSIVELY_APP_PATH" in frontend_source
     assert "responsively://" in frontend_source
     assert "ArgumentList @($Url)" in frontend_source
+    assert "responsively.log" in frontend_source
+    assert "responsively.err.log" in frontend_source
+    assert "ELECTRON_ENABLE_LOGGING" in frontend_source
+    assert "RedirectStandardError" in frontend_source
+    assert "WindowStyle Hidden" in frontend_source
     assert "$env:BROWSER = 'none'" in frontend_source
     assert "taskkill" in frontend_source
     assert "start-backend.ps1" in app_source

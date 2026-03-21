@@ -26,6 +26,169 @@ class FintoGemini:
     aio = SimpleNamespace(chats=FintiChats())
 
 
+async def _semina_dati_operativi_e_personali(db_temporaneo):
+    timestamp = "2026-03-21T10:00:00+00:00"
+    await db_temporaneo.execute(
+        """
+        INSERT INTO timbrature (
+            id, data, ora_entrata, ora_uscita, marcature,
+            ore_lavorate, ore_arrotondate, ore_reperibilita,
+            is_reperibilita_attiva, note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "timbr-1",
+            "2026-03-20",
+            "08:00",
+            "17:00",
+            "[]",
+            8.0,
+            8.0,
+            0.0,
+            0,
+            "Timbratura di test",
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO timbrature_aziendali (
+            id, data, ora_entrata, ora_uscita, ore_lavorate,
+            descrizione, fonte_pdf, mese_riferimento, anno_riferimento, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "timbr-aziendale-1",
+            "2026-03-21",
+            "08:00",
+            "17:00",
+            8.0,
+            "Report aziendale",
+            "report-mese.pdf",
+            3,
+            2026,
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO buste_paga (
+            id, mese, anno, pdf_base64, pdf_nome,
+            lordo, netto, straordinari_ore, straordinari_importo,
+            trattenute_totali, netto_calcolato, differenza,
+            has_discrepancy, note_confronto, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "busta-1",
+            3,
+            2026,
+            base64.b64encode(b"%PDF-busta").decode("ascii"),
+            "marzo-2026.pdf",
+            2400.0,
+            1800.0,
+            4.0,
+            120.0,
+            500.0,
+            1800.0,
+            0.0,
+            0,
+            "Confronto di test",
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO documenti (
+            id, tipo, titolo, descrizione, sottotipo,
+            file_base64, file_nome, file_tipo, data_riferimento, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "doc-1",
+            "busta_paga",
+            "Cedolino marzo 2026",
+            "Documento personale",
+            "ordinaria",
+            base64.b64encode(b"%PDF-doc").decode("ascii"),
+            "cedolino-marzo-2026.pdf",
+            "pdf",
+            "2026-03",
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO assenze (
+            id, tipo, data_inizio, data_fine, ore_totali,
+            note, certificato_base64, certificato_nome, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "assenza-1",
+            "ferie",
+            "2026-03-10",
+            "2026-03-11",
+            16.0,
+            "Assenza di test",
+            None,
+            None,
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO reperibilita (
+            id, data, ora_inizio, ora_fine, tipo,
+            ore_totali, interventi, compenso_calcolato, note, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "rep-1",
+            "2026-03-18",
+            "22:00",
+            "02:00",
+            "passiva",
+            4.0,
+            0,
+            0.0,
+            "Reperibilità di test",
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO chat_history (
+            id, session_id, role, content, timestamp
+        ) VALUES (?, ?, ?, ?, ?)
+        """,
+        [
+            "chat-1",
+            "sessione-1",
+            "user",
+            "Ho bisogno dei miei dati",
+            timestamp,
+        ],
+    )
+    await db_temporaneo.execute(
+        """
+        INSERT INTO alerts (
+            id, tipo, titolo, messaggio, data_scadenza, letto, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "alert-1",
+            "promemoria",
+            "Scadenza",
+            "Messaggio personale",
+            "2026-04-01",
+            0,
+            timestamp,
+        ],
+    )
+    await db_temporaneo.commit()
+
+
 async def test_api_root_e_health_espongono_stato_app(client_api):
     risposta_root = await client_api.get("/api/")
     risposta_health = await client_api.get("/api/health")
@@ -550,6 +713,138 @@ async def test_api_documenti_ripara_righe_corrotte_senza_crash(client_api, db_te
     assert riga["data_riferimento"] == "2026-03"
     assert riga["created_at"] == "2026-03-21T10:00:00+00:00"
     assert riga["sottotipo"] == "ordinaria"
+
+
+async def test_api_cancella_dati_personali_svuota_solo_i_dati_operativi(client_api, db_temporaneo):
+    await client_api.put(
+        "/api/settings",
+        json={
+            "nome": "Mario Rossi",
+            "qualifica": "Impiegato",
+            "azienda": "Azienda Srl",
+            "sede": "Milano",
+            "paga_base": 2400.0,
+            "ticket_valore": 8.5,
+            "pin_hash": "1234",
+            "use_biometric": False,
+        },
+    )
+    await _semina_dati_operativi_e_personali(db_temporaneo)
+
+    rifiutata = await client_api.post("/api/dati-personali/cancella", json={"conferma": False})
+    cancellata = await client_api.post("/api/dati-personali/cancella", json={"conferma": True})
+
+    assert rifiutata.status_code == 400
+    assert rifiutata.json()["detail"] == "Conferma richiesta per cancellare i dati personali operativi."
+    assert cancellata.status_code == 200
+    assert cancellata.json()["message"] == "Dati personali operativi cancellati."
+    assert cancellata.json()["cancellati"]["timbrature"] == 1
+    assert cancellata.json()["cancellati"]["timbrature_aziendali"] == 1
+    assert cancellata.json()["cancellati"]["buste_paga"] == 1
+    assert cancellata.json()["cancellati"]["documenti"] == 1
+
+    endpoint_checks = {
+        "/api/timbrature": [],
+        "/api/timbrature-aziendali": [],
+        "/api/buste-paga": [],
+        "/api/documenti": [],
+    }
+    for path, expected in endpoint_checks.items():
+        risposta = await client_api.get(path)
+        assert risposta.status_code == 200
+        assert risposta.json() == expected
+
+    settings = await client_api.get("/api/settings")
+    assert settings.status_code == 200
+    assert settings.json()["nome"] == "Mario Rossi"
+    assert settings.json()["azienda"] == "Azienda Srl"
+    assert settings.json()["paga_base"] == 2400.0
+    assert settings.json()["use_biometric"] is False
+
+    for tabella in [
+        "timbrature",
+        "timbrature_aziendali",
+        "buste_paga",
+        "documenti",
+        "assenze",
+        "reperibilita",
+        "chat_history",
+        "alerts",
+    ]:
+        cur = await db_temporaneo.execute(f"SELECT COUNT(1) AS totale FROM {tabella}")
+        totale = int((await cur.fetchone())["totale"])
+        if tabella in {"timbrature", "timbrature_aziendali", "buste_paga", "documenti"}:
+            assert totale == 0
+        else:
+            assert totale == 1
+
+    cur = await db_temporaneo.execute("SELECT COUNT(1) AS totale FROM settings")
+    assert int((await cur.fetchone())["totale"]) == 1
+
+
+async def test_api_elimina_account_azzera_profilo_e_lascia_i_dati_operativi(client_api, db_temporaneo):
+    await client_api.put(
+        "/api/settings",
+        json={
+            "nome": "Mario Rossi",
+            "qualifica": "Impiegato",
+            "livello": 4,
+            "azienda": "Azienda Srl",
+            "sede": "Milano",
+            "ccnl": "Metalmeccanico",
+            "data_assunzione": "2020-01-10",
+            "orario_tipo": "Fisso",
+            "ore_giornaliere": 8,
+            "paga_base": 2400.0,
+            "scatti_anzianita": 30.0,
+            "superminimo": 120.0,
+            "premio_incarico": 50.0,
+            "divisore_orario": 173,
+            "divisore_giornaliero": 8,
+            "ticket_valore": 8.5,
+            "pin_hash": "1234",
+            "use_biometric": True,
+        },
+    )
+    await db_temporaneo.execute(
+        "UPDATE settings SET pin_hash = ?, use_biometric = ? WHERE id = (SELECT id FROM settings LIMIT 1)",
+        ["1234", 1],
+    )
+    await db_temporaneo.commit()
+    await _semina_dati_operativi_e_personali(db_temporaneo)
+
+    rifiutata = await client_api.post("/api/account/elimina", json={"conferma": False})
+    eliminata = await client_api.post("/api/account/elimina", json={"conferma": True})
+
+    assert rifiutata.status_code == 400
+    assert rifiutata.json()["detail"] == "Conferma richiesta per eliminare l'account."
+    assert eliminata.status_code == 200
+    assert eliminata.json()["message"] == "Account eliminato e profilo azzerato."
+    assert eliminata.json()["settings_reset"] is True
+
+    settings = await client_api.get("/api/settings")
+    assert settings.status_code == 200
+    assert settings.json()["nome"] == ""
+    assert settings.json()["qualifica"] == ""
+    assert settings.json()["azienda"] == ""
+    assert settings.json()["sede"] == ""
+    assert settings.json()["paga_base"] == 0
+    assert settings.json()["ticket_valore"] == 0
+    assert settings.json()["pin_hash"] is None
+    assert settings.json()["use_biometric"] is False
+
+    for tabella in [
+        "timbrature",
+        "timbrature_aziendali",
+        "buste_paga",
+        "documenti",
+        "assenze",
+        "reperibilita",
+        "chat_history",
+        "alerts",
+    ]:
+        cur = await db_temporaneo.execute(f"SELECT COUNT(1) AS totale FROM {tabella}")
+        assert int((await cur.fetchone())["totale"]) == 1
 
 
 async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):

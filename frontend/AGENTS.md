@@ -17,6 +17,13 @@ I calcoli di dominio li fa il backend — qui si formattano e mostrano i risulta
 - Font minimo 14px body, 12px solo etichette secondarie
 - Accessibilità: label su ogni input, alt su immagini, contrasto WCAG AA
 
+## Orchestrazione
+- Codex è l'orchestratore del lavoro frontend, non il primo esecutore
+- I sub-agent frontend devono lavorare con ownership chiara e ambito limitato ai file o componenti assegnati
+- Se esiste un sub-agent frontend adatto e libero, il task va delegato prima di essere eseguito direttamente da Codex
+- Se un sub-agent frontend fallisce, prima si tenta di sbloccarlo, restringere il task o riassegnarlo a un altro sub-agent equivalente
+- Codex interviene direttamente sul frontend solo quando tutti i sub-agent adatti sono già impegnati oppure realmente bloccati
+
 ## Offline
 - Cache le risposte del backend in locale (IndexedDB o localStorage)
 - Quando online: chiama API, salva risultato

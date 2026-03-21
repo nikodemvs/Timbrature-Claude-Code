@@ -47,6 +47,15 @@ non si tocca uno senza toccare l'altro.**
 Applica queste regole automaticamente in base a cosa stai modificando.
 Non aspettare che l'utente te lo chieda.
 
+### Regola di orchestrazione
+- Codex è l'orchestratore del lavoro, non il primo esecutore
+- I sub-agent devono lavorare per ownership chiara e nel proprio ambito di responsabilità
+- Se esiste un sub-agent adatto e libero, il lavoro va delegato a lui prima di essere eseguito dall'orchestratore
+- L'orchestratore esegue direttamente un task solo quando tutti i sub-agent adatti a svolgerlo sono già impegnati
+- Se un sub-agent non riesce a completare il proprio lavoro, non si abbandona subito la delega: prima si tenta di sbloccarlo, restringere meglio il task, reinviargli contesto utile o riassegnare il lavoro a un altro sub-agent equivalente
+- L'orchestratore interviene direttamente solo dopo che i tentativi ragionevoli di far eseguire il task a un sub-agent sono falliti oppure quando non esiste alcun sub-agent compatibile con quel lavoro
+- Quando più sub-agent possono lavorare in parallelo senza conflitti di ownership, vanno saturati prima di spostare nuovo lavoro sull'orchestratore
+
 ### Quando tocchi qualsiasi file frontend
 - Mobile-first: tutto deve funzionare da 375px
 - Touch target minimi 44x44px

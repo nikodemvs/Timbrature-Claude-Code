@@ -5,6 +5,16 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Propagata orchestrazione anche nei file AGENTS secondari
+Cosa: aggiunta anche in backend/AGENTS.md e frontend/AGENTS.md la regola che definisce Codex come orchestratore, impone ownership chiara ai sub-agent e richiede delega, sblocco o riassegnazione prima dell'esecuzione diretta
+Perché: evitare che la regola resti valida solo nel file root e renderla esplicita anche nei contesti backend e frontend letti da agenti specializzati
+File: backend/AGENTS.md, frontend/AGENTS.md, CHANGELOG.md
+
+## 2026-03-21 — Regola permanente per orchestrazione e sub-agent
+Cosa: aggiunta in AGENTS.md una regola esplicita che definisce Codex come orchestratore, impone ai sub-agent di lavorare nel proprio ambito con ownership chiara e obbliga a delegare il lavoro prima all'agente adatto e libero, usando l'orchestratore come esecutore solo quando tutti gli agenti compatibili sono già impegnati o davvero bloccati
+Perché: rendere stabile il metodo di lavoro tra sessioni, evitare che l'orchestratore assorba task delegabili e imporre un tentativo reale di sblocco o riassegnazione quando un sub-agent fallisce
+File: AGENTS.md, CHANGELOG.md
+
 ## 2026-03-21 — Storico cedolini, tredicesima separata e archivio CUD
 Cosa: ricostruita la schermata Buste Paga con tab dedicati per Cedolini e CUD, import singolo o storico da più PDF/cartella sul web, archivio distinto dei file caricati, conferma di sovrascrittura sui duplicati e test automatici per tredicesima e Certificazione Unica
 Perché: permettere il caricamento ordinato di storici documentali, distinguere la tredicesima dal cedolino ordinario del mese e iniziare a gestire i CUD con un archivio base senza confonderli con le mensilità standard

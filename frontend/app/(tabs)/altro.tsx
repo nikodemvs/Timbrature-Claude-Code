@@ -489,8 +489,8 @@ export default function AltroScreen() {
             <Ionicons name="person-circle-outline" size={44} color={colors.textSecondary} />
             <Text style={styles.profileEmptyTitle}>Nessun account attivo</Text>
             <Text style={styles.profileEmptyText}>
-              Scegli come reinserire i dati dell&apos;account. Puoi compilarli manualmente oppure caricare
-              una busta paga per riconoscerli in automatico.
+              Scegli come inserire i dati del tuo account{'\n'}
+              Puoi compilarli manualmente oppure caricare una busta paga per riconoscerli in automatico
             </Text>
             <View style={styles.profileEmptyActions}>
               <Button

@@ -283,7 +283,8 @@ def test_e2e_altro_mostra_doppia_cancellazione_con_popup(browser, stack_applicaz
         page.get_by_test_id("altro-back-button").click()
         page.get_by_test_id("altro-screen").wait_for(timeout=30000)
         expect(page.get_by_text("Nessun account attivo")).to_be_visible()
-        expect(page.get_by_text("Scegli come reinserire i dati dell'account. Puoi compilarli manualmente oppure caricare una busta paga per riconoscerli in automatico.")).to_be_visible()
+        expect(page.get_by_text("Scegli come inserire i dati del tuo account")).to_be_visible()
+        expect(page.get_by_text("Puoi compilarli manualmente oppure caricare una busta paga per riconoscerli in automatico")).to_be_visible()
         expect(page.get_by_test_id("altro-account-manual-cta")).to_be_visible()
         expect(page.get_by_test_id("altro-account-upload-cta")).to_be_visible()
 

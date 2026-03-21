@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Ricalibrato il copy di recupero account in Altro
+Cosa: aggiornata la card `Nessun account attivo` con il nuovo testo su due righe logiche e allineato il test E2E che verifica il copy della schermata
+Perché: rendere piu chiaro il messaggio di recupero account e mantenere il controllo automatico del copy visibile nella suite visuale
+File: frontend/app/(tabs)/altro.tsx, tests/test_e2e.py, CHANGELOG.md
+
 ## 2026-03-21 — Recupero account guidato dalla scheda Altro
 Cosa: nella card `Nessun account attivo` aggiunte due scelte reali per reinserire i dati dell'account, con accesso diretto all'editing manuale dei dati e instradamento al flusso automatico di caricamento busta paga gia presente nella scheda Buste Paga
 Perché: trasformare l'avviso passivo dopo `Elimina account` in un punto di recupero chiaro e operativo, riducendo l'ambiguita tra inserimento manuale e riconoscimento automatico tramite parser

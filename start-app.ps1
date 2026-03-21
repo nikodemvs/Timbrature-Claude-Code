@@ -1,7 +1,8 @@
 param(
     [int]$BackendPort = 8000,
     [int]$FrontendPort = 8081,
-    [switch]$NoClearCache
+    [switch]$NoClearCache,
+    [switch]$NoResponsively
 )
 
 $ErrorActionPreference = "Stop"
@@ -10,7 +11,7 @@ $backendScript = Join-Path $PSScriptRoot "start-backend.ps1"
 $frontendScript = Join-Path $PSScriptRoot "start-frontend.ps1"
 
 & $backendScript -Port $BackendPort -WaitForReady -ForceRestart
-& $frontendScript -Port $FrontendPort -BackendPort $BackendPort -WaitForReady -NoClearCache:$NoClearCache -ForceRestart
+& $frontendScript -Port $FrontendPort -BackendPort $BackendPort -WaitForReady -NoClearCache:$NoClearCache -ForceRestart -NoResponsively:$NoResponsively
 
 Write-Host ""
 Write-Host "Applicazione pronta."

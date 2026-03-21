@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timedelta
 from types import SimpleNamespace
+from io import BytesIO
 
 import pytest
 
@@ -249,6 +250,137 @@ async def test_api_update_busta_paga_positivo_errore_ed_edge(client_api):
     assert errore.status_code == 404
 
 
+async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "parse_sometime_pdf",
+        lambda _content, filename: {
+            "success": False,
+            "filename": filename,
+            "timbrature": [],
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "parse_zucchetti_pdf",
+        lambda _content, filename: {
+            "success": True,
+            "filename": filename,
+            "netto": 1450.0,
+            "ore": {"straordinarie": 12.5},
+            "totali": {"competenze": 2400.0, "trattenute": 500.0},
+        },
+    )
+
+    upload = await client_api.post(
+        "/api/buste-paga/2026/3/upload",
+        files={"file": ("marzo-2026.pdf", BytesIO(b"%PDF-busta"), "application/pdf")},
+    )
+    dettaglio = await client_api.get("/api/buste-paga/2026/3")
+
+    assert upload.status_code == 200
+    assert upload.json()["parse_success"] is True
+    assert dettaglio.status_code == 200
+    assert dettaglio.json()["pdf_nome"] == "marzo-2026.pdf"
+    assert dettaglio.json()["lordo"] == 2400.0
+    assert dettaglio.json()["netto"] == 1450.0
+    assert dettaglio.json()["straordinari_ore"] == 12.5
+    assert dettaglio.json()["trattenute_totali"] == 500.0
+
+
+async def test_api_upload_busta_paga_rifiuta_report_timbrature(client_api, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "parse_sometime_pdf",
+        lambda _content, filename: {
+            "success": True,
+            "filename": filename,
+            "timbrature": [{"data": "2026-03-10", "ora_entrata": "08:00", "ora_uscita": "17:00"}],
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "parse_zucchetti_pdf",
+        lambda _content, filename: {
+            "success": False,
+            "filename": filename,
+            "errors": [],
+        },
+    )
+
+    upload = await client_api.post(
+        "/api/buste-paga/2026/3/upload",
+        files={"file": ("CART_2026-03-01_2026-03-31_0001_Mario Rossi.pdf", BytesIO(b"%PDF-timbrature"), "application/pdf")},
+    )
+    lista = await client_api.get("/api/buste-paga", params={"anno": 2026})
+
+    assert upload.status_code == 400
+    assert "sembra un report timbrature" in upload.json()["detail"]
+    assert lista.status_code == 200
+    assert lista.json() == []
+
+
+async def test_api_upload_busta_paga_auto_rileva_periodo_e_chiede_sovrascrittura(client_api, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "parse_sometime_pdf",
+        lambda _content, filename: {
+            "success": False,
+            "filename": filename,
+            "timbrature": [],
+            "errors": [],
+        },
+    )
+    parser_state = {
+        "filename": "marzo-2026.pdf",
+        "mese": 3,
+        "anno": 2026,
+        "netto": 1450.0,
+        "ore": {"straordinarie": 8.5},
+        "totali": {"competenze": 2400.0, "trattenute": 500.0},
+    }
+
+    def finto_parse_zucchetti(_content: bytes, filename: str):
+        return {
+            "success": True,
+            "filename": filename,
+            **parser_state,
+        }
+
+    monkeypatch.setattr(server, "parse_zucchetti_pdf", finto_parse_zucchetti)
+
+    prima = await client_api.post(
+        "/api/buste-paga/upload",
+        files={"file": ("marzo-2026.pdf", BytesIO(b"%PDF-busta-1"), "application/pdf")},
+    )
+    duplicata = await client_api.post(
+        "/api/buste-paga/upload",
+        files={"file": ("marzo-2026-v2.pdf", BytesIO(b"%PDF-busta-2"), "application/pdf")},
+    )
+
+    parser_state["netto"] = 1525.0
+    parser_state["totali"] = {"competenze": 2500.0, "trattenute": 520.0}
+    sovrascritta = await client_api.post(
+        "/api/buste-paga/upload",
+        data={"force_overwrite": "true"},
+        files={"file": ("marzo-2026-v2.pdf", BytesIO(b"%PDF-busta-3"), "application/pdf")},
+    )
+    dettaglio = await client_api.get("/api/buste-paga/2026/3")
+
+    assert prima.status_code == 200
+    assert prima.json()["mese"] == 3
+    assert prima.json()["anno"] == 2026
+    assert duplicata.status_code == 409
+    assert duplicata.json()["detail"]["code"] == "duplicato_busta_paga"
+    assert sovrascritta.status_code == 200
+    assert dettaglio.status_code == 200
+    assert dettaglio.json()["pdf_nome"] == "marzo-2026-v2.pdf"
+    assert dettaglio.json()["netto"] == 1525.0
+    assert dettaglio.json()["lordo"] == 2500.0
+
+
 async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
     vuota = await client_api.get("/api/dashboard")
     await client_api.put("/api/settings", json={"ticket_valore": 8.0})
@@ -265,6 +397,238 @@ async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
     assert piena.json()["mese_corrente"]["ore_lavorate"] == 9.0
     assert piena.json()["mese_corrente"]["ticket_maturati"] == 1
     assert errore.status_code == 405
+
+
+async def test_api_upload_timbrature_aziendali_importa_e_rende_visibili_i_dati(client_api, monkeypatch):
+    def finto_parse_sometime_pdf(_content: bytes, filename: str):
+        return {
+            "success": True,
+            "filename": filename,
+            "mese": 3,
+            "anno": 2026,
+            "timbrature": [
+                {
+                    "data": "2026-03-10",
+                    "ora_entrata": "08:00",
+                    "ora_uscita": "17:00",
+                    "ore_lavorate": 9.0,
+                    "descrizione": "Turno regolare",
+                },
+                {
+                    "data": "2026-03-11",
+                    "ora_entrata": "08:15",
+                    "ora_uscita": "17:30",
+                    "ore_lavorate": 9.25,
+                    "descrizione": "Tkt Mensa",
+                },
+            ],
+            "totali": {"ore_lavorate": 18.25},
+            "errors": [],
+        }
+
+    monkeypatch.setattr(server, "parse_sometime_pdf", finto_parse_sometime_pdf)
+
+    upload = await client_api.post(
+        "/api/timbrature-aziendali/upload",
+        files={"file": ("CART_2026-03-01_2026-03-31_0001_Mario Rossi.pdf", BytesIO(b"%PDF-finto"), "application/pdf")},
+        data={"mese": "3", "anno": "2026"},
+    )
+    lista = await client_api.get("/api/timbrature-aziendali", params={"mese": 3, "anno": 2026})
+
+    assert upload.status_code == 200
+    assert upload.json()["timbrature_importate"] == 2
+    assert upload.json()["parse_success"] is True
+    assert lista.status_code == 200
+    assert len(lista.json()) == 2
+    assert lista.json()[0]["data"] == "2026-03-11"
+    assert lista.json()[1]["data"] == "2026-03-10"
+    assert lista.json()[0]["descrizione"] == "Tkt Mensa"
+
+
+async def test_api_upload_timbrature_aziendali_rifiuta_busta_paga_e_non_salva_documenti(client_api, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "parse_sometime_pdf",
+        lambda _content, filename: {
+            "success": False,
+            "filename": filename,
+            "mese": None,
+            "anno": None,
+            "timbrature": [],
+            "totali": {},
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "parse_zucchetti_pdf",
+        lambda _content, filename: {
+            "success": True,
+            "filename": filename,
+            "totali": {"competenze": 2500.0},
+        },
+    )
+
+    upload = await client_api.post(
+        "/api/timbrature-aziendali/upload",
+        files={"file": ("2021_10_ottobre.pdf", BytesIO(b"%PDF-busta"), "application/pdf")},
+        data={"mese": "3", "anno": "2026"},
+    )
+    lista = await client_api.get("/api/timbrature-aziendali", params={"mese": 3, "anno": 2026})
+    documenti = await client_api.get("/api/documenti", params={"tipo": "timbrature_report"})
+
+    assert upload.status_code == 400
+    assert "sembra una busta paga" in upload.json()["detail"]
+    assert lista.status_code == 200
+    assert lista.json() == []
+    assert documenti.status_code == 200
+    assert documenti.json() == []
+
+
+async def test_api_upload_timbrature_aziendali_rileva_periodo_reale_e_filtra_per_mese(client_api, monkeypatch):
+    def finto_parse_sometime_pdf(_content: bytes, filename: str):
+        return {
+            "success": True,
+            "filename": filename,
+            "mese": None,
+            "anno": None,
+            "timbrature": [
+                {
+                    "data": "2026-01-10",
+                    "ora_entrata": "08:00",
+                    "ora_uscita": "17:00",
+                    "ore_lavorate": 9.0,
+                    "descrizione": "Turno regolare",
+                },
+                {
+                    "data": "2026-01-11",
+                    "ora_entrata": "08:10",
+                    "ora_uscita": "16:40",
+                    "ore_lavorate": 8.5,
+                    "descrizione": "Turno ridotto",
+                },
+            ],
+            "totali": {"ore_lavorate": 17.5},
+            "errors": [],
+        }
+
+    monkeypatch.setattr(server, "parse_sometime_pdf", finto_parse_sometime_pdf)
+
+    await client_api.post(
+        "/api/timbrature",
+        json={"data": "2026-01-10", "ora_entrata": "08:00", "ora_uscita": "17:00"},
+    )
+    upload = await client_api.post(
+        "/api/timbrature-aziendali/upload",
+        files={"file": ("report-gennaio.pdf", BytesIO(b"%PDF-gennaio"), "application/pdf")},
+        data={"mese": "3", "anno": "2026"},
+    )
+    gennaio = await client_api.get("/api/timbrature-aziendali", params={"mese": 1, "anno": 2026})
+    marzo = await client_api.get("/api/timbrature-aziendali", params={"mese": 3, "anno": 2026})
+    confronto_gennaio = await client_api.get("/api/confronto-timbrature", params={"mese": 1, "anno": 2026})
+    confronto_marzo = await client_api.get("/api/confronto-timbrature", params={"mese": 3, "anno": 2026})
+
+    assert upload.status_code == 200
+    assert upload.json()["mese"] == 1
+    assert upload.json()["anno"] == 2026
+    assert gennaio.status_code == 200
+    assert len(gennaio.json()) == 2
+    assert marzo.status_code == 200
+    assert marzo.json() == []
+    assert confronto_gennaio.status_code == 200
+    assert len(confronto_gennaio.json()["confronti"]) == 2
+    assert confronto_marzo.status_code == 200
+    assert confronto_marzo.json()["confronti"] == []
+
+
+async def test_api_timbrature_aziendali_sincronizza_metadati_gia_sporchi(client_api):
+    await server._db.execute(
+        "INSERT INTO timbrature_aziendali VALUES (?,?,?,?,?,?,?,?,?,?)",
+        [
+            "timbratura-azienda-sporca",
+            "2026-01-05",
+            "08:00",
+            "17:00",
+            9.0,
+            "Import storico",
+            "storico.pdf",
+            3,
+            2026,
+            datetime.now().isoformat(),
+        ],
+    )
+    await server._db.commit()
+
+    gennaio = await client_api.get("/api/timbrature-aziendali", params={"mese": 1, "anno": 2026})
+    marzo = await client_api.get("/api/timbrature-aziendali", params={"mese": 3, "anno": 2026})
+
+    assert gennaio.status_code == 200
+    assert len(gennaio.json()) == 1
+    assert gennaio.json()[0]["data"] == "2026-01-05"
+    assert marzo.status_code == 200
+    assert marzo.json() == []
+
+
+async def test_api_upload_timbrature_aziendali_chiede_sovrascrittura_su_duplicato(client_api, monkeypatch):
+    parser_state = {
+        "filename": "report-marzo.pdf",
+        "timbrature": [
+            {
+                "data": "2026-03-10",
+                "ora_entrata": "08:00",
+                "ora_uscita": "17:00",
+                "ore_lavorate": 9.0,
+                "descrizione": "Prima versione",
+            }
+        ],
+    }
+
+    def finto_parse_sometime_pdf(_content: bytes, filename: str):
+        return {
+            "success": True,
+            "filename": filename,
+            "mese": 3,
+            "anno": 2026,
+            "timbrature": parser_state["timbrature"],
+            "totali": {"ore_lavorate": 9.0},
+            "errors": [],
+        }
+
+    monkeypatch.setattr(server, "parse_sometime_pdf", finto_parse_sometime_pdf)
+
+    prima = await client_api.post(
+        "/api/timbrature-aziendali/upload",
+        files={"file": ("report-marzo.pdf", BytesIO(b"%PDF-marzo-1"), "application/pdf")},
+    )
+    duplicata = await client_api.post(
+        "/api/timbrature-aziendali/upload",
+        files={"file": ("report-marzo-v2.pdf", BytesIO(b"%PDF-marzo-2"), "application/pdf")},
+    )
+
+    parser_state["timbrature"] = [
+        {
+            "data": "2026-03-10",
+            "ora_entrata": "07:45",
+            "ora_uscita": "17:15",
+            "ore_lavorate": 9.5,
+            "descrizione": "Versione aggiornata",
+        }
+    ]
+    sovrascritta = await client_api.post(
+        "/api/timbrature-aziendali/upload",
+        data={"force_overwrite": "true"},
+        files={"file": ("report-marzo-v2.pdf", BytesIO(b"%PDF-marzo-3"), "application/pdf")},
+    )
+    lista = await client_api.get("/api/timbrature-aziendali", params={"mese": 3, "anno": 2026})
+
+    assert prima.status_code == 200
+    assert duplicata.status_code == 409
+    assert duplicata.json()["detail"]["code"] == "duplicato_timbrature_report"
+    assert sovrascritta.status_code == 200
+    assert lista.status_code == 200
+    assert len(lista.json()) == 1
+    assert lista.json()[0]["ora_entrata"] == "07:45"
+    assert lista.json()[0]["descrizione"] == "Versione aggiornata"
 
 
 async def test_api_chat_e_storico_gestiscono_successo_errore_ed_edge(client_api):

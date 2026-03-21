@@ -24,9 +24,16 @@ type TabType = 'personali' | 'aziendali' | 'confronto';
 interface ApiErrorResponse {
   response?: {
     data?: {
-      detail?: string;
+      detail?: string | UploadConflictDetail;
     };
   };
+}
+
+interface UploadConflictDetail {
+  code?: string;
+  message?: string;
+  mese?: number;
+  anno?: number;
 }
 
 interface ConfrontoItem {
@@ -58,9 +65,53 @@ interface TimbraturaAziendale {
   descrizione: string | null;
 }
 
+interface PendingTimbratureOverwrite {
+  file: DocumentPicker.DocumentPickerAsset;
+  message: string;
+  mese: number;
+  anno: number;
+}
+
+const getApiErrorDetail = (error: unknown) =>
+  (error as ApiErrorResponse | null)?.response?.data?.detail;
+
 const getApiErrorMessage = (error: unknown, fallback: string) => {
-  const response = (error as ApiErrorResponse | null)?.response;
-  return response?.data?.detail || fallback;
+  const detail = getApiErrorDetail(error);
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (detail?.message) {
+    return detail.message;
+  }
+  return fallback;
+};
+
+const getUploadAlertTitle = (message: string) =>
+  message.includes('sembra una busta paga') || message.includes('sembra un report timbrature')
+    ? 'File non compatibile'
+    : 'Errore';
+
+const getConflictDetail = (error: unknown): UploadConflictDetail | null => {
+  const detail = getApiErrorDetail(error);
+  if (typeof detail === 'string' || !detail) {
+    return null;
+  }
+  return detail;
+};
+
+const appendPdfToFormData = (formData: FormData, asset: DocumentPicker.DocumentPickerAsset) => {
+  const browserFile = asset.file;
+
+  if (typeof File !== 'undefined' && browserFile instanceof File) {
+    formData.append('file', browserFile, browserFile.name);
+    return;
+  }
+
+  formData.append('file', {
+    uri: asset.uri,
+    name: asset.name,
+    type: asset.mimeType || 'application/pdf',
+  } as unknown as Blob);
 };
 
 export default function TimbraturaScreen() {
@@ -86,6 +137,7 @@ export default function TimbraturaScreen() {
   const [saving, setSaving] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const [isReperibilita, setIsReperibilita] = useState(false);
+  const [pendingOverwrite, setPendingOverwrite] = useState<PendingTimbratureOverwrite | null>(null);
   
   // Selettore mese/anno
   const now = new Date();
@@ -145,42 +197,63 @@ export default function TimbraturaScreen() {
     loadData();
   }, [loadData]);
 
-  const handleUploadPDF = async () => {
+  const uploadTimbraturePdf = async (file: DocumentPicker.DocumentPickerAsset, forceOverwrite = false) => {
+    setUploading(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
-      
-      if (result.canceled || !result.assets || result.assets.length === 0) {
-        return;
-      }
-      
-      const file = result.assets[0];
-      setUploading(true);
-      
       const formData = new FormData();
-      formData.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: 'application/pdf',
-      } as unknown as Blob);
-      formData.append('mese', meseSelezionato.toString());
-      formData.append('anno', annoSelezionato.toString());
-      
-      const response = await api.uploadTimbratureAziendali(meseSelezionato, annoSelezionato, formData);
-      
+      appendPdfToFormData(formData, file);
+      if (forceOverwrite) {
+        formData.append('force_overwrite', 'true');
+      }
+
+      const response = await api.uploadTimbratureAziendali(formData);
+      const meseImportato = response.data.mese;
+      const annoImportato = response.data.anno;
+      const periodoCambiato = meseImportato !== meseSelezionato || annoImportato !== annoSelezionato;
+
+      setPendingOverwrite(null);
+      if (periodoCambiato) {
+        setMeseSelezionato(meseImportato);
+        setAnnoSelezionato(annoImportato);
+      } else {
+        await loadData();
+      }
+
       Alert.alert(
-        'PDF Caricato',
-        `File "${file.name}" caricato con successo.\n\n${response.data.timbrature_importate || 0} timbrature importate automaticamente.`,
-        [{ text: 'OK', onPress: loadData }]
+        'PDF caricato',
+        `File "${file.name}" importato nel periodo ${MESI[meseImportato - 1]} ${annoImportato}.\n\n${response.data.timbrature_importate || 0} timbrature importate automaticamente.`,
       );
     } catch (error: unknown) {
       console.error('Upload error:', error);
-      Alert.alert('Errore', getApiErrorMessage(error, 'Impossibile caricare il file PDF'));
+      const detail = getConflictDetail(error);
+      if (detail?.code === 'duplicato_timbrature_report' && detail.mese && detail.anno) {
+        setPendingOverwrite({
+          file,
+          message: detail.message || 'Esiste già un report timbrature per questo mese.',
+          mese: detail.mese,
+          anno: detail.anno,
+        });
+        return;
+      }
+
+      const message = getApiErrorMessage(error, 'Impossibile caricare il file PDF');
+      Alert.alert(getUploadAlertTitle(message), message);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleUploadPDF = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+    });
+    
+    if (result.canceled || !result.assets || result.assets.length === 0) {
+      return;
+    }
+    
+    await uploadTimbraturePdf(result.assets[0]);
   };
 
   const handleSave = async () => {
@@ -406,7 +479,7 @@ export default function TimbraturaScreen() {
     <View style={styles.emptyContainer}>
       <Ionicons name="cloud-upload-outline" size={64} color={colors.border} />
       <Text style={styles.emptyText}>Nessuna timbratura aziendale</Text>
-      <Text style={styles.emptySubtext}>Carica un PDF per importare i dati aziendali</Text>
+      <Text style={styles.emptySubtext}>Carica il PDF timbrature mensile con il dettaglio giornaliero di entrate e uscite</Text>
       <Button
         title="Carica PDF Timbrature"
         onPress={handleUploadPDF}
@@ -421,7 +494,7 @@ export default function TimbraturaScreen() {
     activeTab === 'personali'
       ? 'Modifica ed elimina le timbrature dalle azioni visibili su ogni scheda.'
       : activeTab === 'aziendali'
-        ? 'Importa il PDF del mese attivo per popolare le timbrature ufficiali.'
+        ? 'Importa il PDF timbrature del mese attivo con il dettaglio giornaliero di entrate e uscite.'
         : 'Controlla subito le discrepanze e confronta le ore tra dati personali e aziendali.';
   const giorniConDiscrepanza = confrontoRiepilogo?.giorni_con_discrepanza ?? 0;
   const differenzaOreTotale = confrontoRiepilogo?.differenza_ore_totale ?? 0;
@@ -682,6 +755,44 @@ export default function TimbraturaScreen() {
               loading={deleting}
               style={styles.sheetButton}
               testID="timbrature-delete-confirm-button"
+            />
+          </View>
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={Boolean(pendingOverwrite)}
+        onClose={() => !uploading && setPendingOverwrite(null)}
+        title="Report già presente"
+        height="42%"
+        testID="timbrature-upload-conflict-sheet"
+        closeButtonTestID="timbrature-upload-conflict-close"
+      >
+        <View style={styles.deleteSheetContent}>
+          <View style={styles.warningIconContainer}>
+            <Ionicons name="alert-circle-outline" size={22} color={colors.warning} />
+          </View>
+          <Text style={styles.deleteSheetTitle}>Vuoi sovrascrivere il report esistente?</Text>
+          <Text style={styles.deleteSheetText}>
+            {pendingOverwrite
+              ? `${pendingOverwrite.message} Periodo rilevato: ${MESI[pendingOverwrite.mese - 1]} ${pendingOverwrite.anno}.`
+              : 'Esiste già un report timbrature per questo mese.'}
+          </Text>
+          <View style={styles.sheetButtons}>
+            <Button
+              title="Annulla"
+              variant="outline"
+              onPress={() => setPendingOverwrite(null)}
+              disabled={uploading}
+              style={styles.sheetButton}
+              testID="timbrature-upload-conflict-cancel-button"
+            />
+            <Button
+              title="Sovrascrivi"
+              onPress={() => pendingOverwrite && uploadTimbraturePdf(pendingOverwrite.file, true)}
+              loading={uploading}
+              style={styles.sheetButton}
+              testID="timbrature-upload-conflict-confirm-button"
             />
           </View>
         </View>
@@ -1015,6 +1126,16 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       height: 52,
       borderRadius: 26,
       backgroundColor: `${colors.error}12`,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+      alignSelf: 'center',
+    },
+    warningIconContainer: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: `${colors.warning}12`,
       alignItems: 'center',
       justifyContent: 'center',
       marginBottom: 16,

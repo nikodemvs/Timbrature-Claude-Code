@@ -333,7 +333,13 @@ def test_unit_script_avvio_locale_esistono_e_puntano_ai_comandi_attesi():
     assert "expo start --web" in frontend_source
     assert "EXPO_PUBLIC_BACKEND_URL" in frontend_source
     assert "[switch]$ForceRestart" in frontend_source
+    assert "[switch]$NoResponsively" in frontend_source
+    assert "RESPONSIVELY_APP_PATH" in frontend_source
+    assert "responsively://" in frontend_source
+    assert "ArgumentList @($Url)" in frontend_source
+    assert "$env:BROWSER = 'none'" in frontend_source
     assert "taskkill" in frontend_source
     assert "start-backend.ps1" in app_source
     assert "start-frontend.ps1" in app_source
     assert "-ForceRestart" in app_source
+    assert "[switch]$NoResponsively" in app_source

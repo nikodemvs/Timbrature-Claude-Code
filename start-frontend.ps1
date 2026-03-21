@@ -3,7 +3,8 @@ param(
     [int]$BackendPort = 8000,
     [switch]$WaitForReady,
     [switch]$NoClearCache,
-    [switch]$ForceRestart
+    [switch]$ForceRestart,
+    [switch]$NoResponsively
 )
 
 $ErrorActionPreference = "Stop"
@@ -94,6 +95,75 @@ function Get-NpxCommand {
     throw "npx non trovato nel PATH."
 }
 
+function Get-ResponsivelyLauncher {
+    if ($env:RESPONSIVELY_APP_PATH -and (Test-Path -LiteralPath $env:RESPONSIVELY_APP_PATH)) {
+        return @{
+            Type = "exe"
+            Target = $env:RESPONSIVELY_APP_PATH
+        }
+    }
+
+    $commands = Get-Command ResponsivelyApp, ResponsivelyApp.exe, responsivelyapp, responsivelyapp.exe -ErrorAction SilentlyContinue
+    if ($commands) {
+        $command = $commands | Select-Object -First 1
+        return @{
+            Type = "exe"
+            Target = $command.Source
+        }
+    }
+
+    $knownPaths = @(
+        (Join-Path $env:LOCALAPPDATA "Programs\\ResponsivelyApp\\ResponsivelyApp.exe"),
+        (Join-Path $env:LOCALAPPDATA "Programs\\Responsively App\\ResponsivelyApp.exe"),
+        (Join-Path $env:ProgramFiles "ResponsivelyApp\\ResponsivelyApp.exe"),
+        (Join-Path $env:ProgramFiles "Responsively App\\ResponsivelyApp.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "ResponsivelyApp\\ResponsivelyApp.exe"),
+        (Join-Path ${env:ProgramFiles(x86)} "Responsively App\\ResponsivelyApp.exe")
+    ) | Where-Object { $_ }
+
+    $existingPath = $knownPaths | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+    if ($existingPath) {
+        return @{
+            Type = "exe"
+            Target = $existingPath
+        }
+    }
+
+    if (Test-Path "Registry::HKEY_CLASSES_ROOT\\responsively") {
+        return @{
+            Type = "protocol"
+            Target = "responsively://"
+        }
+    }
+
+    return $null
+}
+
+function Open-InResponsively {
+    param([string]$Url)
+
+    $launcher = Get-ResponsivelyLauncher
+    if (-not $launcher) {
+        Write-Warning "Responsively App non trovata. Installa l'app oppure imposta RESPONSIVELY_APP_PATH. URL disponibile: $Url"
+        return $false
+    }
+
+    $responsivelyUrl = "responsively://$Url"
+
+    if ($launcher.Type -eq "protocol") {
+        Start-Process $responsivelyUrl | Out-Null
+        return $true
+    }
+
+    try {
+        Start-Process -FilePath $launcher.Target -ArgumentList @($Url) | Out-Null
+        return $true
+    } catch {
+        Write-Warning "Impossibile avviare Responsively App con $($launcher.Target). URL disponibile: $Url"
+        return $false
+    }
+}
+
 New-Item -ItemType Directory -Path $runtimeDir -Force | Out-Null
 
 $processoEsistente = Get-ExistingProcess -PidFile $pidPath
@@ -119,6 +189,7 @@ if (-not $NoClearCache) {
 $command = @"
 Set-Location -LiteralPath '$frontendDir'
 `$env:CI = '1'
+`$env:BROWSER = 'none'
 `$env:EXPO_PUBLIC_BACKEND_URL = 'http://127.0.0.1:$BackendPort'
 & '$npxCommand' expo start --web --port $Port $clearFlag
 "@
@@ -137,6 +208,11 @@ if ($WaitForReady) {
     Wait-UrlReady -Url "http://127.0.0.1:$Port"
 }
 
-Write-Host "Frontend avviato su http://127.0.0.1:$Port"
+$frontendUrl = "http://127.0.0.1:$Port"
+if (-not $NoResponsively) {
+    Open-InResponsively -Url $frontendUrl | Out-Null
+}
+
+Write-Host "Frontend avviato su $frontendUrl"
 Write-Host "Backend collegato: http://127.0.0.1:$BackendPort"
 Write-Host "Log: $logPath"

@@ -17,6 +17,71 @@ import { formatCurrency, getMesiItaliano, getCurrentMonthYear } from '../../src/
 import { BustaPaga } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      detail?: string | UploadConflictDetail;
+    };
+  };
+}
+
+interface UploadConflictDetail {
+  code?: string;
+  message?: string;
+  mese?: number;
+  anno?: number;
+}
+
+interface PendingBustaOverwrite {
+  file: DocumentPicker.DocumentPickerAsset;
+  message: string;
+  mese: number;
+  anno: number;
+}
+
+const getApiErrorDetail = (error: unknown) =>
+  (error as ApiErrorResponse | null)?.response?.data?.detail;
+
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  const detail = getApiErrorDetail(error);
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  if (detail?.message) {
+    return detail.message;
+  }
+  const response = (error as ApiErrorResponse | null)?.response;
+  return typeof response?.data?.detail === 'string' ? response.data.detail : fallback;
+};
+
+const getUploadAlertTitle = (message: string) =>
+  message.includes('sembra una busta paga') || message.includes('sembra un report timbrature')
+    ? 'File non compatibile'
+    : 'Errore';
+
+const getConflictDetail = (error: unknown): UploadConflictDetail | null => {
+  const detail = getApiErrorDetail(error);
+  if (typeof detail === 'string' || !detail) {
+    return null;
+  }
+  return detail;
+};
+
+const appendPdfToFormData = (formData: FormData, asset: DocumentPicker.DocumentPickerAsset) => {
+  const browserFile = asset.file;
+
+  if (typeof File !== 'undefined' && browserFile instanceof File) {
+    formData.append('file', browserFile, browserFile.name);
+    return;
+  }
+
+  formData.append('file', {
+    uri: asset.uri,
+    name: asset.name,
+    type: asset.mimeType || 'application/pdf',
+  } as unknown as Blob);
+};
+
 export default function BustePagaScreen() {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
@@ -38,6 +103,7 @@ export default function BustePagaScreen() {
   const [trattenuteTotali, setTrattenuteTotali] = useState('');
   const [saving, setSaving] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [pendingOverwrite, setPendingOverwrite] = useState<PendingBustaOverwrite | null>(null);
 
   const loadData = useCallback(async () => {
     try {
@@ -96,45 +162,65 @@ export default function BustePagaScreen() {
       resetForm();
       loadData();
       Alert.alert('Successo', 'Busta paga salvata');
-    } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore nel salvataggio');
+    } catch (error: unknown) {
+      Alert.alert('Errore', getApiErrorMessage(error, 'Errore nel salvataggio'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleUploadPdf = async () => {
+  const uploadBustaPdf = async (file: DocumentPicker.DocumentPickerAsset, forceOverwrite = false) => {
+    setUploading(true);
     try {
-      const result = await DocumentPicker.getDocumentAsync({
-        type: 'application/pdf',
-        copyToCacheDirectory: true,
-      });
+      const formData = new FormData();
+      appendPdfToFormData(formData, file);
+      if (forceOverwrite) {
+        formData.append('force_overwrite', 'true');
+      }
 
-      if (result.canceled || !result.assets?.[0]) {
+      const response = await api.uploadBustaPagaAuto(formData);
+      const meseImportato = response.data.mese;
+      const annoImportato = response.data.anno;
+
+      setPendingOverwrite(null);
+      setMese(meseImportato.toString());
+      setAnno(annoImportato.toString());
+      await loadData();
+      Alert.alert(
+        'PDF caricato',
+        `Busta paga importata nel periodo ${getMesiItaliano(meseImportato)} ${annoImportato}.`,
+      );
+    } catch (error: unknown) {
+      console.error('Upload error:', error);
+      const detail = getConflictDetail(error);
+      if (detail?.code === 'duplicato_busta_paga' && detail.mese && detail.anno) {
+        setPendingOverwrite({
+          file,
+          message: detail.message || 'Esiste già una busta paga per questo periodo.',
+          mese: detail.mese,
+          anno: detail.anno,
+        });
         return;
       }
 
-      const file = result.assets[0];
-      setUploading(true);
-
-      // Create form data
-      const formData = new FormData();
-      formData.append('file', {
-        uri: file.uri,
-        name: file.name,
-        type: 'application/pdf',
-      } as any);
-
-      await api.uploadBustaPaga(parseInt(anno), parseInt(mese), formData);
-      
-      Alert.alert('Successo', 'PDF caricato');
-      loadData();
-    } catch (error: any) {
-      console.error('Upload error:', error);
-      Alert.alert('Errore', 'Impossibile caricare il PDF');
+      const message = getApiErrorMessage(error, 'Impossibile caricare il PDF');
+      Alert.alert(getUploadAlertTitle(message), message);
     } finally {
       setUploading(false);
     }
+  };
+
+  const handleUploadPdf = async () => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+    });
+
+    if (result.canceled || !result.assets?.[0]) {
+      return;
+    }
+
+    await uploadBustaPdf(result.assets[0]);
   };
 
   const resetForm = () => {
@@ -232,7 +318,7 @@ export default function BustePagaScreen() {
           <View style={styles.emptyContainer}>
             <Ionicons name="document-text-outline" size={64} color={colors.border} />
             <Text style={styles.emptyText}>Nessuna busta paga</Text>
-            <Text style={styles.emptySubtext}>Aggiungi la tua prima busta paga</Text>
+            <Text style={styles.emptySubtext}>Carica il PDF mensile della busta paga Zucchetti o inserisci i dati manualmente</Text>
           </View>
         }
       />
@@ -244,6 +330,22 @@ export default function BustePagaScreen() {
         title="Busta Paga"
         height="85%"
       >
+        <Button
+          title={uploading ? "Caricamento..." : "Carica PDF"}
+          icon="cloud-upload"
+          variant="outline"
+          onPress={handleUploadPdf}
+          loading={uploading}
+          style={styles.uploadButton}
+        />
+        <Text style={styles.uploadHint}>
+          Il parser riconosce automaticamente mese e anno del PDF Zucchetti. Qui non va caricato un report timbrature.
+        </Text>
+
+        <Text style={styles.manualSectionTitle}>Inserimento manuale</Text>
+        <Text style={styles.manualSectionHint}>
+          Se compili i valori a mano, indica qui il periodo della busta paga.
+        </Text>
         <View style={styles.periodRow}>
           <InputField
             label="Mese"
@@ -262,15 +364,6 @@ export default function BustePagaScreen() {
             style={styles.halfInput}
           />
         </View>
-
-        <Button
-          title={uploading ? "Caricamento..." : "Carica PDF"}
-          icon="cloud-upload"
-          variant="outline"
-          onPress={handleUploadPdf}
-          loading={uploading}
-          style={styles.uploadButton}
-        />
 
         <InputField
           label="Importo Lordo"
@@ -326,6 +419,42 @@ export default function BustePagaScreen() {
             loading={saving}
             style={styles.sheetButton}
           />
+        </View>
+      </BottomSheet>
+
+      <BottomSheet
+        visible={Boolean(pendingOverwrite)}
+        onClose={() => !uploading && setPendingOverwrite(null)}
+        title="Busta paga già presente"
+        height="42%"
+      >
+        <View style={styles.confirmationContent}>
+          <View style={styles.confirmationIconContainer}>
+            <Ionicons name="alert-circle-outline" size={22} color={colors.warning} />
+          </View>
+          <Text style={styles.confirmationTitle}>
+            Vuoi sovrascrivere la busta paga archiviata?
+          </Text>
+          <Text style={styles.confirmationText}>
+            {pendingOverwrite
+              ? `${pendingOverwrite.message} Periodo rilevato: ${getMesiItaliano(pendingOverwrite.mese)} ${pendingOverwrite.anno}.`
+              : 'Esiste già una busta paga archiviata per questo periodo.'}
+          </Text>
+          <View style={styles.sheetButtons}>
+            <Button
+              title="Annulla"
+              variant="outline"
+              onPress={() => setPendingOverwrite(null)}
+              disabled={uploading}
+              style={styles.sheetButton}
+            />
+            <Button
+              title="Sovrascrivi"
+              onPress={() => pendingOverwrite && uploadBustaPdf(pendingOverwrite.file, true)}
+              loading={uploading}
+              style={styles.sheetButton}
+            />
+          </View>
         </View>
       </BottomSheet>
 
@@ -516,6 +645,25 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     uploadButton: {
       marginBottom: 16,
     },
+    uploadHint: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      marginTop: -8,
+      marginBottom: 16,
+    },
+    manualSectionTitle: {
+      fontSize: 14,
+      fontWeight: '700',
+      color: colors.text,
+      marginBottom: 6,
+    },
+    manualSectionHint: {
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.textSecondary,
+      marginBottom: 12,
+    },
     sheetButtons: {
       flexDirection: 'row',
       gap: 12,
@@ -523,6 +671,32 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     sheetButton: {
       flex: 1,
+    },
+    confirmationContent: {
+      paddingBottom: 8,
+    },
+    confirmationIconContainer: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: `${colors.warning}12`,
+      justifyContent: 'center',
+      alignItems: 'center',
+      alignSelf: 'center',
+      marginBottom: 16,
+    },
+    confirmationTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 10,
+    },
+    confirmationText: {
+      fontSize: 14,
+      lineHeight: 21,
+      color: colors.textSecondary,
+      textAlign: 'center',
     },
     detailSection: {
       alignItems: 'center',

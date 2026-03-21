@@ -435,7 +435,199 @@ async def init_db():
             created_at TEXT
         )
     """)
+    await _sync_timbrature_aziendali_periodi()
     await _db.commit()
+
+
+def _periodo_da_data_iso(data_iso: str) -> tuple[int, int]:
+    data = datetime.strptime(data_iso, "%Y-%m-%d")
+    return data.year, data.month
+
+
+def _periodi_da_timbrature_parse(timbrature: List[Dict[str, Any]]) -> List[tuple[int, int]]:
+    periodi = {
+        _periodo_da_data_iso(t["data"])
+        for t in timbrature
+        if t.get("data")
+    }
+    return sorted(periodi)
+
+
+def _dettaglio_duplicato(codice: str, messaggio: str, anno: int, mese: int) -> Dict[str, Any]:
+    return {
+        "code": codice,
+        "message": messaggio,
+        "anno": anno,
+        "mese": mese,
+    }
+
+
+def _risolvi_periodo_timbrature(
+    parse_result: Dict[str, Any],
+    mese_hint: Optional[int] = None,
+    anno_hint: Optional[int] = None,
+) -> tuple[int, int]:
+    timbrature = parse_result.get("timbrature") or []
+    periodi = _periodi_da_timbrature_parse(timbrature)
+
+    if len(periodi) == 1:
+        return periodi[0]
+
+    parser_anno = parse_result.get("anno")
+    parser_mese = parse_result.get("mese")
+    if parser_anno and parser_mese and not periodi:
+        return parser_anno, parser_mese
+
+    if len(periodi) > 1:
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Il report timbrature contiene giornate di più mesi. "
+                "Carica un PDF riferito a un solo mese per permettere "
+                "l'associazione automatica corretta."
+            ),
+        )
+
+    if anno_hint and mese_hint:
+        return anno_hint, mese_hint
+
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Impossibile riconoscere automaticamente il mese del report timbrature. "
+            "Carica un PDF compatibile con il dettaglio giornaliero del mese."
+        ),
+    )
+
+
+def _risolvi_periodo_busta_paga(
+    parse_result: Dict[str, Any],
+    mese_hint: Optional[int] = None,
+    anno_hint: Optional[int] = None,
+) -> tuple[int, int]:
+    parser_anno = parse_result.get("anno")
+    parser_mese = parse_result.get("mese")
+    if parser_anno and parser_mese:
+        return parser_anno, parser_mese
+
+    if anno_hint and mese_hint:
+        return anno_hint, mese_hint
+
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Impossibile riconoscere automaticamente il mese della busta paga. "
+            "Carica un PDF Zucchetti che contenga il periodo di retribuzione."
+        ),
+    )
+
+
+async def _sync_timbrature_aziendali_periodi() -> None:
+    await _db.execute(
+        """
+        UPDATE timbrature_aziendali
+        SET anno_riferimento = CAST(substr(data, 1, 4) AS INTEGER),
+            mese_riferimento = CAST(substr(data, 6, 2) AS INTEGER)
+        WHERE data IS NOT NULL
+          AND (
+            anno_riferimento IS NULL OR mese_riferimento IS NULL OR
+            anno_riferimento != CAST(substr(data, 1, 4) AS INTEGER) OR
+            mese_riferimento != CAST(substr(data, 6, 2) AS INTEGER)
+          )
+        """
+    )
+
+
+async def _salva_upload_busta_paga(
+    file: UploadFile,
+    *,
+    anno_hint: Optional[int] = None,
+    mese_hint: Optional[int] = None,
+    force_overwrite: bool = False,
+) -> Dict[str, Any]:
+    content = await file.read()
+    timbrature_result = parse_sometime_pdf(content, file.filename)
+    if timbrature_result["success"] and (timbrature_result.get("timbrature") or []):
+        raise HTTPException(
+            status_code=400,
+            detail="Il file caricato sembra un report timbrature, non una busta paga Zucchetti. Carica il PDF mensile della busta paga.",
+        )
+
+    b64 = base64.b64encode(content).decode()
+    parse_result = parse_zucchetti_pdf(content, file.filename)
+    anno_rilevato, mese_rilevato = _risolvi_periodo_busta_paga(
+        parse_result,
+        mese_hint=mese_hint,
+        anno_hint=anno_hint,
+    )
+
+    update_fields = {"pdf_base64": b64, "pdf_nome": file.filename}
+    if parse_result["success"]:
+        if parse_result.get("netto"):
+            update_fields["netto"] = parse_result["netto"]
+        ore = parse_result.get("ore", {})
+        if ore.get("straordinarie"):
+            update_fields["straordinari_ore"] = ore["straordinarie"]
+        totali = parse_result.get("totali", {})
+        if totali.get("competenze"):
+            update_fields["lordo"] = totali["competenze"]
+        if totali.get("trattenute"):
+            update_fields["trattenute_totali"] = totali["trattenute"]
+
+    cur = await _db.execute(
+        "SELECT id FROM buste_paga WHERE anno = ? AND mese = ?",
+        [anno_rilevato, mese_rilevato],
+    )
+    existing = await cur.fetchone()
+    if existing and not force_overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=_dettaglio_duplicato(
+                "duplicato_busta_paga",
+                (
+                    "Esiste già una busta paga archiviata per questo mese. "
+                    "Puoi annullare il caricamento oppure sovrascrivere il file esistente."
+                ),
+                anno_rilevato,
+                mese_rilevato,
+            ),
+        )
+
+    if existing:
+        set_clause = ", ".join(f"{k} = ?" for k in update_fields.keys())
+        await _db.execute(
+            f"UPDATE buste_paga SET {set_clause} WHERE anno = ? AND mese = ?",
+            list(update_fields.values()) + [anno_rilevato, mese_rilevato]
+        )
+    else:
+        new_id = str(uuid.uuid4())
+        b = BustaPaga(id=new_id, anno=anno_rilevato, mese=mese_rilevato, **{
+            k: v for k, v in update_fields.items()
+            if k in ['pdf_base64', 'pdf_nome', 'netto', 'lordo',
+                     'straordinari_ore', 'trattenute_totali']
+        })
+        await _db.execute(
+            "INSERT INTO buste_paga VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+            [b.id, b.mese, b.anno, b.pdf_base64, b.pdf_nome,
+             b.lordo, b.netto, b.straordinari_ore, b.straordinari_importo,
+             b.trattenute_totali, b.netto_calcolato, b.differenza,
+             int(b.has_discrepancy), b.note_confronto, b.created_at.isoformat()]
+        )
+
+    await _db.commit()
+    cur = await _db.execute(
+        "SELECT * FROM buste_paga WHERE anno = ? AND mese = ?",
+        [anno_rilevato, mese_rilevato]
+    )
+    row = _busta_from_row(_row(await cur.fetchone()))
+    return {
+        "busta": BustaPaga(**row).model_dump(),
+        "parse_success": parse_result["success"],
+        "parsed_data": {k: v for k, v in parse_result.items()
+                        if k not in ["raw_text", "success", "errors", "filename"]},
+        "mese": mese_rilevato,
+        "anno": anno_rilevato,
+    }
 
 # ============== DB HELPERS ==============
 
@@ -1137,60 +1329,29 @@ async def create_busta_paga(input: BustaPagaCreate):
     return b
 
 @api_router.post("/buste-paga/{anno}/{mese}/upload")
-async def upload_busta_paga(anno: int, mese: int, file: UploadFile = File(...)):
-    content = await file.read()
-    b64 = base64.b64encode(content).decode()
-    parse_result = parse_zucchetti_pdf(content, file.filename)
-    update_fields = {"pdf_base64": b64, "pdf_nome": file.filename}
-    if parse_result["success"]:
-        if parse_result.get("netto"):
-            update_fields["netto"] = parse_result["netto"]
-        ore = parse_result.get("ore", {})
-        if ore.get("straordinarie"):
-            update_fields["straordinari_ore"] = ore["straordinarie"]
-        totali = parse_result.get("totali", {})
-        if totali.get("competenze"):
-            update_fields["lordo"] = totali["competenze"]
-        if totali.get("trattenute"):
-            update_fields["trattenute_totali"] = totali["trattenute"]
-
-    cur = await _db.execute(
-        "SELECT id FROM buste_paga WHERE anno = ? AND mese = ?", [anno, mese]
+async def upload_busta_paga(
+    anno: int,
+    mese: int,
+    file: UploadFile = File(...),
+    force_overwrite: bool = Form(False),
+):
+    return await _salva_upload_busta_paga(
+        file,
+        anno_hint=anno,
+        mese_hint=mese,
+        force_overwrite=force_overwrite,
     )
-    existing = await cur.fetchone()
-    if existing:
-        set_clause = ", ".join(f"{k} = ?" for k in update_fields.keys())
-        await _db.execute(
-            f"UPDATE buste_paga SET {set_clause} WHERE anno = ? AND mese = ?",
-            list(update_fields.values()) + [anno, mese]
-        )
-        await _db.commit()
-    else:
-        new_id = str(uuid.uuid4())
-        b = BustaPaga(id=new_id, anno=anno, mese=mese, **{
-            k: v for k, v in update_fields.items()
-            if k in ['pdf_base64', 'pdf_nome', 'netto', 'lordo',
-                     'straordinari_ore', 'trattenute_totali']
-        })
-        await _db.execute(
-            "INSERT INTO buste_paga VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [b.id, b.mese, b.anno, b.pdf_base64, b.pdf_nome,
-             b.lordo, b.netto, b.straordinari_ore, b.straordinari_importo,
-             b.trattenute_totali, b.netto_calcolato, b.differenza,
-             int(b.has_discrepancy), b.note_confronto, b.created_at.isoformat()]
-        )
-        await _db.commit()
 
-    cur = await _db.execute(
-        "SELECT * FROM buste_paga WHERE anno = ? AND mese = ?", [anno, mese]
+
+@api_router.post("/buste-paga/upload")
+async def upload_busta_paga_auto(
+    file: UploadFile = File(...),
+    force_overwrite: bool = Form(False),
+):
+    return await _salva_upload_busta_paga(
+        file,
+        force_overwrite=force_overwrite,
     )
-    row = _busta_from_row(_row(await cur.fetchone()))
-    return {
-        "busta": BustaPaga(**row).model_dump(),
-        "parse_success": parse_result["success"],
-        "parsed_data": {k: v for k, v in parse_result.items()
-                        if k not in ["raw_text", "success", "errors", "filename"]}
-    }
 
 @api_router.put("/buste-paga/{anno}/{mese}")
 async def update_busta_paga(anno: int, mese: int, updates: BustaPagaUpdate):
@@ -1289,6 +1450,8 @@ async def delete_documento(id: str):
 
 @api_router.get("/timbrature-aziendali")
 async def get_timbrature_aziendali(mese: Optional[int] = None, anno: Optional[int] = None):
+    await _sync_timbrature_aziendali_periodi()
+    await _db.commit()
     if mese and anno:
         cur = await _db.execute(
             "SELECT * FROM timbrature_aziendali WHERE mese_riferimento=? AND anno_riferimento=? ORDER BY data DESC",
@@ -1304,47 +1467,100 @@ async def get_timbrature_aziendali(mese: Optional[int] = None, anno: Optional[in
 
 @api_router.post("/timbrature-aziendali/upload")
 async def upload_timbrature_aziendali(
-    mese: int = Form(...),
-    anno: int = Form(...),
-    file: UploadFile = File(...)
+    mese: Optional[int] = Form(None),
+    anno: Optional[int] = Form(None),
+    file: UploadFile = File(...),
+    force_overwrite: bool = Form(False),
 ):
     content = await file.read()
-    b64 = base64.b64encode(content).decode()
     parse_result = parse_sometime_pdf(content, file.filename)
+    timbrature_parse = parse_result.get("timbrature") or []
+
+    if not parse_result["success"] or not timbrature_parse:
+        zucchetti_result = parse_zucchetti_pdf(content, file.filename)
+        if zucchetti_result.get("success"):
+            raise HTTPException(
+                status_code=400,
+                detail="Il file caricato sembra una busta paga, non un report timbrature. Carica il PDF timbrature mensile dell'azienda con il dettaglio giornaliero di entrate e uscite.",
+            )
+
+        dettaglio_errore = parse_result.get("errors", [])
+        messaggio = (
+            "Impossibile importare timbrature da questo PDF. "
+            "Carica un report timbrature aziendale compatibile con il dettaglio giornaliero di entrate e uscite."
+        )
+        if dettaglio_errore:
+            messaggio = f"{messaggio} Dettaglio parser: {dettaglio_errore[0]}"
+        raise HTTPException(status_code=400, detail=messaggio)
+
+    parsed_anno, parsed_mese = _risolvi_periodo_timbrature(
+        parse_result,
+        mese_hint=mese,
+        anno_hint=anno,
+    )
+    cur = await _db.execute(
+        "SELECT COUNT(1) AS totale FROM timbrature_aziendali WHERE mese_riferimento=? AND anno_riferimento=?",
+        [parsed_mese, parsed_anno],
+    )
+    existing_count_row = await cur.fetchone()
+    existing_count = int(existing_count_row["totale"]) if existing_count_row else 0
+    if existing_count > 0 and not force_overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=_dettaglio_duplicato(
+                "duplicato_timbrature_report",
+                (
+                    "Esiste già un report timbrature archiviato per questo mese. "
+                    "Puoi annullare il caricamento oppure sovrascrivere i dati esistenti."
+                ),
+                parsed_anno,
+                parsed_mese,
+            ),
+        )
+    if existing_count > 0 and force_overwrite:
+        await _db.execute(
+            "DELETE FROM timbrature_aziendali WHERE mese_riferimento=? AND anno_riferimento=?",
+            [parsed_mese, parsed_anno],
+        )
+        await _db.execute(
+            "DELETE FROM documenti WHERE tipo='timbrature_report' AND data_riferimento=?",
+            [f"{parsed_anno}-{parsed_mese:02d}"],
+        )
+
     imported_count = 0
-    if parse_result["success"] and parse_result["timbrature"]:
-        parsed_mese = parse_result.get("mese") or mese
-        parsed_anno = parse_result.get("anno") or anno
-        for t in parse_result["timbrature"]:
-            timb = TimbraturaAziendale(
-                data=t["data"],
-                ora_entrata=t.get("ora_entrata"),
-                ora_uscita=t.get("ora_uscita"),
-                ore_lavorate=t.get("ore_lavorate", 0.0),
-                descrizione=t.get("descrizione"),
-                fonte_pdf=file.filename,
-                mese_riferimento=parsed_mese,
-                anno_riferimento=parsed_anno
-            )
-            await _db.execute(
-                """INSERT INTO timbrature_aziendali VALUES (?,?,?,?,?,?,?,?,?,?)
-                   ON CONFLICT(data) DO UPDATE SET
-                   ora_entrata=excluded.ora_entrata, ora_uscita=excluded.ora_uscita,
-                   ore_lavorate=excluded.ore_lavorate, descrizione=excluded.descrizione,
-                   fonte_pdf=excluded.fonte_pdf, mese_riferimento=excluded.mese_riferimento,
-                   anno_riferimento=excluded.anno_riferimento""",
-                [timb.id, timb.data, timb.ora_entrata, timb.ora_uscita,
-                 timb.ore_lavorate, timb.descrizione, timb.fonte_pdf,
-                 timb.mese_riferimento, timb.anno_riferimento, timb.created_at.isoformat()]
-            )
-            imported_count += 1
-        await _db.commit()
+    for t in timbrature_parse:
+        anno_timbratura, mese_timbratura = _periodo_da_data_iso(t["data"])
+        timb = TimbraturaAziendale(
+            data=t["data"],
+            ora_entrata=t.get("ora_entrata"),
+            ora_uscita=t.get("ora_uscita"),
+            ore_lavorate=t.get("ore_lavorate", 0.0),
+            descrizione=t.get("descrizione"),
+            fonte_pdf=file.filename,
+            mese_riferimento=mese_timbratura,
+            anno_riferimento=anno_timbratura
+        )
+        await _db.execute(
+            """INSERT INTO timbrature_aziendali VALUES (?,?,?,?,?,?,?,?,?,?)
+               ON CONFLICT(data) DO UPDATE SET
+               ora_entrata=excluded.ora_entrata, ora_uscita=excluded.ora_uscita,
+               ore_lavorate=excluded.ore_lavorate, descrizione=excluded.descrizione,
+               fonte_pdf=excluded.fonte_pdf, mese_riferimento=excluded.mese_riferimento,
+               anno_riferimento=excluded.anno_riferimento""",
+            [timb.id, timb.data, timb.ora_entrata, timb.ora_uscita,
+             timb.ore_lavorate, timb.descrizione, timb.fonte_pdf,
+             timb.mese_riferimento, timb.anno_riferimento, timb.created_at.isoformat()]
+        )
+        imported_count += 1
+    await _db.commit()
+
+    b64 = base64.b64encode(content).decode()
     doc = Documento(
         tipo="timbrature_report",
-        titolo=f"Timbrature Aziendali {mese:02d}/{anno}",
-        descrizione=f"Report timbrature aziendali per {mese}/{anno}",
+        titolo=f"Timbrature Aziendali {parsed_mese:02d}/{parsed_anno}",
+        descrizione=f"Report timbrature aziendali per {parsed_mese}/{parsed_anno}",
         file_base64=b64, file_nome=file.filename, file_tipo="pdf",
-        data_riferimento=f"{anno}-{mese:02d}"
+        data_riferimento=f"{parsed_anno}-{parsed_mese:02d}"
     )
     await _db.execute(
         "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?)",
@@ -1356,7 +1572,7 @@ async def upload_timbrature_aziendali(
         "message": f"PDF caricato e {imported_count} timbrature importate automaticamente",
         "documento_id": doc.id,
         "filename": file.filename,
-        "mese": mese, "anno": anno,
+        "mese": parsed_mese, "anno": parsed_anno,
         "timbrature_importate": imported_count,
         "totali": parse_result.get("totali", {}),
         "parse_success": parse_result["success"],

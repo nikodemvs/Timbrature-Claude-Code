@@ -12,6 +12,29 @@ import {
   WeeklySummary,
 } from '../types';
 
+export interface PdfUploadResponse {
+  message: string;
+  mese: number;
+  anno: number;
+  parse_success: boolean;
+  parsed_data?: Record<string, unknown>;
+  timbrature_importate?: number;
+  filename?: string;
+  documento_id?: string;
+  totali?: Record<string, unknown>;
+  busta?: BustaPaga;
+}
+
+export interface TimbraturaAziendalePayload {
+  data: string;
+  ora_entrata?: string | null;
+  ora_uscita?: string | null;
+  ore_lavorate?: number;
+  descrizione?: string | null;
+  mese_riferimento?: number;
+  anno_riferimento?: number;
+}
+
 const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
 
 const api = axios.create({
@@ -74,7 +97,11 @@ export const createBustaPaga = (data: {
 }) =>
   api.post<BustaPaga>('/buste-paga', data);
 export const uploadBustaPaga = (anno: number, mese: number, file: FormData) =>
-  api.post(`/buste-paga/${anno}/${mese}/upload`, file, {
+  api.post<PdfUploadResponse>(`/buste-paga/${anno}/${mese}/upload`, file, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
+export const uploadBustaPagaAuto = (file: FormData) =>
+  api.post<PdfUploadResponse>('/buste-paga/upload', file, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 export const updateBustaPaga = (anno: number, mese: number, data: Partial<BustaPaga>) =>
@@ -108,12 +135,11 @@ export const clearChatHistory = () => api.delete('/chat/history');
 // Timbrature Aziendali
 export const getTimbratureAziendali = (params?: { mese?: number; anno?: number }) =>
   api.get('/timbrature-aziendali', { params });
-export const uploadTimbratureAziendali = (mese: number, anno: number, file: FormData) =>
-  api.post('/timbrature-aziendali/upload', file, {
+export const uploadTimbratureAziendali = (file: FormData) =>
+  api.post<PdfUploadResponse>('/timbrature-aziendali/upload', file, {
     headers: { 'Content-Type': 'multipart/form-data' },
-    params: { mese, anno }
   });
-export const importTimbratureAziendali = (timbrature: any[]) =>
+export const importTimbratureAziendali = (timbrature: TimbraturaAziendalePayload[]) =>
   api.post('/timbrature-aziendali/import', timbrature);
 export const deleteTimbraturaAziendale = (data: string) =>
   api.delete(`/timbrature-aziendali/${data}`);

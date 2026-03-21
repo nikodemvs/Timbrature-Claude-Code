@@ -5,6 +5,31 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Mese automatico PDF e conferma sovrascrittura archivio
+Cosa: il backend ora ricava automaticamente il mese reale dai PDF di timbrature e buste paga, riallinea i record aziendali già salvati alla data effettiva, blocca i duplicati con richiesta esplicita di sovrascrittura e il frontend sposta la vista sul periodo riconosciuto dal parser senza chiedere il mese del file per l'upload busta paga
+Perché: evitare import con mese errato, far sì che il selettore mese della schermata Timbrature condizioni davvero i dati mostrati, associare correttamente report e buste paga al loro periodo e impedire sovrascritture involontarie dell'archivio
+File: backend/server.py, frontend/src/services/api.ts, frontend/app/(tabs)/timbrature.tsx, frontend/app/(tabs)/buste-paga.tsx, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Avvio automatico in Responsively App
+Cosa: aggiornati gli script di avvio locale per impedire a Expo di aprire il browser predefinito, provare ad aprire automaticamente il frontend in Responsively App dopo il boot, cercare il binario in modo automatico, usare l'URL diretto quando viene lanciato `ResponsivelyApp.exe` e supportare `RESPONSIVELY_APP_PATH` con fallback pulito se l'app non è disponibile
+Perché: usare il tasto Start con un ambiente di preview responsive invece di Edge o del browser di sistema, evitando l'errore `Invalid URL` quando Responsively viene aperta direttamente su Windows
+File: start-app.ps1, start-frontend.ps1, tests/test_unit.py, CHANGELOG.md
+
+## 2026-03-21 — Fix upload PDF timbrature aziendali sul web
+Cosa: corretto il `FormData` della schermata Timbrature per usare il `File` reale restituito da `expo-document-picker` sul web e mantenere il fallback `uri` su native, aggiunto un test API sull'import delle timbrature aziendali da PDF
+Perché: far sì che il caricamento del report mensile aziendale arrivi davvero al parser backend e popoli la sezione Azienda con le timbrature importate invece di lasciare la schermata vuota
+File: frontend/app/(tabs)/timbrature.tsx, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Validazione PDF errato nella scheda Azienda
+Cosa: la sezione Timbrature > Azienda ora rifiuta i PDF che sembrano buste paga invece di salvarli come report timbrature vuoti, mostra un messaggio chiaro lato API e rende piu esplicito nell'interfaccia quale documento va caricato
+Perché: evitare schermate vuote e falsi caricamenti riusciti quando l'utente seleziona una busta paga o un PDF non compatibile al posto del report timbrature giornaliero
+File: backend/server.py, frontend/app/(tabs)/timbrature.tsx, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Validazione incrociata PDF tra Timbrature e Buste Paga
+Cosa: aggiunto anche nel caricamento buste paga il rifiuto esplicito dei report timbrature, uniformati i popup frontend con avviso `File non compatibile` in entrambe le schermate e resa piu chiara l'indicazione sul tipo di PDF atteso
+Perché: impedire caricamenti nel posto sbagliato in entrambi i sensi e dare all'utente un feedback immediato senza salvare documenti errati
+File: backend/server.py, frontend/app/(tabs)/buste-paga.tsx, frontend/app/(tabs)/timbrature.tsx, tests/test_api.py, CHANGELOG.md
+
 ## 2026-03-21 — Timer Home timbratura parte da zero
 Cosa: corretto il timer della card Home timbrature usando il timestamp reale dell'ultima entrata e un override locale alla conferma della timbratura, aggiunti testID dedicati e rafforzata la verifica E2E sul primo secondo di conteggio
 Perché: evitare che il timer parta gia avanzato dopo il tap su Entrata e rendere affidabile la percezione del conteggio in tempo reale

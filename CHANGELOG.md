@@ -5,6 +5,45 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Fase 1 offline-first: fondamenta locali
+Cosa: installato expo-sqlite; creati src/db/localDb.ts (database SQLite locale con 9 tabelle + offline_queue) e src/storage/fileStore.ts (wrapper Expo FileSystem per PDF e documenti)
+Perché: primo step della migrazione offline-first — il device diventa fonte di verità, il backend cloud è opzionale; i file utente (PDF, certificati) sono ora salvati in locale invece che come base64 nel DB
+File: frontend/package.json, frontend/src/db/localDb.ts, frontend/src/storage/fileStore.ts
+
+---
+
+## 2026-03-21 — Aggiunta configurazione nativa Claude Code
+Cosa: creati CLAUDE.md (root), backend/CLAUDE.md e frontend/CLAUDE.md per uso con Claude Code; il progetto è ora condiviso tra Claude Code e Codex
+Perché: AGENTS.md è la convenzione Codex; Claude Code legge CLAUDE.md nativamente — i nuovi file si dichiarano allineati ad AGENTS.md (che resta la fonte di verità) e aggiungono solo regole specifiche Claude Code (orchestrazione agenti, MCP tools, gestione .claude/ e memory/)
+File: CLAUDE.md, backend/CLAUDE.md, frontend/CLAUDE.md
+
+---
+
+## 2026-03-21 — Riparato recupero account da cedolino Zucchetti reale
+Cosa: aggiunto un fallback backend che ricava nome, cognome e matricola dal raw text delle buste Zucchetti quando il parser strutturato non li espone, e sia `/settings` sia `/dashboard` riparano anche le buste gia archiviate
+Perché: il PDF reale importato salvava azienda e livello ma lasciava vuoti nome, cognome e matricola nella dashboard, quindi la card `Nessun account attivo` restava visibile e le informazioni account non si popolavano
+File: backend/server.py, frontend/app/(tabs)/altro.tsx, frontend/app/(tabs)/buste-paga.tsx, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Sincronizzato account attivo dopo primo cedolino
+Cosa: la scheda Altro si aggiorna al focus, consente il caricamento diretto di una busta paga dalla card vuota, sincronizza dashboard e settings dopo l'import e considera attivo l'account appena arrivano nome o cognome dal cedolino
+Perché: evitare che la card "Nessun account attivo" resti visibile dopo il primo import valido e rendere davvero automatico il recupero dei dati minimi account
+File: frontend/app/(tabs)/altro.tsx, frontend/app/(tabs)/buste-paga.tsx, CHANGELOG.md
+
+## 2026-03-21 — Reso robusto il recupero nome e cognome da busta paga
+Cosa: il parser Zucchetti dei settings accetta ora anche un output con nome e cognome al livello root del risultato, la card Altro si aggiorna al focus e i test API verificano che dopo il primo upload i campi minimi account siano presenti in settings e dashboard
+Perché: evitare che la UI resti su `Nessun account attivo` quando la prima busta paga ha gia fornito i dati minimi dell'account, anche se il parser cambia leggermente forma
+File: backend/server.py, frontend/app/(tabs)/altro.tsx, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Dati account minimi nei settings
+Cosa: esteso lo schema settings con cognome, matricola e numero badge, aggiunta una migrazione retrocompatibile per i database gia esistenti e aggiornato il flusso automatico della prima busta per separare nome e cognome quando possibile
+Perché: supportare solo i dati account davvero necessari nell'inserimento manuale, mantenere i dati contrattuali al parser e non rompere gli archivi locali gia presenti
+File: backend/server.py, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Ridotto il form account ai soli dati identificativi
+Cosa: la card e il bottom sheet account in Altro ora usano solo Nome, Cognome, Matricola e Numero badge, con un messaggio esplicito che il resto dei dati arrivera dalla prima busta paga e con reset locale allineato su questi soli campi
+Perché: semplificare l'inserimento manuale iniziale e lasciare al parser del cedolino il completamento dei dati contrattuali non essenziali
+File: frontend/app/(tabs)/altro.tsx, frontend/src/store/appStore.ts, frontend/src/types/index.ts, tests/test_e2e.py, CHANGELOG.md
+
 ## 2026-03-21 — Ricalibrato il copy di recupero account in Altro
 Cosa: aggiornata la card `Nessun account attivo` con il nuovo testo su due righe logiche e allineato il test E2E che verifica il copy della schermata
 Perché: rendere piu chiaro il messaggio di recupero account e mantenere il controllo automatico del copy visibile nella suite visuale

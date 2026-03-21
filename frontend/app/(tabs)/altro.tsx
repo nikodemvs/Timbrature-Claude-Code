@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useRouter } from 'expo-router';
 import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
 import { useAppStore, THEMES, ThemeKey, ColorSchemePreference } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
@@ -53,6 +54,7 @@ export default function AltroScreen() {
   const { colors, themeColors, colorSchemePreference, setColorSchemePreference, resolvedScheme } =
     useAppTheme();
   const styles = createStyles(colors);
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState<TabType>('menu');
   
   // Chat state
@@ -316,6 +318,15 @@ export default function AltroScreen() {
     setShowDeleteAccountSheet(true);
   };
 
+  const openAccountManualFlow = () => {
+    setActiveTab('settings');
+    openEditSettings();
+  };
+
+  const openAutomaticUploadFlow = () => {
+    router.push('/(tabs)/buste-paga');
+  };
+
   const clearOperationalData = async () => {
     setDeletingOperationalData(true);
     try {
@@ -478,8 +489,24 @@ export default function AltroScreen() {
             <Ionicons name="person-circle-outline" size={44} color={colors.textSecondary} />
             <Text style={styles.profileEmptyTitle}>Nessun account attivo</Text>
             <Text style={styles.profileEmptyText}>
-              L&apos;account è stato rimosso. I dati contrattuali restano disponibili nelle impostazioni e continuano ad alimentare le stime.
+              Scegli come reinserire i dati dell&apos;account. Puoi compilarli manualmente oppure caricare
+              una busta paga per riconoscerli in automatico.
             </Text>
+            <View style={styles.profileEmptyActions}>
+              <Button
+                title="Inserisci i dati dell'account manualmente"
+                onPress={openAccountManualFlow}
+                style={styles.profileEmptyActionButton}
+                testID="altro-account-manual-cta"
+              />
+              <Button
+                title="Carica la tua busta paga"
+                variant="outline"
+                onPress={openAutomaticUploadFlow}
+                style={styles.profileEmptyActionButton}
+                testID="altro-account-upload-cta"
+              />
+            </View>
           </View>
         )}
       </Card>
@@ -841,7 +868,7 @@ export default function AltroScreen() {
       </BottomSheet>
 
       {/* Edit Settings Sheet */}
-      <BottomSheet visible={showEditSheet} onClose={() => setShowEditSheet(false)} title="Modifica Dati" height="85%">
+      <BottomSheet visible={showEditSheet} onClose={() => setShowEditSheet(false)} title="Modifica Dati" height="85%" testID="altro-settings-edit-sheet">
         <InputField label="Nome" value={editNome} onChangeText={setEditNome} />
         <InputField label="Qualifica" value={editQualifica} onChangeText={setEditQualifica} />
         <InputField label="Livello" value={editLivello} onChangeText={setEditLivello} keyboardType="numeric" />
@@ -850,8 +877,8 @@ export default function AltroScreen() {
         <InputField label="Superminimo (€)" value={editSuperminimo} onChangeText={setEditSuperminimo} keyboardType="decimal-pad" />
         <InputField label="Scatti Anzianità (€)" value={editScatti} onChangeText={setEditScatti} keyboardType="decimal-pad" />
         <View style={styles.sheetButtons}>
-          <Button title="Annulla" variant="outline" onPress={() => setShowEditSheet(false)} style={styles.sheetButton} />
-          <Button title="Salva" onPress={saveSettings} loading={savingSettings} style={styles.sheetButton} />
+          <Button title="Annulla" variant="outline" onPress={() => setShowEditSheet(false)} style={styles.sheetButton} testID="altro-settings-edit-cancel-button" />
+          <Button title="Salva" onPress={saveSettings} loading={savingSettings} style={styles.sheetButton} testID="altro-settings-edit-save-button" />
         </View>
       </BottomSheet>
 
@@ -990,6 +1017,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     profileEmptyState: { alignItems: 'center', paddingVertical: 8, gap: 8 },
     profileEmptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
     profileEmptyText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
+    profileEmptyActions: { width: '100%', gap: 10, marginTop: 6 },
+    profileEmptyActionButton: { width: '100%' },
     chatContainer: { flex: 1 },
     chatMessages: { paddingHorizontal: 16, paddingBottom: 16 },
     chatEmpty: { alignItems: 'center', paddingVertical: 60 },

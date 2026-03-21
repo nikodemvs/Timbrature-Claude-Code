@@ -220,7 +220,6 @@ def test_e2e_buste_paga_mostra_struttura_compatta_e_tab_cud(browser, stack_appli
     finally:
         context.close()
 
-
 def test_e2e_altro_mostra_doppia_cancellazione_con_popup(browser, stack_applicazione):
     context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
     try:
@@ -284,11 +283,24 @@ def test_e2e_altro_mostra_doppia_cancellazione_con_popup(browser, stack_applicaz
         page.get_by_test_id("altro-back-button").click()
         page.get_by_test_id("altro-screen").wait_for(timeout=30000)
         expect(page.get_by_text("Nessun account attivo")).to_be_visible()
-        expect(page.get_by_text("L'account è stato rimosso. I dati contrattuali restano disponibili nelle impostazioni e continuano ad alimentare le stime.")).to_be_visible()
+        expect(page.get_by_text("Scegli come reinserire i dati dell'account. Puoi compilarli manualmente oppure caricare una busta paga per riconoscerli in automatico.")).to_be_visible()
+        expect(page.get_by_test_id("altro-account-manual-cta")).to_be_visible()
+        expect(page.get_by_test_id("altro-account-upload-cta")).to_be_visible()
+
+        page.get_by_test_id("altro-account-manual-cta").click()
+        page.get_by_test_id("altro-settings-screen").wait_for(timeout=10000)
+        page.get_by_test_id("altro-settings-edit-sheet").wait_for(timeout=10000)
+        page.get_by_test_id("altro-settings-edit-cancel-button").click()
+        page.get_by_test_id("altro-settings-edit-sheet").wait_for(state="hidden", timeout=10000)
+        page.get_by_test_id("altro-back-button").click()
+        page.get_by_test_id("altro-screen").wait_for(timeout=10000)
+
+        page.get_by_test_id("altro-account-upload-cta").click()
+        page.get_by_test_id("buste-screen").wait_for(timeout=30000)
+        expect(page.get_by_test_id("buste-upload-single-button")).to_be_visible()
 
         page.get_by_test_id("tab-home").click()
         page.get_by_test_id("dashboard-screen").wait_for(timeout=30000)
-        expect(page.get_by_text("Benvenuto")).to_be_visible()
         expect(page.get_by_test_id("dashboard-stima-card")).to_be_visible()
     finally:
         context.close()

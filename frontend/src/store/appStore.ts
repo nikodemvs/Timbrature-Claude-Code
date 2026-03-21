@@ -120,6 +120,7 @@ interface AppState {
   // Alerts count
   unreadAlerts: number;
   setUnreadAlerts: (count: number) => void;
+  resetUserData: () => void;
   
   // Theme
   theme: ThemeKey;
@@ -158,6 +159,31 @@ export const useAppStore = create<AppState>()(
       // Alerts
       unreadAlerts: 0,
       setUnreadAlerts: (count) => set({ unreadAlerts: count }),
+      resetUserData: () =>
+        set((state) => ({
+          dashboard: state.dashboard
+            ? {
+                ...state.dashboard,
+                settings: {
+                  ...state.dashboard.settings,
+                  nome: '',
+                  pin_hash: undefined,
+                  use_biometric: false,
+                },
+              }
+            : null,
+          settings: state.settings
+            ? {
+                ...state.settings,
+                nome: '',
+                pin_hash: undefined,
+                use_biometric: false,
+              }
+            : null,
+          isAuthenticated: false,
+          chatSessionId: null,
+          unreadAlerts: 0,
+        })),
       
       // Theme
       theme: 'blue',

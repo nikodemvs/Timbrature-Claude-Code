@@ -165,6 +165,7 @@ def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazion
         expect(page.get_by_text(marcatura_entrata)).to_be_visible()
         expect(page.get_by_text(marcatura_uscita)).to_be_visible()
         page.get_by_test_id("dashboard-stima-card").click()
+        expect(page.get_by_test_id("dashboard-stima-fonte")).to_be_visible()
         expect(page.get_by_test_id("dashboard-stima-competenza")).to_have_text(competence_label)
         expect(page.get_by_test_id("dashboard-stima-pagamento-previsto")).to_have_text(payment_label)
 
@@ -280,6 +281,15 @@ def test_e2e_altro_mostra_doppia_cancellazione_con_popup(browser, stack_applicaz
         page.wait_for_timeout(1500)
 
         page.get_by_test_id("altro-settings-delete-account-sheet").wait_for(state="hidden", timeout=10000)
+        page.get_by_test_id("altro-back-button").click()
+        page.get_by_test_id("altro-screen").wait_for(timeout=30000)
+        expect(page.get_by_text("Nessun account attivo")).to_be_visible()
+        expect(page.get_by_text("L'account è stato rimosso. I dati contrattuali restano disponibili nelle impostazioni e continuano ad alimentare le stime.")).to_be_visible()
+
+        page.get_by_test_id("tab-home").click()
+        page.get_by_test_id("dashboard-screen").wait_for(timeout=30000)
+        expect(page.get_by_text("Benvenuto")).to_be_visible()
+        expect(page.get_by_test_id("dashboard-stima-card")).to_be_visible()
     finally:
         context.close()
 
@@ -456,7 +466,7 @@ def test_visual_dark_mode_touch_target_e_font_minimo(browser, stack_applicazione
         page.get_by_test_id("altro-menu-settings").click()
         page.get_by_test_id("altro-settings-screen").wait_for(timeout=10000)
         page.get_by_test_id("altro-settings-appearance-button").click()
-        page.get_by_text("Scuro").click()
+        page.get_by_text("Scuro", exact=True).click()
         page.wait_for_timeout(1200)
 
         bottone_home = page.get_by_test_id("tab-home")

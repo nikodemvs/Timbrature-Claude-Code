@@ -67,6 +67,7 @@ export default function AltroScreen() {
       dashboard,
       setDashboard,
       setTodayTimbratura,
+      resetUserData,
   } = useAppStore();
   const chatScrollRef = useRef<FlatList>(null);
   
@@ -342,7 +343,7 @@ export default function AltroScreen() {
         const SecureStore = await import('expo-secure-store');
         await SecureStore.deleteItemAsync('bustapaga_pin');
       }
-      await refreshDashboard();
+      resetUserData();
       setNewPin('');
       setShowDeleteAccountSheet(false);
       Alert.alert('Account eliminato', response.data.message || 'Account eliminato correttamente.');
@@ -353,6 +354,8 @@ export default function AltroScreen() {
       setDeletingAccount(false);
     }
   };
+
+  const hasProfileData = Boolean(dashboard?.settings?.nome?.trim());
 
   const saveSettings = () => {
     Alert.alert(
@@ -454,20 +457,31 @@ export default function AltroScreen() {
       </View>
 
       <Card style={styles.profileCard}>
-        <View style={styles.profileHeader}>
-          <View style={[styles.profileAvatar, { backgroundColor: themeColors.primary }]}>
-            <Text style={styles.profileInitials}>
-              {dashboard?.settings?.nome?.split(' ').map(n => n[0]).join('') || 'ZM'}
+        {hasProfileData ? (
+          <View style={styles.profileHeader}>
+            <View style={[styles.profileAvatar, { backgroundColor: themeColors.primary }]}>
+              <Text style={styles.profileInitials}>
+                {dashboard?.settings?.nome?.split(' ').map(n => n[0]).join('') || '—'}
+              </Text>
+            </View>
+            <View style={styles.profileInfo}>
+              <Text style={styles.profileName}>{dashboard?.settings?.nome || '-'}</Text>
+              <Text style={styles.profileRole}>
+                {dashboard?.settings?.qualifica || '-'}
+                {dashboard?.settings?.livello ? ` - Livello ${dashboard.settings.livello}` : ''}
+              </Text>
+              <Text style={styles.profileCompany}>{dashboard?.settings?.azienda || '-'}</Text>
+            </View>
+          </View>
+        ) : (
+          <View style={styles.profileEmptyState}>
+            <Ionicons name="person-circle-outline" size={44} color={colors.textSecondary} />
+            <Text style={styles.profileEmptyTitle}>Nessun account attivo</Text>
+            <Text style={styles.profileEmptyText}>
+              L&apos;account è stato rimosso. I dati contrattuali restano disponibili nelle impostazioni e continuano ad alimentare le stime.
             </Text>
           </View>
-          <View style={styles.profileInfo}>
-            <Text style={styles.profileName}>{dashboard?.settings?.nome || 'Zambara Marco'}</Text>
-            <Text style={styles.profileRole}>
-              {dashboard?.settings?.qualifica || 'Operaio'} - Livello {dashboard?.settings?.livello || 5}
-            </Text>
-            <Text style={styles.profileCompany}>{dashboard?.settings?.azienda || 'Plastiape SpA'}</Text>
-          </View>
-        </View>
+        )}
       </Card>
     </ScrollView>
   );
@@ -712,7 +726,6 @@ export default function AltroScreen() {
           </TouchableOpacity>
         </View>
         
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Nome</Text><Text style={styles.infoValue}>{dashboard?.settings?.nome || '-'}</Text></View>
         <View style={styles.infoRow}><Text style={styles.infoLabel}>Qualifica</Text><Text style={styles.infoValue}>{dashboard?.settings?.qualifica || '-'}</Text></View>
         <View style={styles.infoRow}><Text style={styles.infoLabel}>Livello</Text><Text style={styles.infoValue}>{dashboard?.settings?.livello || '-'}</Text></View>
         <View style={styles.infoRow}><Text style={styles.infoLabel}>Azienda</Text><Text style={styles.infoValue}>{dashboard?.settings?.azienda || '-'}</Text></View>
@@ -974,6 +987,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     profileName: { fontSize: 18, fontWeight: '600', color: colors.text },
     profileRole: { fontSize: 14, color: colors.textSecondary, marginTop: 2 },
     profileCompany: { fontSize: 13, color: colors.textLight, marginTop: 2 },
+    profileEmptyState: { alignItems: 'center', paddingVertical: 8, gap: 8 },
+    profileEmptyTitle: { fontSize: 18, fontWeight: '700', color: colors.text, textAlign: 'center' },
+    profileEmptyText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
     chatContainer: { flex: 1 },
     chatMessages: { paddingHorizontal: 16, paddingBottom: 16 },
     chatEmpty: { alignItems: 'center', paddingVertical: 60 },

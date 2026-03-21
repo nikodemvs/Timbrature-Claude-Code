@@ -152,6 +152,16 @@ export interface DashboardData {
     pagamento_giorno?: number;
     pagamento_mese?: number;
     pagamento_anno?: number;
+    fonte?: string;
+    fonte_stima?: string;
+    ha_dati_contrattuali?: boolean;
+    ha_dati_operativi_mese?: boolean;
+    metadati?: {
+      ha_dati_contrattuali?: boolean;
+      ha_dati_operativi_mese?: boolean;
+      sorgente?: string;
+      stato?: string;
+    };
   };
   ferie: {
     anno: number;

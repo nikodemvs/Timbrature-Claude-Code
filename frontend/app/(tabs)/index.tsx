@@ -54,6 +54,16 @@ interface DashboardStimaFields {
   pagamento_giorno?: number;
   pagamento_mese?: number;
   pagamento_anno?: number;
+  fonte?: string;
+  fonte_stima?: string;
+  ha_dati_contrattuali?: boolean;
+  ha_dati_operativi_mese?: boolean;
+  metadati?: {
+    ha_dati_contrattuali?: boolean;
+    ha_dati_operativi_mese?: boolean;
+    sorgente?: string;
+    stato?: string;
+  };
 }
 
 function formatHMS(totalSeconds: number): string {
@@ -132,6 +142,19 @@ function formatStimaPagamentoPrevisto(mese: number, anno: number, stime?: Dashbo
   const mesePagamento = stime?.pagamento_previsto_mese ?? stime?.mese_pagamento_previsto ?? stime?.pagamento_mese ?? (mese === 12 ? 1 : mese + 1);
   const annoPagamento = stime?.pagamento_previsto_anno ?? stime?.anno_pagamento_previsto ?? stime?.pagamento_anno ?? (mese === 12 ? anno + 1 : anno);
   return `${giornoPagamento} ${getMesiItaliano(mesePagamento)} ${annoPagamento}`;
+}
+
+function formatStimaFonte(mese: number, anno: number, stime?: DashboardStimaFields) {
+  if (stime?.metadati?.stato) {
+    return stime.metadati.stato;
+  }
+  if (stime?.fonte_stima) {
+    return stime.fonte_stima;
+  }
+  if (stime?.fonte) {
+    return stime.fonte;
+  }
+  return `Competenza ${formatCompetenzaStima(mese, anno, stime)} · pagamento previsto ${formatStimaPagamentoPrevisto(mese, anno, stime)}`;
 }
 
 export default function DashboardScreen() {
@@ -520,6 +543,12 @@ export default function DashboardScreen() {
                   <Text style={styles.estimateLabel}>netto stimato di {stimaCompetenza}</Text>
                 </View>
                 <View style={styles.estimateDetails}>
+                  <View style={styles.estimateSourceBanner}>
+                    <Text style={styles.estimateSourceLabel}>Fonte stima</Text>
+                    <Text style={styles.estimateSourceValue} testID="dashboard-stima-fonte">
+                      {formatStimaFonte(data?.mese_corrente?.mese || today.getMonth() + 1, data?.mese_corrente?.anno || today.getFullYear(), data?.stime)}
+                    </Text>
+                  </View>
                   <View style={styles.estimateRow}>
                     <Text style={styles.estimateDetailLabel}>Periodo di competenza</Text>
                     <Text style={styles.estimateDetailValue} testID="dashboard-stima-competenza">
@@ -651,7 +680,7 @@ export default function DashboardScreen() {
       {/* Header */}
       <View style={styles.header}>
         <View>
-          <Text style={styles.greeting}>Ciao, {data?.settings?.nome?.split(' ')[0] || 'Marco'}</Text>
+          <Text style={styles.greeting}>{data?.settings?.nome ? `Ciao, ${data.settings.nome.split(' ')[0]}` : 'Benvenuto'}</Text>
           <Text style={styles.subtitle}>{meseCorrente} {today.getFullYear()}</Text>
         </View>
         <TouchableOpacity
@@ -781,6 +810,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     estimateValue: { fontSize: 36, fontWeight: '700', color: colors.success },
     estimateLabel: { fontSize: 14, color: colors.textSecondary, marginTop: 4 },
     estimateDetails: { gap: 8 },
+    estimateSourceBanner: { padding: 12, borderRadius: 12, backgroundColor: colors.cardDark, gap: 4 },
+    estimateSourceLabel: { fontSize: 12, fontWeight: '700', color: colors.textSecondary, textTransform: 'uppercase' },
+    estimateSourceValue: { fontSize: 14, lineHeight: 20, color: colors.text },
     estimateRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' },
     estimateDetailLabel: { fontSize: 14, color: colors.textSecondary },
     estimateDetailValue: { fontSize: 14, fontWeight: '600', color: colors.text },

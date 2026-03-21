@@ -101,24 +101,24 @@ class AppBaseModel(BaseModel):
 
 class UserSettings(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    nome: str = "Marco Zambara"
-    qualifica: str = "Operaio"
-    livello: int = 5
-    azienda: str = "Plastiape SpA"
-    sede: str = "Osnago (LC)"
-    ccnl: str = "Unionchimica Confapi — Gomma Plastica"
-    data_assunzione: str = "2015-07-11"
-    orario_tipo: str = "Giornata fissa Lun-Ven"
-    ore_giornaliere: int = 8
-    paga_base: float = 2026.64
-    scatti_anzianita: float = 66.88
-    superminimo: float = 469.41
-    premio_incarico: float = 56.90
-    divisore_orario: int = 169
-    divisore_giornaliero: int = 25
-    ticket_valore: float = 8.00
+    nome: str = ""
+    qualifica: str = ""
+    livello: int = 0
+    azienda: str = ""
+    sede: str = ""
+    ccnl: str = ""
+    data_assunzione: str = ""
+    orario_tipo: str = ""
+    ore_giornaliere: int = 0
+    paga_base: float = 0.0
+    scatti_anzianita: float = 0.0
+    superminimo: float = 0.0
+    premio_incarico: float = 0.0
+    divisore_orario: int = 0
+    divisore_giornaliero: int = 0
+    ticket_valore: float = 0.0
     pin_hash: Optional[str] = None
-    use_biometric: bool = True
+    use_biometric: bool = False
     created_at: datetime = Field(default_factory=_utc_now)
     updated_at: datetime = Field(default_factory=_utc_now)
 
@@ -324,24 +324,24 @@ async def init_db():
     await _db.execute("""
         CREATE TABLE IF NOT EXISTS settings (
             id TEXT PRIMARY KEY,
-            nome TEXT DEFAULT 'Zambara Marco',
-            qualifica TEXT DEFAULT 'Operaio',
-            livello INTEGER DEFAULT 5,
-            azienda TEXT DEFAULT 'Plastiape SpA',
-            sede TEXT DEFAULT 'Osnago (LC)',
-            ccnl TEXT DEFAULT 'Unionchimica Confapi — Gomma Plastica',
-            data_assunzione TEXT DEFAULT '2015-07-11',
-            orario_tipo TEXT DEFAULT 'Giornata fissa Lun-Ven',
-            ore_giornaliere INTEGER DEFAULT 8,
-            paga_base REAL DEFAULT 2026.64,
-            scatti_anzianita REAL DEFAULT 66.88,
-            superminimo REAL DEFAULT 469.41,
-            premio_incarico REAL DEFAULT 56.90,
-            divisore_orario INTEGER DEFAULT 169,
-            divisore_giornaliero INTEGER DEFAULT 25,
-            ticket_valore REAL DEFAULT 8.00,
+            nome TEXT DEFAULT '',
+            qualifica TEXT DEFAULT '',
+            livello INTEGER DEFAULT 0,
+            azienda TEXT DEFAULT '',
+            sede TEXT DEFAULT '',
+            ccnl TEXT DEFAULT '',
+            data_assunzione TEXT DEFAULT '',
+            orario_tipo TEXT DEFAULT '',
+            ore_giornaliere INTEGER DEFAULT 0,
+            paga_base REAL DEFAULT 0,
+            scatti_anzianita REAL DEFAULT 0,
+            superminimo REAL DEFAULT 0,
+            premio_incarico REAL DEFAULT 0,
+            divisore_orario INTEGER DEFAULT 0,
+            divisore_giornaliero INTEGER DEFAULT 0,
+            ticket_valore REAL DEFAULT 0,
             pin_hash TEXT,
-            use_biometric INTEGER DEFAULT 1,
+            use_biometric INTEGER DEFAULT 0,
             created_at TEXT,
             updated_at TEXT
         )
@@ -1020,26 +1020,7 @@ async def _aggiorna_settings_da_zucchetti(parse_result: Dict[str, Any]) -> None:
 
 
 def _settings_personali_vuote() -> UserSettings:
-    return UserSettings(
-        nome="",
-        qualifica="",
-        livello=0,
-        azienda="",
-        sede="",
-        ccnl="",
-        data_assunzione="",
-        orario_tipo="",
-        ore_giornaliere=0,
-        paga_base=0.0,
-        scatti_anzianita=0.0,
-        superminimo=0.0,
-        premio_incarico=0.0,
-        divisore_orario=0,
-        divisore_giornaliero=0,
-        ticket_valore=0.0,
-        pin_hash=None,
-        use_biometric=False,
-    )
+    return UserSettings()
 
 
 async def _scrivi_settings_neutre() -> None:
@@ -1127,6 +1108,98 @@ async def _scrivi_settings_neutre() -> None:
                 settings_vuote["updated_at"].isoformat(),
             ],
         )
+
+
+async def _azzera_identita_account_e_sicurezza() -> None:
+    aggiornamenti = {
+        "nome": "",
+        "pin_hash": None,
+        "use_biometric": 0,
+        "updated_at": _utc_now_iso(),
+    }
+    cur = await _db.execute("SELECT id FROM settings LIMIT 1")
+    settings_esistenti = await cur.fetchone()
+    if settings_esistenti:
+        await _db.execute(
+            """
+            UPDATE settings
+            SET nome = ?,
+                pin_hash = ?,
+                use_biometric = ?,
+                updated_at = ?
+            WHERE id = ?
+            """,
+            [
+                aggiornamenti["nome"],
+                aggiornamenti["pin_hash"],
+                aggiornamenti["use_biometric"],
+                aggiornamenti["updated_at"],
+                settings_esistenti["id"],
+            ],
+        )
+        return
+
+    settings_vuote = _settings_personali_vuote().model_dump()
+    await _db.execute(
+        "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [
+            settings_vuote["id"],
+            settings_vuote["nome"],
+            settings_vuote["qualifica"],
+            settings_vuote["livello"],
+            settings_vuote["azienda"],
+            settings_vuote["sede"],
+            settings_vuote["ccnl"],
+            settings_vuote["data_assunzione"],
+            settings_vuote["orario_tipo"],
+            settings_vuote["ore_giornaliere"],
+            settings_vuote["paga_base"],
+            settings_vuote["scatti_anzianita"],
+            settings_vuote["superminimo"],
+            settings_vuote["premio_incarico"],
+            settings_vuote["divisore_orario"],
+            settings_vuote["divisore_giornaliero"],
+            settings_vuote["ticket_valore"],
+            settings_vuote["pin_hash"],
+            int(settings_vuote["use_biometric"]),
+            settings_vuote["created_at"].isoformat(),
+            settings_vuote["updated_at"].isoformat(),
+        ],
+    )
+
+
+def _calcola_metadati_stima(settings: Dict[str, Any], timbrature: List[Dict[str, Any]]) -> Dict[str, Any]:
+    ha_dati_contrattuali = any(
+        (settings.get(campo) or 0) > 0
+        for campo in [
+            "paga_base",
+            "scatti_anzianita",
+            "superminimo",
+            "premio_incarico",
+            "ticket_valore",
+        ]
+    )
+    ha_dati_operativi_mese = len(timbrature) > 0
+
+    if ha_dati_contrattuali and ha_dati_operativi_mese:
+        sorgente = "dati_contrattuali_e_operativi_mese"
+        stato = "Stima basata su dati contrattuali e timbrature del mese."
+    elif ha_dati_contrattuali:
+        sorgente = "solo_dati_contrattuali"
+        stato = "Stima basata solo sui dati contrattuali."
+    elif ha_dati_operativi_mese:
+        sorgente = "solo_dati_operativi"
+        stato = "Dati operativi presenti, ma dati contrattuali insufficienti per una stima affidabile."
+    else:
+        sorgente = "nessun_dato_utile"
+        stato = "Stima non disponibile: mancano dati contrattuali e operativi del mese."
+
+    return {
+        "ha_dati_contrattuali": ha_dati_contrattuali,
+        "ha_dati_operativi_mese": ha_dati_operativi_mese,
+        "sorgente": sorgente,
+        "stato": stato,
+    }
 
 
 async def _svuota_dati_operativi_personali() -> Dict[str, int]:
@@ -1395,10 +1468,11 @@ async def elimina_account(richiesta: EliminaAccountRequest):
             detail="Conferma richiesta per eliminare l'account.",
         )
 
-    await _scrivi_settings_neutre()
+    await _azzera_identita_account_e_sicurezza()
     await _db.commit()
     return {
-        "message": "Account eliminato e profilo azzerato.",
+        "message": "Account eliminato e dati di accesso azzerati.",
+        "dati_contrattuali_conservati": True,
         "settings_reset": True,
     }
 
@@ -2262,7 +2336,7 @@ async def get_dashboard():
     cur = await _db.execute("SELECT * FROM settings LIMIT 1")
     settings = _settings_from_row(_row(await cur.fetchone()))
     if not settings:
-        settings = UserSettings().dict()
+        settings = _settings_personali_vuote().dict()
     start = f"{anno}-{mese:02d}-01"
     end = f"{anno + 1}-01-01" if mese == 12 else f"{anno}-{mese + 1:02d}-01"
     cur = await _db.execute(
@@ -2287,9 +2361,13 @@ async def get_dashboard():
         (settings.get("superminimo") or 0) +
         (settings.get("premio_incarico") or 0)
     )
-    quota_oraria = base_mensile / (settings.get("divisore_orario") or 169)
+    metadati_stima = _calcola_metadati_stima(settings, timbrature)
+    divisore_orario = settings.get("divisore_orario") or 169
+    ticket_valore = settings.get("ticket_valore")
+    ticket_unitario = float(ticket_valore) if isinstance(ticket_valore, (int, float)) else 0.0
+    quota_oraria = base_mensile / divisore_orario
     straordinario_stimato = ore_straordinarie * quota_oraria * 1.18
-    ticket_totale = giorni_con_ticket * (settings.get("ticket_valore") or 8)
+    ticket_totale = giorni_con_ticket * ticket_unitario
     lordo_stimato = base_mensile + straordinario_stimato + ticket_totale
     netto_stimato = lordo_stimato * 0.72
     pagamento_mese = mese + 1 if mese < 12 else 1
@@ -2308,6 +2386,16 @@ async def get_dashboard():
             "netto_stimato": round(netto_stimato, 2),
             "straordinario_stimato": round(straordinario_stimato, 2),
             "ticket_totale": round(ticket_totale, 2),
+            "metadati": {
+                "ha_dati_contrattuali": metadati_stima["ha_dati_contrattuali"],
+                "ha_dati_operativi_mese": metadati_stima["ha_dati_operativi_mese"],
+                "sorgente": metadati_stima["sorgente"],
+                "stato": metadati_stima["stato"],
+            },
+            "ha_dati_contrattuali": metadati_stima["ha_dati_contrattuali"],
+            "ha_dati_operativi_mese": metadati_stima["ha_dati_operativi_mese"],
+            "fonte": metadati_stima["sorgente"],
+            "fonte_stima": metadati_stima["stato"],
             "competenza_mese": mese,
             "competenza_anno": anno,
             "pagamento_previsto_giorno": 27,
@@ -2400,7 +2488,7 @@ async def chat(request: ChatRequest):
         raise HTTPException(status_code=500, detail="GEMINI_API_KEY non configurata")
     try:
         cur = await _db.execute("SELECT * FROM settings LIMIT 1")
-        settings = _settings_from_row(_row(await cur.fetchone())) or {}
+        settings = _settings_from_row(_row(await cur.fetchone())) or _settings_personali_vuote().dict()
         dashboard = await get_dashboard()
         ferie = await get_saldo_ferie()
         comporto = await get_comporto()
@@ -2415,22 +2503,22 @@ async def chat(request: ChatRequest):
 Rispondi SEMPRE in italiano, in modo chiaro, preciso e diretto. Quando fai calcoli, mostra i passaggi.
 
 === DATI ANAGRAFICI E CONTRATTUALI ===
-Nome: {settings.get('nome', 'Zambara Marco')}
-Qualifica: {settings.get('qualifica', 'Operaio')} - Livello: {settings.get('livello', 5)}
-Azienda: {settings.get('azienda', 'Plastiape SpA')}, {settings.get('sede', 'Osnago (LC)')}
-CCNL: {settings.get('ccnl', 'Unionchimica Confapi — Gomma Plastica')}
-Data assunzione: {settings.get('data_assunzione', '2015-07-11')}
-Orario: {settings.get('orario_tipo', 'Giornata fissa Lun-Ven')}, {settings.get('ore_giornaliere', 8)}h/giorno
+Nome: {settings.get('nome') or 'Non disponibile'}
+Qualifica: {settings.get('qualifica') or 'Non disponibile'} - Livello: {settings.get('livello') or 0}
+Azienda: {settings.get('azienda') or 'Non disponibile'}, {settings.get('sede') or 'Non disponibile'}
+CCNL: {settings.get('ccnl') or 'Non disponibile'}
+Data assunzione: {settings.get('data_assunzione') or 'Non disponibile'}
+Orario: {settings.get('orario_tipo') or 'Non disponibile'}, {settings.get('ore_giornaliere') or 0}h/giorno
 
 === ELEMENTI RETRIBUTIVI ATTUALI ===
-Paga base: €{settings.get('paga_base', 2026.64):.2f}
-Scatti anzianità: €{settings.get('scatti_anzianita', 66.88):.2f} (quinto scatto N.4,80 × €13,94)
-Superminimo: €{settings.get('superminimo', 469.41):.2f}
-Premio incarico: €{settings.get('premio_incarico', 56.90):.2f}
+Paga base: €{float(settings.get('paga_base') or 0):.2f}
+Scatti anzianità: €{float(settings.get('scatti_anzianita') or 0):.2f}
+Superminimo: €{float(settings.get('superminimo') or 0):.2f}
+Premio incarico: €{float(settings.get('premio_incarico') or 0):.2f}
 Totale base mensile: €{base_mensile:.2f}
-Divisore orario: {settings.get('divisore_orario', 169)} → quota oraria €{quota_oraria:.2f}
-Divisore giornaliero: {settings.get('divisore_giornaliero', 25)} → quota giornaliera €{base_mensile / (settings.get('divisore_giornaliero') or 25):.2f}
-Ticket elettronico: €{settings.get('ticket_valore', 8.00):.2f}/giorno se ore totali ≥ 5h
+Divisore orario: {settings.get('divisore_orario') or 0} → quota oraria €{quota_oraria:.2f}
+Divisore giornaliero: {settings.get('divisore_giornaliero') or 0} → quota giornaliera €{base_mensile / (settings.get('divisore_giornaliero') or 25):.2f}
+Ticket elettronico: €{float(settings.get('ticket_valore') or 0):.2f}/giorno se ore totali ≥ 5h
 
 === STORICO PAGA BASE ===
 - Fino luglio 2025: €1.987,14

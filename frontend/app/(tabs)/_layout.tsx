@@ -4,6 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { View, StyleSheet, Platform } from 'react-native';
 import { useAppStore } from '../../src/store/appStore';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { DESIGN_TOKENS } from '../../src/utils/colors';
 import { createElevation } from '../../src/utils/shadows';
 
 export default function TabLayout() {
@@ -20,6 +21,7 @@ export default function TabLayout() {
         tabBarStyle: styles.tabBar,
         tabBarLabelStyle: styles.tabBarLabel,
         tabBarItemStyle: styles.tabBarItem,
+        tabBarIconStyle: styles.tabBarIcon,
       }}
     >
       <Tabs.Screen
@@ -82,26 +84,30 @@ export default function TabLayout() {
 const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     tabBar: {
-      backgroundColor: colors.card,
+      backgroundColor: colors.surface,
       borderTopWidth: 1,
       borderTopColor: colors.border,
-      paddingTop: 10,
-      paddingBottom: Platform.OS === 'ios' ? 24 : 8,
-      height: Platform.OS === 'ios' ? 88 : 64,
+      paddingTop: 12,
+      paddingBottom: Platform.OS === 'ios' ? 20 : 10,
+      height: Platform.OS === 'ios' ? DESIGN_TOKENS.component.tabBarHeightIOS : DESIGN_TOKENS.component.tabBarHeightAndroid,
       ...createElevation({
         color: colors.shadowMedium,
-        offsetY: -2,
-        blur: 8,
-        opacity: 0.24,
-        elevation: 6,
+        offsetY: -3,
+        blur: 12,
+        opacity: 0.2,
+        elevation: 8,
       }),
     },
     tabBarLabel: {
-      fontSize: 12,
-      fontWeight: '600',
+      fontSize: 11,
+      fontWeight: '700',
+      letterSpacing: 0.2,
     },
     tabBarItem: {
-      paddingVertical: 2,
+      minHeight: 44,
+    },
+    tabBarIcon: {
+      marginTop: 2,
     },
     badge: {
       position: 'absolute',

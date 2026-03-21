@@ -5,6 +5,16 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Separazione account locale e catena dati Stima Netto
+Cosa: separati i dati di account dai dati contrattuali nella logica di eliminazione, rimossi fallback personali finti da Home e Altro, resa esplicita la fonte della stima netto e mantenuta la stima anche dopo l'eliminazione dell'account locale quando i dati contrattuali restano presenti
+Perché: evitare che Elimina account azzeri il contratto usato nei calcoli, chiarire perché Cancella dati personali può lasciare una stima basata sul contratto e impedire che la UI mostri dati fantasma
+File: backend/server.py, frontend/app/(tabs)/altro.tsx, frontend/app/(tabs)/index.tsx, frontend/src/store/appStore.ts, frontend/src/types/index.ts, tests/test_api.py, tests/test_e2e.py, CHANGELOG.md
+
+## 2026-03-21 — Restyling del design system condiviso
+Cosa: riallineati i token colore e le superfici condivise con card, button, input, bottom sheet, stat card, loading screen e tab bar piu puliti, coerenti e leggibili
+Perché: ottenere un look piu premium e uniforme senza toccare le singole screen e senza alterare i flussi di navigazione
+File: frontend/src/utils/colors.ts, frontend/src/components/Card.tsx, frontend/src/components/Button.tsx, frontend/src/components/InputField.tsx, frontend/src/components/BottomSheet.tsx, frontend/src/components/StatCard.tsx, frontend/src/components/LoadingScreen.tsx, frontend/app/(tabs)/_layout.tsx, CHANGELOG.md
+
 ## 2026-03-21 — Mitigazione log SSL di Responsively
 Cosa: rafforzato il launcher frontend quando apre Responsively App, isolando meglio il processo Electron e reindirizzando stdout/stderr su file runtime dedicati per evitare che i warning SSL net_error -202 finiscano nel terminale
 Perché: mantenere pulito l'output del tasto Start quando il frontend viene aperto in Responsively senza toccare l'app Expo

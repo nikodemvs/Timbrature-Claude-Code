@@ -2,6 +2,7 @@ import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, ActivityIndicator, StyleProp, ViewStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../hooks/useAppTheme';
+import { DESIGN_TOKENS } from '../utils/colors';
 import { createElevation } from '../utils/shadows';
 
 interface CardProps {
@@ -35,7 +36,7 @@ export const Card: React.FC<CardProps> = ({
   const resolvedIconColor = iconColor ?? colors.primary;
 
   return (
-    <Wrapper style={[styles.card, style]} onPress={onPress} activeOpacity={0.7} testID={testID}>
+    <Wrapper style={[styles.card, style]} onPress={onPress} activeOpacity={0.86} testID={testID}>
       {loading ? (
         <ActivityIndicator size="small" color={colors.primary} />
       ) : (
@@ -67,24 +68,24 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
   StyleSheet.create({
     card: {
       backgroundColor: colors.card,
-      borderRadius: 16,
-      padding: 16,
-      marginBottom: 12,
+      borderRadius: DESIGN_TOKENS.radius.xl,
+      padding: DESIGN_TOKENS.component.cardPadding,
+      marginBottom: 14,
       borderWidth: 1,
       borderColor: colors.border,
       ...createElevation({
-        color: colors.shadowMedium,
-        offsetY: 2,
-        blur: 8,
-        opacity: 0.2,
-        elevation: 2,
+        color: colors.shadowLight,
+        offsetY: 3,
+        blur: 12,
+        opacity: 0.16,
+        elevation: 3,
       }),
     },
     header: {
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'space-between',
-      marginBottom: 12,
+      marginBottom: 14,
     },
     headerLeft: {
       flexDirection: 'row',
@@ -92,9 +93,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       flex: 1,
     },
     iconContainer: {
-      width: 40,
-      height: 40,
-      borderRadius: 12,
+      width: 44,
+      height: 44,
+      borderRadius: DESIGN_TOKENS.radius.md,
       alignItems: 'center',
       justifyContent: 'center',
       marginRight: 12,
@@ -103,13 +104,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       flex: 1,
     },
     title: {
-      fontSize: 16,
-      fontWeight: '600',
+      fontSize: 17,
+      fontWeight: '700',
       color: colors.text,
     },
     subtitle: {
-      fontSize: 13,
+      fontSize: 14,
       color: colors.textSecondary,
-      marginTop: 2,
+      marginTop: 3,
+      lineHeight: 18,
     },
   });

@@ -211,7 +211,10 @@ async def test_api_settings_get_put_errore_e_caso_edge(client_api):
     edge = await client_api.put("/api/settings", json={"pin_hash": ""})
 
     assert iniziale.status_code == 200
-    assert iniziale.json()["nome"] in {"Marco Zambara", "Zambara Marco"}
+    assert iniziale.json()["nome"] == ""
+    assert iniziale.json()["azienda"] == ""
+    assert iniziale.json()["paga_base"] == 0
+    assert iniziale.json()["use_biometric"] is False
     assert aggiornata.status_code == 200
     assert aggiornata.json()["nome"] == "Mario Rossi"
     assert aggiornata.json()["use_biometric"] is False
@@ -795,11 +798,17 @@ async def test_api_cancella_dati_personali_svuota_solo_i_dati_operativi(client_a
         assert risposta.json() == expected
 
     settings = await client_api.get("/api/settings")
+    dashboard = await client_api.get("/api/dashboard")
     assert settings.status_code == 200
     assert settings.json()["nome"] == "Mario Rossi"
     assert settings.json()["azienda"] == "Azienda Srl"
     assert settings.json()["paga_base"] == 2400.0
     assert settings.json()["use_biometric"] is False
+    assert dashboard.status_code == 200
+    assert dashboard.json()["stime"]["metadati"]["ha_dati_contrattuali"] is True
+    assert dashboard.json()["stime"]["metadati"]["ha_dati_operativi_mese"] is False
+    assert dashboard.json()["stime"]["fonte"] == "solo_dati_contrattuali"
+    assert dashboard.json()["stime"]["fonte_stima"] == "Stima basata solo sui dati contrattuali."
 
     for tabella in [
         "timbrature",
@@ -822,7 +831,7 @@ async def test_api_cancella_dati_personali_svuota_solo_i_dati_operativi(client_a
     assert int((await cur.fetchone())["totale"]) == 1
 
 
-async def test_api_elimina_account_azzera_profilo_e_lascia_i_dati_operativi(client_api, db_temporaneo):
+async def test_api_elimina_account_azzera_identita_e_sicurezza_ma_conserva_contratto_e_operativita(client_api, db_temporaneo):
     await client_api.put(
         "/api/settings",
         json={
@@ -859,19 +868,26 @@ async def test_api_elimina_account_azzera_profilo_e_lascia_i_dati_operativi(clie
     assert rifiutata.status_code == 400
     assert rifiutata.json()["detail"] == "Conferma richiesta per eliminare l'account."
     assert eliminata.status_code == 200
-    assert eliminata.json()["message"] == "Account eliminato e profilo azzerato."
+    assert eliminata.json()["message"] == "Account eliminato e dati di accesso azzerati."
+    assert eliminata.json()["dati_contrattuali_conservati"] is True
     assert eliminata.json()["settings_reset"] is True
 
     settings = await client_api.get("/api/settings")
     assert settings.status_code == 200
     assert settings.json()["nome"] == ""
-    assert settings.json()["qualifica"] == ""
-    assert settings.json()["azienda"] == ""
-    assert settings.json()["sede"] == ""
-    assert settings.json()["paga_base"] == 0
-    assert settings.json()["ticket_valore"] == 0
+    assert settings.json()["qualifica"] == "Impiegato"
+    assert settings.json()["azienda"] == "Azienda Srl"
+    assert settings.json()["sede"] == "Milano"
+    assert settings.json()["paga_base"] == 2400.0
+    assert settings.json()["ticket_valore"] == 8.5
     assert settings.json()["pin_hash"] is None
     assert settings.json()["use_biometric"] is False
+
+    dashboard = await client_api.get("/api/dashboard")
+    assert dashboard.status_code == 200
+    assert dashboard.json()["stime"]["metadati"]["ha_dati_contrattuali"] is True
+    assert dashboard.json()["stime"]["metadati"]["ha_dati_operativi_mese"] is True
+    assert dashboard.json()["stime"]["metadati"]["sorgente"] == "dati_contrattuali_e_operativi_mese"
 
     for tabella in [
         "timbrature",
@@ -892,7 +908,7 @@ async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
     pagamento_mese = now.month + 1 if now.month < 12 else 1
     pagamento_anno = now.year if now.month < 12 else now.year + 1
     vuota = await client_api.get("/api/dashboard")
-    await client_api.put("/api/settings", json={"ticket_valore": 8.0})
+    await client_api.put("/api/settings", json={"paga_base": 2000.0, "ticket_valore": 8.0})
     await client_api.post(
         "/api/timbrature",
         json={"data": datetime.now().strftime("%Y-%m-%d"), "ora_entrata": "08:00", "ora_uscita": "17:00"},
@@ -902,6 +918,12 @@ async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
 
     assert vuota.status_code == 200
     assert vuota.json()["mese_corrente"]["ore_lavorate"] == 0
+    assert vuota.json()["stime"]["lordo_stimato"] == 0
+    assert vuota.json()["stime"]["netto_stimato"] == 0
+    assert vuota.json()["stime"]["ticket_totale"] == 0
+    assert vuota.json()["stime"]["metadati"]["ha_dati_contrattuali"] is False
+    assert vuota.json()["stime"]["metadati"]["ha_dati_operativi_mese"] is False
+    assert vuota.json()["stime"]["metadati"]["sorgente"] == "nessun_dato_utile"
     assert vuota.json()["stime"]["competenza_mese"] == now.month
     assert vuota.json()["stime"]["competenza_anno"] == now.year
     assert vuota.json()["stime"]["pagamento_previsto_giorno"] == 27
@@ -910,6 +932,10 @@ async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
     assert piena.status_code == 200
     assert piena.json()["mese_corrente"]["ore_lavorate"] == 9.0
     assert piena.json()["mese_corrente"]["ticket_maturati"] == 1
+    assert piena.json()["stime"]["ticket_totale"] == 8.0
+    assert piena.json()["stime"]["metadati"]["ha_dati_contrattuali"] is True
+    assert piena.json()["stime"]["metadati"]["ha_dati_operativi_mese"] is True
+    assert piena.json()["stime"]["metadati"]["sorgente"] == "dati_contrattuali_e_operativi_mese"
     assert errore.status_code == 405
 
 

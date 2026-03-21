@@ -2,6 +2,8 @@ import React from 'react';
 import { TouchableOpacity, Text, StyleSheet, ActivityIndicator, StyleProp, ViewStyle, TextStyle } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useAppTheme } from '../hooks/useAppTheme';
+import { DESIGN_TOKENS } from '../utils/colors';
+import { createElevation } from '../utils/shadows';
 
 interface ButtonProps {
   title: string;
@@ -35,51 +37,74 @@ export const Button: React.FC<ButtonProps> = ({
   const { colors } = useAppTheme();
   const styles = createStyles();
 
-  const getBackgroundColor = () => {
-    if (disabled) return colors.borderDark;
-    switch (variant) {
-      case 'primary': return colors.primary;
-      case 'secondary': return colors.secondary;
-      case 'danger': return colors.error;
-      case 'success': return colors.success;
-      case 'outline': return 'transparent';
-      default: return colors.primary;
-    }
-  };
-
   const getTextColor = () => {
     if (disabled) return colors.textSecondary;
     switch (variant) {
       case 'outline': return colors.primary;
+      case 'secondary': return colors.text;
       default: return colors.textWhite;
     }
   };
 
   const getPadding = () => {
     switch (size) {
-      case 'small': return { paddingVertical: 8, paddingHorizontal: 16 };
-      case 'large': return { paddingVertical: 16, paddingHorizontal: 32 };
-      default: return { paddingVertical: 12, paddingHorizontal: 24 };
+      case 'small': return { minHeight: 40, paddingVertical: 8, paddingHorizontal: 14 };
+      case 'large': return { minHeight: 54, paddingVertical: 16, paddingHorizontal: 22 };
+      default: return { minHeight: DESIGN_TOKENS.component.buttonMinHeight, paddingVertical: 12, paddingHorizontal: 18 };
     }
   };
 
   const getFontSize = () => {
     switch (size) {
-      case 'small': return 14;
-      case 'large': return 18;
-      default: return 16;
+      case 'small': return 13;
+      case 'large': return 17;
+      default: return 15;
     }
   };
 
-  const iconSize = size === 'small' ? 16 : size === 'large' ? 22 : 18;
+  const iconSize = size === 'small' ? 15 : size === 'large' ? 20 : 17;
+  const variantStyle =
+    variant === 'outline'
+      ? {
+          backgroundColor: colors.surface,
+          borderWidth: 1.5,
+          borderColor: colors.border,
+        }
+      : variant === 'secondary'
+        ? {
+            backgroundColor: colors.cardDark,
+            borderWidth: 1,
+            borderColor: colors.border,
+          }
+        : variant === 'danger'
+          ? {
+              backgroundColor: colors.error,
+              borderWidth: 0,
+            }
+          : variant === 'success'
+            ? {
+                backgroundColor: colors.success,
+                borderWidth: 0,
+              }
+            : {
+                backgroundColor: colors.primary,
+                borderWidth: 0,
+                ...createElevation({
+                  color: colors.shadowMedium,
+                  offsetY: 3,
+                  blur: 10,
+                  opacity: 0.2,
+                  elevation: 3,
+                }),
+              };
 
   return (
     <TouchableOpacity
       style={[
         styles.button,
         getPadding(),
-        { backgroundColor: getBackgroundColor() },
-        variant === 'outline' && { borderWidth: 2, borderColor: colors.primary },
+        variantStyle,
+        disabled && { backgroundColor: colors.borderDark, borderColor: colors.borderDark, shadowOpacity: 0, elevation: 0 },
         fullWidth && { width: '100%' },
         style,
       ]}
@@ -113,16 +138,16 @@ const createStyles = () =>
       flexDirection: 'row',
       alignItems: 'center',
       justifyContent: 'center',
-      borderRadius: 12,
-      minHeight: 44,
+      borderRadius: DESIGN_TOKENS.radius.lg,
     },
     text: {
-      fontWeight: '600',
+      fontWeight: '700',
+      letterSpacing: 0.15,
     },
     iconLeft: {
-      marginRight: 8,
+      marginRight: 10,
     },
     iconRight: {
-      marginLeft: 8,
+      marginLeft: 10,
     },
   });

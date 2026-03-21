@@ -5,6 +5,13 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Fase 2 offline-first: algoritmi TypeScript
+Cosa: creato src/algorithms/calcoli.ts — port fedele 1:1 di tutti gli algoritmi protetti da backend/server.py (arrotondaQuartiOra, calcolaOreLavorate, calcolaStraordinario, calcolaTicket, calcolaReperibilita passiva/attiva, calcolaOreDaMarcature, calcolaOreReperibilita, calcolaMetadatiStima, stimaNetto, calcolaSaldoFerie, calcolaComporto)
+Perché: gli algoritmi devono funzionare offline sul device senza chiamare il backend; traduzione 1:1, stessa logica, nessuna ottimizzazione
+File: frontend/src/algorithms/calcoli.ts, CLAUDE.md
+
+---
+
 ## 2026-03-21 — Fase 1 offline-first: fondamenta locali
 Cosa: installato expo-sqlite; creati src/db/localDb.ts (database SQLite locale con 9 tabelle + offline_queue) e src/storage/fileStore.ts (wrapper Expo FileSystem per PDF e documenti)
 Perché: primo step della migrazione offline-first — il device diventa fonte di verità, il backend cloud è opzionale; i file utente (PDF, certificati) sono ora salvati in locale invece che come base64 nel DB

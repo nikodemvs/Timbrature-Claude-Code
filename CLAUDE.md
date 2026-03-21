@@ -34,6 +34,10 @@ Copia identica da `AGENTS.md`. Questi numeri di riga sono vincolanti.
 - L19 formatta ore
 - L83 percentuale
 
+### frontend/src/algorithms/calcoli.ts (mirror TypeScript — Fase 2 offline-first)
+Port fedele 1:1 degli algoritmi Python sopra. Stessa logica, stessi risultati.
+**Non modificare uno senza modificare l'altro.**
+
 **Se un algoritmo esiste sia nel backend che nel frontend, sono una coppia: non si tocca uno senza toccare l'altro.**
 
 ---

@@ -165,18 +165,27 @@ def test_e2e_crea_ferie_e_aggiorna_il_saldo(browser, stack_applicazione):
         context.close()
 
 
-def test_e2e_buste_paga_mostra_archivio_cud_e_azioni_upload(browser, stack_applicazione):
+def test_e2e_buste_paga_mostra_struttura_compatta_e_tab_cud(browser, stack_applicazione):
     context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
     try:
         page.get_by_test_id("tab-buste-paga").click()
         page.get_by_test_id("buste-screen").wait_for(timeout=30000)
 
+        expect(page.get_by_text("Panoramica rapida")).to_be_visible()
+        expect(page.get_by_text("Azioni rapide")).to_be_visible()
+        expect(page.get_by_text("Mensilità per anno")).to_be_visible()
+        expect(page.get_by_text("Archivio PDF")).to_be_visible()
         expect(page.get_by_test_id("buste-upload-single-button")).to_be_visible()
         expect(page.get_by_test_id("buste-add-manual-button")).to_be_visible()
+        expect(page.get_by_test_id("buste-upload-folder-button")).to_be_visible()
 
         page.get_by_test_id("buste-tab-cud").click()
-        expect(page.get_by_test_id("cud-upload-single-button")).to_be_visible()
         expect(page.get_by_text("Archivio CUD")).to_be_visible()
+        expect(page.get_by_text("Azioni rapide")).to_be_visible()
+        expect(page.get_by_text("Storico CUD per anno")).to_be_visible()
+        expect(page.get_by_test_id("cud-upload-single-button")).to_be_visible()
+        expect(page.get_by_test_id("cud-upload-history-button")).to_be_visible()
+        expect(page.get_by_test_id("cud-upload-folder-button")).to_be_visible()
     finally:
         context.close()
 

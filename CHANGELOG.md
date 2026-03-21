@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Riorganizzazione schermata buste paga
+Cosa: ridisegnata la scheda Buste Paga con azioni rapide compattate, riepilogo iniziale e storico raggruppato per anno con sezioni espandibili separate per Cedolini, Archivio PDF e CUD
+Perché: ridurre il carico cognitivo, accorciare lo scroll e rendere più leggibile la gestione dei documenti senza cambiare i flussi esistenti
+File: frontend/app/(tabs)/buste-paga.tsx
+
 ## 2026-03-21 — Riparazione archivio documenti
 Cosa: corretto l'ordine di inserimento nella tabella documenti con colonne esplicite, aggiunta una riparazione automatica per le righe gia corrotte e copertura API per upload corretti e recupero dell'archivio senza crash
 Perché: evitare il 500 su GET /api/documenti, rendere leggibile l'archivio esistente e prevenire nuove corruzioni dei record documenti

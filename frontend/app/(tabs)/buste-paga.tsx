@@ -79,6 +79,12 @@ interface BatchImportSummary {
 }
 
 type BatchScope = 'mixed' | 'cud-only';
+type GroupSection = 'cedolini' | 'archivio' | 'cud';
+
+interface YearGroup<T> {
+  anno: number;
+  items: T[];
+}
 
 const getApiErrorDetail = (error: unknown) =>
   (error as ApiErrorResponse | null)?.response?.data?.detail;
@@ -153,6 +159,14 @@ const sortDocumenti = (documenti: Documento[]) =>
     return second.localeCompare(first);
   });
 
+const sortBustePaga = (items: BustaPaga[]) =>
+  [...items].sort((left, right) => {
+    if (left.anno !== right.anno) {
+      return right.anno - left.anno;
+    }
+    return right.mese - left.mese;
+  });
+
 const formatPeriodoDocumento = (documento: Documento) => {
   if (!documento.data_riferimento) {
     return 'Periodo non rilevato';
@@ -174,6 +188,31 @@ const getDocumentoBadge = (documento: Documento) => {
   return { label: 'Ordinaria', tone: 'primary' as const };
 };
 
+const getDocumentoYear = (documento: Documento) => {
+  if (documento.data_riferimento && /^\d{4}-\d{2}$/.test(documento.data_riferimento)) {
+    return Number.parseInt(documento.data_riferimento.slice(0, 4), 10);
+  }
+  if (documento.data_riferimento && /^\d{4}$/.test(documento.data_riferimento)) {
+    return Number.parseInt(documento.data_riferimento, 10);
+  }
+  return Number.parseInt(documento.created_at.slice(0, 4), 10);
+};
+
+const groupByYear = <T,>(items: T[], getYear: (item: T) => number): YearGroup<T>[] => {
+  const grouped = new Map<number, T[]>();
+
+  items.forEach((item) => {
+    const year = getYear(item);
+    const list = grouped.get(year) || [];
+    list.push(item);
+    grouped.set(year, list);
+  });
+
+  return Array.from(grouped.entries())
+    .sort(([left], [right]) => right - left)
+    .map(([anno, groupedItems]) => ({ anno, items: groupedItems }));
+};
+
 export default function BustePagaScreen() {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
@@ -190,6 +229,11 @@ export default function BustePagaScreen() {
   const [showDetailSheet, setShowDetailSheet] = useState(false);
   const [selectedBusta, setSelectedBusta] = useState<BustaPaga | null>(null);
   const [pendingOverwrite, setPendingOverwrite] = useState<PendingOverwrite | null>(null);
+  const [expandedYearsBySection, setExpandedYearsBySection] = useState<Record<GroupSection, number[]>>({
+    cedolini: [],
+    archivio: [],
+    cud: [],
+  });
 
   const { mese: currentMese, anno: currentAnno } = getCurrentMonthYear();
   const [mese, setMese] = useState(currentMese.toString());
@@ -210,13 +254,28 @@ export default function BustePagaScreen() {
       ]);
 
       if (busteRes.status === 'fulfilled') {
-        setBustePaga(busteRes.value.data);
+        const sortedBuste = sortBustePaga(busteRes.value.data);
+        setBustePaga(sortedBuste);
+        setExpandedYearsBySection((current) => ({
+          ...current,
+          cedolini: current.cedolini.length > 0 || sortedBuste.length === 0 ? current.cedolini : [sortedBuste[0].anno],
+        }));
       }
       if (archivioRes.status === 'fulfilled') {
-        setArchivioCedolini(sortDocumenti(archivioRes.value.data));
+        const sortedArchivio = sortDocumenti(archivioRes.value.data);
+        setArchivioCedolini(sortedArchivio);
+        setExpandedYearsBySection((current) => ({
+          ...current,
+          archivio: current.archivio.length > 0 || sortedArchivio.length === 0 ? current.archivio : [getDocumentoYear(sortedArchivio[0])],
+        }));
       }
       if (cudRes.status === 'fulfilled') {
-        setCudDocuments(sortDocumenti(cudRes.value.data));
+        const sortedCud = sortDocumenti(cudRes.value.data);
+        setCudDocuments(sortedCud);
+        setExpandedYearsBySection((current) => ({
+          ...current,
+          cud: current.cud.length > 0 || sortedCud.length === 0 ? current.cud : [getDocumentoYear(sortedCud[0])],
+        }));
       }
 
       const failureCount = [busteRes, archivioRes, cudRes].filter((result) => result.status === 'rejected').length;
@@ -611,6 +670,22 @@ export default function BustePagaScreen() {
     setShowAddSheet(true);
   };
 
+  const toggleYear = (section: GroupSection, year: number) => {
+    setExpandedYearsBySection((current) => {
+      const sectionYears = current[section];
+      return {
+        ...current,
+        [section]: sectionYears.includes(year)
+          ? sectionYears.filter((item) => item !== year)
+          : [...sectionYears, year].sort((left, right) => right - left),
+      };
+    });
+  };
+
+  const cedoliniGroups = groupByYear(bustePaga, (item) => item.anno);
+  const archivioGroups = groupByYear(archivioCedolini, getDocumentoYear);
+  const cudGroups = groupByYear(cudDocuments, getDocumentoYear);
+
   if (loading) {
     return <LoadingScreen message="Caricamento archivio paghe..." />;
   }
@@ -627,26 +702,36 @@ export default function BustePagaScreen() {
     ) : null;
 
   const renderBustaItem = ({ item }: { item: BustaPaga }) => (
-    <Card style={styles.card} onPress={() => openDetail(item)}>
+    <Card style={styles.itemCard} onPress={() => openDetail(item)}>
       <View style={styles.cardRow}>
         <View style={styles.iconBox}>
           <Ionicons name="document-text" size={20} color={colors.primary} />
         </View>
         <View style={styles.cardContent}>
-          <Text style={styles.cardTitle}>{getMesiItaliano(item.mese)} {item.anno}</Text>
-          <Text style={styles.cardMeta}>{item.pdf_nome || 'Mensilità inserita manualmente'}</Text>
+          <Text style={styles.cardTitle}>
+            {getMesiItaliano(item.mese)} {item.anno}
+          </Text>
+          <Text style={styles.cardMeta} numberOfLines={2}>
+            {item.pdf_nome || 'Mensilità inserita manualmente'}
+          </Text>
         </View>
         <View style={styles.amountBox}>
           <Text style={styles.nettoValue}>{formatCurrency(item.netto || 0)}</Text>
           <Text style={styles.lordoValue}>Lordo {formatCurrency(item.lordo || 0)}</Text>
         </View>
       </View>
-      {item.has_discrepancy && (
-        <View style={styles.banner}>
-          <Ionicons name="alert-circle" size={16} color={colors.error} />
-          <Text style={styles.bannerText}>Differenza sul netto: {formatCurrency(item.differenza)}</Text>
+      <View style={styles.itemFooter}>
+        <View style={styles.pill}>
+          <Ionicons name="calendar-outline" size={12} color={colors.textSecondary} />
+          <Text style={styles.pillText}>{getMesiItaliano(item.mese)} {item.anno}</Text>
         </View>
-      )}
+        <View style={[styles.pill, item.has_discrepancy ? styles.pillDanger : styles.pillNeutral]}>
+          <Ionicons name={item.has_discrepancy ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={12} color={item.has_discrepancy ? colors.error : colors.success} />
+          <Text style={[styles.pillText, item.has_discrepancy ? styles.pillTextDanger : styles.pillTextNeutral]}>
+            {item.has_discrepancy ? `Scarto ${formatCurrency(item.differenza)}` : 'Allineata'}
+          </Text>
+        </View>
+      </View>
     </Card>
   );
 
@@ -658,7 +743,7 @@ export default function BustePagaScreen() {
       colors.primary;
 
     return (
-      <Card key={documento.id} style={styles.card}>
+      <Card key={documento.id} style={styles.itemCard}>
         <View style={styles.docHeader}>
           <View style={[styles.docBadge, { backgroundColor: `${badgeColor}18` }]}>
             <Text style={[styles.docBadgeText, { color: badgeColor }]}>{badge.label}</Text>
@@ -666,8 +751,91 @@ export default function BustePagaScreen() {
           <Text style={styles.docPeriod}>{formatPeriodoDocumento(documento)}</Text>
         </View>
         <Text style={styles.docTitle}>{documento.titolo}</Text>
-        <Text style={styles.cardMeta}>{documento.file_nome}</Text>
+        <Text style={styles.cardMeta} numberOfLines={2}>{documento.file_nome}</Text>
         <Text style={styles.cardMeta}>Caricato il {formatDate(documento.created_at, 'dd MMM yyyy')}</Text>
+      </Card>
+    );
+  };
+
+  const renderYearSection = <T,>(section: GroupSection, group: YearGroup<T>, renderItem: (item: T) => React.ReactElement) => {
+    const expanded = expandedYearsBySection[section].includes(group.anno);
+
+    return (
+      <Card key={group.anno} style={styles.yearCard}>
+        <TouchableOpacity
+          style={styles.yearHeader}
+          onPress={() => toggleYear(section, group.anno)}
+          accessibilityRole="button"
+          accessibilityLabel={`Sezione anno ${group.anno}`}
+          testID={`buste-year-${group.anno}`}
+        >
+          <View>
+            <Text style={styles.yearTitle}>{group.anno}</Text>
+            <Text style={styles.yearSubtitle}>
+              {group.items.length} elementi
+            </Text>
+          </View>
+          <View style={styles.yearActions}>
+            <Text style={styles.yearCount}>{group.items.length}</Text>
+            <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
+          </View>
+        </TouchableOpacity>
+        {expanded && (
+          <View style={styles.groupBody}>
+            {group.items.map((item, index) => React.cloneElement(renderItem(item), { key: `${group.anno}-${index}` }))}
+          </View>
+        )}
+      </Card>
+    );
+  };
+
+  const renderOverviewCedolini = () => {
+    const currentYearGroup = cedoliniGroups[0];
+    const lastBusta = bustePaga[0];
+    return (
+      <Card style={styles.overviewCard}>
+        <View style={styles.overviewHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Panoramica rapida</Text>
+            <Text style={styles.sectionHint}>Tutto quello che serve in alto, senza scorrere tutta la pagina.</Text>
+          </View>
+          <View style={styles.overviewPill}>
+            <Ionicons name="layers-outline" size={14} color={colors.primary} />
+            <Text style={styles.overviewPillText}>Cedolini</Text>
+          </View>
+        </View>
+        <View style={styles.overviewGrid}>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{bustePaga.length}</Text>
+            <Text style={styles.metricLabel}>Mensilità</Text>
+          </View>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{archivioCedolini.length}</Text>
+            <Text style={styles.metricLabel}>PDF storici</Text>
+          </View>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{bustePaga.filter((item) => item.has_discrepancy).length}</Text>
+            <Text style={styles.metricLabel}>Scarti</Text>
+          </View>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{cudDocuments.length}</Text>
+            <Text style={styles.metricLabel}>CUD</Text>
+          </View>
+        </View>
+        <View style={styles.overviewStrip}>
+          <Ionicons name="calendar-outline" size={16} color={colors.textSecondary} />
+          <Text style={styles.overviewStripText}>
+            {lastBusta ? `Ultimo periodo: ${getMesiItaliano(lastBusta.mese)} ${lastBusta.anno}` : 'Nessuna mensilità ancora archiviata'}
+          </Text>
+        </View>
+        {currentYearGroup && (
+          <View style={styles.overviewStripMuted}>
+            <Ionicons name="library-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.overviewStripText}>
+              Anno più recente: {currentYearGroup.anno} con {currentYearGroup.items.length} mensilità
+            </Text>
+          </View>
+        )}
       </Card>
     );
   };
@@ -675,43 +843,41 @@ export default function BustePagaScreen() {
   const renderCedoliniHeader = () => (
     <View>
       {renderErrorBanner()}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Importa cedolini</Text>
-        <Text style={styles.sectionHint}>
-          Il parser riconosce in autonomia mese e anno. La tredicesima viene archiviata come documento separato dal cedolino ordinario.
-        </Text>
-        <View style={styles.stack}>
-          <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" />
-          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" />
-          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" />
+      {renderOverviewCedolini()}
+      <Card style={styles.quickActionsCard}>
+        <Text style={styles.sectionTitle}>Azioni rapide</Text>
+        <Text style={styles.sectionHint}>Le operazioni più usate sono qui, già pronte senza aprire altri passaggi.</Text>
+        <View style={styles.actionGrid}>
+          <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" style={styles.actionButton} />
+          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" style={styles.actionButton} />
+          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" style={styles.actionButton} />
+          <Button title="Inserimento manuale" icon="add" variant="outline" onPress={() => { resetForm(); setShowAddSheet(true); }} testID="buste-add-manual-button" style={styles.actionButton} />
         </View>
-        {Platform.OS !== 'web' && <Text style={styles.helperText}>Selezione multipla e cartelle disponibili nella versione web.</Text>}
+        {Platform.OS !== 'web' && <Text style={styles.helperText}>La selezione di cartelle e più file è disponibile nella versione web.</Text>}
       </Card>
       <Card style={styles.cardMuted}>
-        <Text style={styles.sectionTitle}>Gestione tredicesima</Text>
+        <Text style={styles.sectionTitle}>Regola di lettura</Text>
         <Text style={styles.sectionHint}>
-          La tredicesima viene distinta dall’ordinaria di dicembre. Resta in archivio storico e non sovrascrive le statistiche mensili standard.
+          Il parser riconosce mese e anno in autonomia. Le tredicesime restano separate dal cedolino ordinario di dicembre.
         </Text>
       </Card>
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Inserimento manuale</Text>
-        <Text style={styles.sectionHint}>Usalo solo quando vuoi aggiungere o correggere una mensilità senza PDF.</Text>
-        <Button title="Nuovo inserimento manuale" icon="add" variant="outline" onPress={() => { resetForm(); setShowAddSheet(true); }} testID="buste-add-manual-button" />
-      </Card>
-      <Text style={styles.listTitle}>Mensilità elaborate</Text>
-    </View>
-  );
-
-  const renderCedoliniFooter = () => (
-    <View>
+      <Text style={styles.listTitle}>Mensilità per anno</Text>
+      {cedoliniGroups.length === 0 ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyText}>Nessuna mensilità elaborata</Text>
+          <Text style={styles.emptySubtext}>Carica un cedolino PDF o inserisci i valori manualmente.</Text>
+        </Card>
+      ) : (
+        cedoliniGroups.map((group) => renderYearSection('cedolini', group, (item) => renderBustaItem({ item })))
+      )}
       <Text style={styles.listTitle}>Archivio PDF</Text>
-      {archivioCedolini.length === 0 ? (
+      {archivioGroups.length === 0 ? (
         <Card style={styles.emptyCard}>
           <Text style={styles.emptyText}>Nessun file storico archiviato</Text>
           <Text style={styles.emptySubtext}>Carica cedolini ordinari o tredicesime per distinguere lo storico.</Text>
         </Card>
       ) : (
-        archivioCedolini.map(renderDocumentoCard)
+        archivioGroups.map((group) => renderYearSection('archivio', group, (item) => renderDocumentoCard(item)))
       )}
     </View>
   );
@@ -719,19 +885,56 @@ export default function BustePagaScreen() {
   const renderCudHeader = () => (
     <View>
       {renderErrorBanner()}
-      <Card style={styles.card}>
-        <Text style={styles.sectionTitle}>Archivio CUD</Text>
-        <Text style={styles.sectionHint}>
-          Per ora vengono salvate solo informazioni base: anno, nome file e data di caricamento.
-        </Text>
-        <View style={styles.stack}>
-          <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" />
-          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" />
-          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" />
+      <Card style={styles.overviewCard}>
+        <View style={styles.overviewHeader}>
+          <View>
+            <Text style={styles.sectionTitle}>Archivio CUD</Text>
+            <Text style={styles.sectionHint}>Archivio essenziale: anno, nome file e data di caricamento.</Text>
+          </View>
+          <View style={styles.overviewPill}>
+            <Ionicons name="document-text-outline" size={14} color={colors.primary} />
+            <Text style={styles.overviewPillText}>Base</Text>
+          </View>
         </View>
-        {Platform.OS !== 'web' && <Text style={styles.helperText}>Selezione multipla e cartelle disponibili nella versione web.</Text>}
+        <View style={styles.overviewGrid}>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{cudDocuments.length}</Text>
+            <Text style={styles.metricLabel}>CUD</Text>
+          </View>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{cudGroups.length}</Text>
+            <Text style={styles.metricLabel}>Anni</Text>
+          </View>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{cudDocuments[0] ? getDocumentoYear(cudDocuments[0]) : '--'}</Text>
+            <Text style={styles.metricLabel}>Ultimo anno</Text>
+          </View>
+          <View style={styles.metricBox}>
+            <Text style={styles.metricValue}>{Platform.OS === 'web' ? 'Web' : 'App'}</Text>
+            <Text style={styles.metricLabel}>Import</Text>
+          </View>
+        </View>
       </Card>
-      <Text style={styles.listTitle}>Storico CUD</Text>
+      <Card style={styles.quickActionsCard}>
+        <Text style={styles.sectionTitle}>Azioni rapide</Text>
+        <Text style={styles.sectionHint}>Qui carichi solo CUD, con import singolo o storico.</Text>
+        <View style={styles.actionGrid}>
+          <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" style={styles.actionButton} />
+          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" style={styles.actionButton} />
+          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" style={styles.actionButton} />
+          <View style={styles.actionPlaceholder} />
+        </View>
+        {Platform.OS !== 'web' && <Text style={styles.helperText}>La selezione di cartelle e più file è disponibile nella versione web.</Text>}
+      </Card>
+      <Text style={styles.listTitle}>Storico CUD per anno</Text>
+      {cudGroups.length === 0 ? (
+        <Card style={styles.emptyCard}>
+          <Text style={styles.emptyText}>Nessun CUD archiviato</Text>
+          <Text style={styles.emptySubtext}>Carica una Certificazione Unica per costruire lo storico base.</Text>
+        </Card>
+      ) : (
+        cudGroups.map((group) => renderYearSection('cud', group, (item) => renderDocumentoCard(item)))
+      )}
     </View>
   );
 
@@ -750,35 +953,22 @@ export default function BustePagaScreen() {
       </View>
       {activeTab === 'cedolini' ? (
         <FlatList
-          data={bustePaga}
-          keyExtractor={(item) => item.id}
-          renderItem={renderBustaItem}
+          data={[]}
+          keyExtractor={(_, index) => `cedolini-${index}`}
+          renderItem={() => null}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
           ListHeaderComponent={renderCedoliniHeader}
-          ListEmptyComponent={
-            <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Nessuna mensilità elaborata</Text>
-              <Text style={styles.emptySubtext}>Carica un cedolino PDF o inserisci i valori manualmente.</Text>
-            </Card>
-          }
-          ListFooterComponent={renderCedoliniFooter}
           showsVerticalScrollIndicator={false}
         />
       ) : (
         <FlatList
-          data={cudDocuments}
-          keyExtractor={(item) => item.id}
-          renderItem={({ item }) => renderDocumentoCard(item)}
+          data={[]}
+          keyExtractor={(_, index) => `cud-${index}`}
+          renderItem={() => null}
           contentContainerStyle={styles.list}
           refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[colors.primary]} />}
           ListHeaderComponent={renderCudHeader}
-          ListEmptyComponent={
-            <Card style={styles.emptyCard}>
-              <Text style={styles.emptyText}>Nessun CUD archiviato</Text>
-              <Text style={styles.emptySubtext}>Carica una Certificazione Unica per costruire lo storico base.</Text>
-            </Card>
-          }
           showsVerticalScrollIndicator={false}
         />
       )}
@@ -900,6 +1090,98 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     card: {
       marginBottom: 12,
     },
+    overviewCard: {
+      marginBottom: 12,
+      paddingBottom: 14,
+    },
+    overviewHeader: {
+      flexDirection: 'row',
+      alignItems: 'flex-start',
+      justifyContent: 'space-between',
+      gap: 12,
+      marginBottom: 14,
+    },
+    overviewPill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      backgroundColor: `${colors.primary}12`,
+      borderRadius: 999,
+      paddingHorizontal: 12,
+      minHeight: 32,
+    },
+    overviewPillText: {
+      fontSize: 12,
+      fontWeight: '700',
+      color: colors.primary,
+    },
+    overviewGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    metricBox: {
+      width: '48%',
+      minHeight: 74,
+      borderRadius: 14,
+      backgroundColor: colors.cardDark,
+      justifyContent: 'center',
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+    },
+    metricValue: {
+      fontSize: 22,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    metricLabel: {
+      fontSize: 12,
+      lineHeight: 16,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    overviewStrip: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 12,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: `${colors.primary}10`,
+    },
+    overviewStripMuted: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      marginTop: 10,
+      paddingHorizontal: 12,
+      paddingVertical: 10,
+      borderRadius: 12,
+      backgroundColor: colors.cardDark,
+    },
+    overviewStripText: {
+      flex: 1,
+      fontSize: 13,
+      lineHeight: 18,
+      color: colors.text,
+    },
+    quickActionsCard: {
+      marginBottom: 12,
+    },
+    actionGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 10,
+    },
+    actionButton: {
+      flexBasis: '48%',
+      minHeight: 46,
+    },
+    actionPlaceholder: {
+      flexBasis: '48%',
+      minHeight: 46,
+    },
     cardMuted: {
       marginBottom: 12,
       backgroundColor: colors.cardDark,
@@ -965,6 +1247,10 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       marginLeft: 12,
       marginRight: 12,
     },
+    itemCard: {
+      marginBottom: 12,
+      paddingBottom: 14,
+    },
     cardTitle: {
       fontSize: 16,
       fontWeight: '700',
@@ -989,6 +1275,36 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       fontSize: 12,
       color: colors.textSecondary,
       marginTop: 4,
+    },
+    itemFooter: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      marginTop: 12,
+    },
+    pill: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      borderRadius: 999,
+      paddingHorizontal: 10,
+      minHeight: 30,
+    },
+    pillNeutral: {
+      backgroundColor: colors.cardDark,
+    },
+    pillDanger: {
+      backgroundColor: `${colors.error}12`,
+    },
+    pillText: {
+      fontSize: 12,
+      fontWeight: '600',
+    },
+    pillTextNeutral: {
+      color: colors.textSecondary,
+    },
+    pillTextDanger: {
+      color: colors.error,
     },
     banner: {
       flexDirection: 'row',
@@ -1032,6 +1348,49 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       fontWeight: '700',
       color: colors.text,
       marginBottom: 6,
+    },
+    yearCard: {
+      marginBottom: 12,
+      paddingBottom: 14,
+    },
+    yearHeader: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'space-between',
+      gap: 12,
+      minHeight: 52,
+    },
+    yearTitle: {
+      fontSize: 18,
+      fontWeight: '700',
+      color: colors.text,
+    },
+    yearSubtitle: {
+      fontSize: 12,
+      color: colors.textSecondary,
+      marginTop: 4,
+    },
+    yearActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 10,
+    },
+    yearCount: {
+      minWidth: 30,
+      minHeight: 30,
+      borderRadius: 999,
+      backgroundColor: `${colors.primary}14`,
+      color: colors.primary,
+      fontSize: 13,
+      fontWeight: '700',
+      textAlign: 'center',
+      textAlignVertical: 'center',
+      paddingHorizontal: 10,
+      paddingVertical: 5,
+    },
+    groupBody: {
+      gap: 12,
+      marginTop: 12,
     },
     emptyCard: {
       alignItems: 'center',

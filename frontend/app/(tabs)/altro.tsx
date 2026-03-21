@@ -10,10 +10,12 @@ import {
   Platform,
   FlatList,
   Alert,
+  Switch,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { useRouter } from 'expo-router';
+import * as DocumentPicker from 'expo-document-picker';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
 import { useAppStore, THEMES, ThemeKey, ColorSchemePreference } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
@@ -23,6 +25,27 @@ import { useAppTheme } from '../../src/hooks/useAppTheme';
 
 type TabType = 'menu' | 'chat' | 'alerts' | 'stats' | 'reperibilita' | 'settings';
 type StatsZoom = 'giorno' | 'settimana' | 'mese' | 'anno' | 'tutti';
+type WebDocumentPickerAsset = DocumentPicker.DocumentPickerAsset & { file?: File | null };
+
+interface AccountUploadAsset {
+  name: string;
+  uri?: string;
+  file?: File | null;
+  mimeType?: string | null;
+}
+
+interface ApiErrorDetail {
+  code?: string;
+  message?: string;
+}
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      detail?: string | ApiErrorDetail;
+    };
+  };
+}
 
 const COLOR_SCHEME_OPTIONS: {
   value: ColorSchemePreference;
@@ -50,6 +73,36 @@ const COLOR_SCHEME_OPTIONS: {
   },
 ];
 
+const appendPdfToFormData = (formData: FormData, asset: AccountUploadAsset) => {
+  const browserFile = asset.file;
+  if (typeof File !== 'undefined' && browserFile instanceof File) {
+    formData.append('file', browserFile, browserFile.name);
+    return;
+  }
+
+  if (!asset.uri) {
+    throw new Error("File PDF non disponibile per l'upload.");
+  }
+
+  formData.append('file', {
+    uri: asset.uri,
+    name: asset.name,
+    type: asset.mimeType || 'application/pdf',
+  } as unknown as Blob);
+};
+
+const getApiErrorMessage = (error: unknown, fallback: string): string => {
+  const apiError = error as ApiErrorResponse;
+  const detail = apiError.response?.data?.detail;
+  if (typeof detail === 'string' && detail.trim()) {
+    return detail.trim();
+  }
+  if (detail && typeof detail === 'object' && typeof detail.message === 'string' && detail.message.trim()) {
+    return detail.message.trim();
+  }
+  return fallback;
+};
+
 export default function AltroScreen() {
   const { colors, themeColors, colorSchemePreference, setColorSchemePreference, resolvedScheme } =
     useAppTheme();
@@ -66,10 +119,14 @@ export default function AltroScreen() {
       setChatSessionId,
       theme,
       setTheme,
+      settings,
+      setSettings,
       dashboard,
       setDashboard,
       setTodayTimbratura,
       resetUserData,
+      cloudEnabled,
+      setCloudEnabled,
   } = useAppStore();
   const chatScrollRef = useRef<FlatList>(null);
   
@@ -105,15 +162,13 @@ export default function AltroScreen() {
   
   // Edit settings state
   const [editNome, setEditNome] = useState('');
-  const [editQualifica, setEditQualifica] = useState('');
-  const [editLivello, setEditLivello] = useState('');
-  const [editAzienda, setEditAzienda] = useState('');
-  const [editPagaBase, setEditPagaBase] = useState('');
-  const [editSuperminimo, setEditSuperminimo] = useState('');
-  const [editScatti, setEditScatti] = useState('');
+  const [editCognome, setEditCognome] = useState('');
+  const [editMatricola, setEditMatricola] = useState('');
+  const [editNumeroBadge, setEditNumeroBadge] = useState('');
   const [savingSettings, setSavingSettings] = useState(false);
   const [deletingOperationalData, setDeletingOperationalData] = useState(false);
   const [deletingAccount, setDeletingAccount] = useState(false);
+  const [uploadingAccountPdf, setUploadingAccountPdf] = useState(false);
 
   const activeSchemeLabel =
     colorSchemePreference === 'system'
@@ -121,6 +176,19 @@ export default function AltroScreen() {
       : colorSchemePreference === 'dark'
         ? 'Scuro'
         : 'Chiaro';
+  const currentSettings = settings || dashboard?.settings || null;
+  const accountDisplayName = [currentSettings?.nome, currentSettings?.cognome]
+    .map((value) => value?.trim() || '')
+    .filter(Boolean)
+    .join(' ');
+  const accountDetails = [
+    currentSettings?.matricola?.trim()
+      ? `Matricola ${currentSettings.matricola.trim()}`
+      : '',
+    currentSettings?.numero_badge?.trim()
+      ? `Badge ${currentSettings.numero_badge.trim()}`
+      : '',
+  ].filter(Boolean);
 
   const loadChatHistory = useCallback(async () => {
     try {
@@ -191,12 +259,30 @@ export default function AltroScreen() {
     }
   }, []);
 
+  const refreshDashboard = useCallback(async () => {
+    try {
+      const settingsResponse = await api.getSettings();
+      const dashboardResponse = await api.getDashboard();
+      const mergedDashboard = {
+        ...dashboardResponse.data,
+        settings: settingsResponse.data,
+      };
+      setSettings(settingsResponse.data);
+      setDashboard(mergedDashboard);
+      return mergedDashboard;
+    } catch (error) {
+      console.error('Error refreshing dashboard:', error);
+      return null;
+    }
+  }, [setDashboard, setSettings]);
+
   useEffect(() => {
     if (activeTab === 'chat') loadChatHistory();
     else if (activeTab === 'alerts') loadAlerts();
     else if (activeTab === 'reperibilita') loadReperibilita();
     else if (activeTab === 'stats') loadStats();
-  }, [activeTab, loadAlerts, loadChatHistory, loadReperibilita, loadStats]);
+    else if (activeTab === 'menu') refreshDashboard();
+  }, [activeTab, loadAlerts, loadChatHistory, loadReperibilita, loadStats, refreshDashboard]);
 
   useEffect(() => {
     if (activeTab === 'stats') {
@@ -208,6 +294,14 @@ export default function AltroScreen() {
 
   const sendMessage = async () => {
     if (!inputText.trim()) return;
+    if (!cloudEnabled) {
+      Alert.alert(
+        'Servizi cloud disabilitati',
+        'La chat AI richiede i servizi cloud. Attivali in Impostazioni → Servizi cloud.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     
     const userMessage: ChatMessage = {
       id: Date.now().toString(),
@@ -291,24 +385,18 @@ export default function AltroScreen() {
   };
 
   const openEditSettings = () => {
-    setEditNome(dashboard?.settings?.nome || '');
-    setEditQualifica(dashboard?.settings?.qualifica || '');
-    setEditLivello(dashboard?.settings?.livello?.toString() || '');
-    setEditAzienda(dashboard?.settings?.azienda || '');
-    setEditPagaBase(dashboard?.settings?.paga_base?.toString() || '');
-    setEditSuperminimo(dashboard?.settings?.superminimo?.toString() || '');
-    setEditScatti(dashboard?.settings?.scatti_anzianita?.toString() || '');
+    setEditNome(currentSettings?.nome || '');
+    setEditCognome(currentSettings?.cognome || '');
+    setEditMatricola(currentSettings?.matricola || '');
+    setEditNumeroBadge(currentSettings?.numero_badge || '');
     setShowEditSheet(true);
   };
 
-  const refreshDashboard = useCallback(async () => {
-    try {
-      const response = await api.getDashboard();
-      setDashboard(response.data);
-    } catch (error) {
-      console.error('Error refreshing dashboard:', error);
-    }
-  }, [setDashboard]);
+  useFocusEffect(
+    useCallback(() => {
+      refreshDashboard();
+    }, [refreshDashboard]),
+  );
 
   const openDeleteOperationalSheet = () => {
     setShowDeleteOperationalSheet(true);
@@ -323,8 +411,61 @@ export default function AltroScreen() {
     openEditSettings();
   };
 
-  const openAutomaticUploadFlow = () => {
-    router.push('/(tabs)/buste-paga');
+  const pickAccountPdfAsset = async (): Promise<AccountUploadAsset | null> => {
+    const result = await DocumentPicker.getDocumentAsync({
+      type: 'application/pdf',
+      copyToCacheDirectory: true,
+      multiple: false,
+    });
+
+    if (result.canceled || result.assets.length === 0) {
+      return null;
+    }
+
+    const asset = result.assets[0] as WebDocumentPickerAsset;
+    return {
+      name: asset.name,
+      uri: asset.uri,
+      file: asset.file ?? null,
+      mimeType: asset.mimeType ?? 'application/pdf',
+    };
+  };
+
+  const openAutomaticUploadFlow = async () => {
+    const asset = await pickAccountPdfAsset();
+    if (!asset) {
+      return;
+    }
+
+    setUploadingAccountPdf(true);
+    try {
+      const formData = new FormData();
+      appendPdfToFormData(formData, asset);
+      await api.uploadBustaPagaAuto(formData);
+      const refreshedDashboard = await refreshDashboard();
+      const refreshedName = refreshedDashboard?.settings?.nome?.trim() || '';
+      const refreshedSurname = refreshedDashboard?.settings?.cognome?.trim() || '';
+
+      if (refreshedName || refreshedSurname) {
+        Alert.alert('Account aggiornato', 'Nome e cognome sono stati recuperati automaticamente dalla busta paga.');
+        return;
+      }
+
+      Alert.alert(
+        'Busta paga caricata',
+        'Il cedolino è stato importato, ma nome e cognome non sono stati riconosciuti automaticamente.',
+      );
+    } catch (error) {
+      const message = getApiErrorMessage(error, 'Impossibile caricare la busta paga.');
+      if (/già presente|duplicat/i.test(message)) {
+        Alert.alert('Documento già presente', `${message} Puoi gestirlo dalla scheda Buste Paga.`);
+        router.push('/(tabs)/buste-paga');
+        return;
+      }
+      Alert.alert('Errore', message);
+    } finally {
+      setUploadingAccountPdf(false);
+    }
   };
 
   const clearOperationalData = async () => {
@@ -366,12 +507,14 @@ export default function AltroScreen() {
     }
   };
 
-  const hasProfileData = Boolean(dashboard?.settings?.nome?.trim());
+  const accountGivenName = currentSettings?.nome?.trim() || '';
+  const accountSurname = currentSettings?.cognome?.trim() || '';
+  const hasProfileData = Boolean(accountGivenName || accountSurname);
 
   const saveSettings = () => {
     Alert.alert(
       'Conferma Modifica',
-      'Sei sicuro di voler salvare le modifiche ai dati contrattuali?',
+      'Vuoi salvare le informazioni dell’account?',
       [
         { text: 'Annulla', style: 'cancel' },
         {
@@ -380,17 +523,14 @@ export default function AltroScreen() {
             setSavingSettings(true);
             try {
               await api.updateSettings({
-                nome: editNome,
-                qualifica: editQualifica,
-                livello: parseInt(editLivello) || undefined,
-                azienda: editAzienda,
-                paga_base: parseFloat(editPagaBase) || undefined,
-                superminimo: parseFloat(editSuperminimo) || undefined,
-                scatti_anzianita: parseFloat(editScatti) || undefined,
+                nome: editNome.trim(),
+                cognome: editCognome.trim(),
+                matricola: editMatricola.trim(),
+                numero_badge: editNumeroBadge.trim(),
               });
               await refreshDashboard();
               setShowEditSheet(false);
-              Alert.alert('Successo', 'Dati aggiornati correttamente');
+              Alert.alert('Successo', 'Informazioni account aggiornate correttamente');
             } catch {
               Alert.alert('Errore', 'Impossibile salvare le modifiche');
             } finally {
@@ -472,16 +612,25 @@ export default function AltroScreen() {
           <View style={styles.profileHeader}>
             <View style={[styles.profileAvatar, { backgroundColor: themeColors.primary }]}>
               <Text style={styles.profileInitials}>
-                {dashboard?.settings?.nome?.split(' ').map(n => n[0]).join('') || '—'}
+                {(accountDisplayName || currentSettings?.matricola || '—')
+                  .split(' ')
+                  .filter(Boolean)
+                  .map((segment) => segment[0])
+                  .join('')
+                  .slice(0, 2)
+                  .toUpperCase() || '—'}
               </Text>
             </View>
             <View style={styles.profileInfo}>
-              <Text style={styles.profileName}>{dashboard?.settings?.nome || '-'}</Text>
+              <Text style={styles.profileName}>{accountDisplayName || 'Account locale'}</Text>
               <Text style={styles.profileRole}>
-                {dashboard?.settings?.qualifica || '-'}
-                {dashboard?.settings?.livello ? ` - Livello ${dashboard.settings.livello}` : ''}
+                {accountDetails.length > 0 ? accountDetails.join(' · ') : 'Matricola e numero badge sono facoltativi'}
               </Text>
-              <Text style={styles.profileCompany}>{dashboard?.settings?.azienda || '-'}</Text>
+              <Text style={styles.profileCompany}>
+                {currentSettings?.azienda?.trim()
+                  ? `Contratto sincronizzato da ${currentSettings.azienda}`
+                  : 'I dati contrattuali si aggiornano automaticamente con la prima busta paga'}
+              </Text>
             </View>
           </View>
         ) : (
@@ -503,6 +652,7 @@ export default function AltroScreen() {
                 title="Carica la tua busta paga"
                 variant="outline"
                 onPress={openAutomaticUploadFlow}
+                loading={uploadingAccountPdf}
                 style={styles.profileEmptyActionButton}
                 testID="altro-account-upload-cta"
               />
@@ -747,20 +897,19 @@ export default function AltroScreen() {
 
       <Card style={{ marginTop: 16 }} testID="altro-settings-contract-card">
         <View style={styles.cardHeaderRow}>
-          <Text style={styles.cardTitle}>Dati Contrattuali</Text>
+          <Text style={styles.cardTitle}>Informazioni account</Text>
           <TouchableOpacity style={styles.editButton} onPress={openEditSettings} testID="altro-settings-edit-button">
             <Ionicons name="pencil" size={20} color={themeColors.primary} />
           </TouchableOpacity>
         </View>
-        
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Qualifica</Text><Text style={styles.infoValue}>{dashboard?.settings?.qualifica || '-'}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Livello</Text><Text style={styles.infoValue}>{dashboard?.settings?.livello || '-'}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Azienda</Text><Text style={styles.infoValue}>{dashboard?.settings?.azienda || '-'}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>CCNL</Text><Text style={styles.infoValue}>{dashboard?.settings?.ccnl || '-'}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Data Assunzione</Text><Text style={styles.infoValue}>{formatDate(dashboard?.settings?.data_assunzione || '')}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Paga Base</Text><Text style={styles.infoValue}>{formatCurrency(dashboard?.settings?.paga_base || 0)}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Superminimo</Text><Text style={styles.infoValue}>{formatCurrency(dashboard?.settings?.superminimo || 0)}</Text></View>
-        <View style={styles.infoRow}><Text style={styles.infoLabel}>Scatti Anzianità</Text><Text style={styles.infoValue}>{formatCurrency(dashboard?.settings?.scatti_anzianita || 0)}</Text></View>
+
+        <View style={styles.infoRow}><Text style={styles.infoLabel}>Nome</Text><Text style={styles.infoValue}>{currentSettings?.nome || '-'}</Text></View>
+        <View style={styles.infoRow}><Text style={styles.infoLabel}>Cognome</Text><Text style={styles.infoValue}>{currentSettings?.cognome || '-'}</Text></View>
+        <View style={styles.infoRow}><Text style={styles.infoLabel}>Matricola</Text><Text style={styles.infoValue}>{currentSettings?.matricola || '-'}</Text></View>
+        <View style={styles.infoRow}><Text style={styles.infoLabel}>Numero badge</Text><Text style={styles.infoValue}>{currentSettings?.numero_badge || '-'}</Text></View>
+        <Text style={styles.infoHint}>
+          Nome e cognome attivano l&apos;account. Matricola e numero badge sono facoltativi; gli altri dati si aggiornano dalla prima busta paga.
+        </Text>
       </Card>
 
       <Card style={styles.dangerCard}>
@@ -805,6 +954,32 @@ export default function AltroScreen() {
           testID="altro-settings-delete-account-button"
           fullWidth
         />
+      </Card>
+
+      {/* Servizi cloud */}
+      <Card style={{ marginTop: 16, marginBottom: 32 }}>
+        <Text style={styles.cardTitle}>Servizi cloud</Text>
+        <View style={[styles.settingItem, { borderBottomWidth: 0 }]}>
+          <Ionicons name="cloud" size={22} color={themeColors.primary} />
+          <View style={styles.settingCopy}>
+            <Text style={styles.settingLabel}>Backend cloud</Text>
+            <Text style={styles.settingValue}>
+              {cloudEnabled ? 'Attivo — parsing PDF e chat AI abilitati' : 'Disattivo — solo modalità offline'}
+            </Text>
+          </View>
+          <Switch
+            value={cloudEnabled}
+            onValueChange={setCloudEnabled}
+            trackColor={{ false: colors.border, true: themeColors.primary }}
+            thumbColor={colors.surface}
+          />
+        </View>
+        {!cloudEnabled && (
+          <Text style={[styles.infoHint, { marginTop: 4 }]}>
+            Con il cloud disabilitato: timbrature, calcoli e dati contrattuali funzionano offline.{'\n'}
+            Richiedono il cloud: import PDF cedolini/timbrature, chat AI.
+          </Text>
+        )}
       </Card>
 
       <BottomSheet visible={showAppearanceSheet} onClose={() => setShowAppearanceSheet(false)} title="Aspetto" height="46%">
@@ -868,14 +1043,14 @@ export default function AltroScreen() {
       </BottomSheet>
 
       {/* Edit Settings Sheet */}
-      <BottomSheet visible={showEditSheet} onClose={() => setShowEditSheet(false)} title="Modifica Dati" height="85%" testID="altro-settings-edit-sheet">
+      <BottomSheet visible={showEditSheet} onClose={() => setShowEditSheet(false)} title="Modifica account" height="72%" testID="altro-settings-edit-sheet">
         <InputField label="Nome" value={editNome} onChangeText={setEditNome} />
-        <InputField label="Qualifica" value={editQualifica} onChangeText={setEditQualifica} />
-        <InputField label="Livello" value={editLivello} onChangeText={setEditLivello} keyboardType="numeric" />
-        <InputField label="Azienda" value={editAzienda} onChangeText={setEditAzienda} />
-        <InputField label="Paga Base (€)" value={editPagaBase} onChangeText={setEditPagaBase} keyboardType="decimal-pad" />
-        <InputField label="Superminimo (€)" value={editSuperminimo} onChangeText={setEditSuperminimo} keyboardType="decimal-pad" />
-        <InputField label="Scatti Anzianità (€)" value={editScatti} onChangeText={setEditScatti} keyboardType="decimal-pad" />
+        <InputField label="Cognome" value={editCognome} onChangeText={setEditCognome} />
+        <InputField label="Matricola" value={editMatricola} onChangeText={setEditMatricola} />
+        <InputField label="Numero badge" value={editNumeroBadge} onChangeText={setEditNumeroBadge} />
+        <Text style={styles.editHint}>
+          Gli altri dati verranno completati automaticamente al caricamento della prima busta paga.
+        </Text>
         <View style={styles.sheetButtons}>
           <Button title="Annulla" variant="outline" onPress={() => setShowEditSheet(false)} style={styles.sheetButton} testID="altro-settings-edit-cancel-button" />
           <Button title="Salva" onPress={saveSettings} loading={savingSettings} style={styles.sheetButton} testID="altro-settings-edit-save-button" />
@@ -1019,6 +1194,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     profileEmptyText: { fontSize: 14, lineHeight: 20, color: colors.textSecondary, textAlign: 'center' },
     profileEmptyActions: { width: '100%', gap: 10, marginTop: 6 },
     profileEmptyActionButton: { width: '100%' },
+    infoHint: { fontSize: 13, lineHeight: 18, color: colors.textSecondary, marginTop: 12 },
+    editHint: { fontSize: 13, lineHeight: 18, color: colors.textSecondary, marginTop: 4, marginBottom: 6 },
     chatContainer: { flex: 1 },
     chatMessages: { paddingHorizontal: 16, paddingBottom: 16 },
     chatEmpty: { alignItems: 'center', paddingVertical: 60 },

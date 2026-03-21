@@ -127,6 +127,10 @@ interface AppState {
   setIsOnline: (value: boolean) => void;
   lastSyncAt: string | null;
   setLastSyncAt: (iso: string | null) => void;
+
+  // Servizi cloud (opzionale, scelto dall'utente)
+  cloudEnabled: boolean;
+  setCloudEnabled: (value: boolean) => void;
   
   // Theme
   theme: ThemeKey;
@@ -203,6 +207,10 @@ export const useAppStore = create<AppState>()(
       lastSyncAt: null,
       setLastSyncAt: (iso) => set({ lastSyncAt: iso }),
 
+      // Servizi cloud
+      cloudEnabled: true,
+      setCloudEnabled: (value) => set({ cloudEnabled: value }),
+
       // Theme
       theme: 'blue',
       setTheme: (theme) => set({ theme }),
@@ -215,6 +223,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         theme: state.theme,
         colorSchemePreference: state.colorSchemePreference,
+        cloudEnabled: state.cloudEnabled,
       }),
     }
   )

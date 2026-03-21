@@ -5,6 +5,13 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Fase 4 offline-first: backend cloud opzionale
+Cosa: aggiunto cloudEnabled (toggle persistito) allo store; offlineApi usa canUseCloud() (isOnline && cloudEnabled) per tutte le chiamate backend; sezione "Servizi cloud" in Impostazioni con switch on/off e descrizione funzionalità; guard cloud su upload PDF in buste-paga.tsx; guard cloud su chat AI in altro.tsx
+Perché: l'utente può disabilitare completamente il backend cloud — l'app funziona in modalità puramente locale; il cloud rimane necessario solo per parsing PDF e chat AI
+File: frontend/src/store/appStore.ts, frontend/src/services/offlineApi.ts, frontend/app/(tabs)/altro.tsx, frontend/app/(tabs)/buste-paga.tsx
+
+---
+
 ## 2026-03-21 — Fase 3 offline-first: cache layer + timbra offline
 Cosa: installato @react-native-community/netinfo; creati useNetworkStatus hook e offlineApi.ts (wrapper cache-first per settings, dashboard, timbrature, assenze, buste-paga, reperibilità, alerts); aggiunto isOnline/lastSyncAt allo store; banner offline nel layout; timbra() ora salva in SQLite locale immediatamente e tenta sync (aggiunge a offline_queue se offline); dashboard home usa algoritmi TypeScript locali quando offline
 Perché: funzionalità core (timbratura, dashboard) ora funzionano senza rete; il backend rimane il source of truth quando disponibile

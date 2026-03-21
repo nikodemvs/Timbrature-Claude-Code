@@ -27,8 +27,10 @@ import {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function isOnline(): boolean {
-  return useAppStore.getState().isOnline;
+/** Verifica se il backend cloud è raggiungibile e abilitato dall'utente. */
+function canUseCloud(): boolean {
+  const { isOnline, cloudEnabled } = useAppStore.getState();
+  return isOnline && cloudEnabled;
 }
 
 function markSynced(): void {
@@ -38,7 +40,7 @@ function markSynced(): void {
 // ─── Settings ─────────────────────────────────────────────────────────────────
 
 export async function getSettings(): Promise<UserSettings | null> {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getSettings();
       await db.upsertSettings(res.data as unknown as Record<string, unknown>);
@@ -55,7 +57,7 @@ export async function getSettings(): Promise<UserSettings | null> {
 export async function updateSettings(data: Partial<UserSettings>): Promise<UserSettings | null> {
   // Salva in locale immediatamente
   await db.upsertSettings(data as Record<string, unknown>);
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.updateSettings(data);
       await db.upsertSettings(res.data as unknown as Record<string, unknown>);
@@ -73,7 +75,7 @@ export async function updateSettings(data: Partial<UserSettings>): Promise<UserS
 // ─── Dashboard ────────────────────────────────────────────────────────────────
 
 export async function getDashboard(): Promise<DashboardData | null> {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getDashboard();
       // Salva settings embedded nella dashboard
@@ -145,7 +147,7 @@ async function _buildDashboardLocale(): Promise<DashboardData | null> {
 // ─── Timbrature ───────────────────────────────────────────────────────────────
 
 export async function getTimbrature(params?: { mese?: number; anno?: number }): Promise<Timbratura[]> {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getTimbrature(params);
       for (const t of res.data) {
@@ -165,7 +167,7 @@ export async function getTimbrature(params?: { mese?: number; anno?: number }): 
 }
 
 export async function getTimbraturaByDate(data: string): Promise<Timbratura | null> {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getTimbraturaByDate(data);
       await db.upsertTimbratura(res.data as unknown as Record<string, unknown>);
@@ -239,7 +241,7 @@ export async function timbra(
   await db.upsertTimbratura(timbraturaLocale);
 
   // Tenta sync con backend
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.timbra(tipo, isReperibilita);
       // Aggiorna locale con i dati ufficiali del backend
@@ -265,7 +267,7 @@ export async function timbra(
 // ─── Assenze ──────────────────────────────────────────────────────────────────
 
 export async function getAssenze(params?: { tipo?: string; anno?: number }) {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getAssenze(params);
       for (const a of res.data) {
@@ -279,7 +281,7 @@ export async function getAssenze(params?: { tipo?: string; anno?: number }) {
 }
 
 export async function getSaldoFerie(anno?: number) {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getSaldoFerie(anno);
       return res.data;
@@ -293,7 +295,7 @@ export async function getSaldoFerie(anno?: number) {
 }
 
 export async function getComporto() {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getComporto();
       return res.data;
@@ -308,7 +310,7 @@ export async function getComporto() {
 // ─── Buste Paga ───────────────────────────────────────────────────────────────
 
 export async function getBustePaga(anno?: number) {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getBustePaga(anno);
       for (const b of res.data) {
@@ -324,7 +326,7 @@ export async function getBustePaga(anno?: number) {
 // ─── Reperibilità ─────────────────────────────────────────────────────────────
 
 export async function getReperibilita(params?: { mese?: number; anno?: number }) {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getReperibilita(params);
       markSynced();
@@ -337,7 +339,7 @@ export async function getReperibilita(params?: { mese?: number; anno?: number })
 // ─── Alerts ───────────────────────────────────────────────────────────────────
 
 export async function getAlerts(soloNonLetti?: boolean) {
-  if (isOnline()) {
+  if (canUseCloud()) {
     try {
       const res = await api.getAlerts(soloNonLetti);
       return res.data;

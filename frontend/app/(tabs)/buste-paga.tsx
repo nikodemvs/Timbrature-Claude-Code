@@ -244,17 +244,19 @@ export default function BustePagaScreen() {
   const [straordinariOre, setStraordinariOre] = useState('');
   const [straordinariImporto, setStraordinariImporto] = useState('');
   const [trattenuteTotali, setTrattenuteTotali] = useState('');
-  const { setDashboard } = useAppStore();
+  const { setDashboard, setSettings, cloudEnabled } = useAppStore();
 
   const loadData = useCallback(async () => {
     try {
       setLoadError(null);
-      const [busteRes, archivioRes, cudRes, dashboardRes] = await Promise.allSettled([
+      const [busteRes, archivioRes, cudRes, settingsRes] = await Promise.allSettled([
         api.getBustePaga(),
         api.getDocumenti('busta_paga'),
         api.getDocumenti('cud'),
-        api.getDashboard(),
+        api.getSettings(),
       ]);
+
+      let settingsData = null;
 
       if (busteRes.status === 'fulfilled') {
         const sortedBuste = sortBustePaga(busteRes.value.data);
@@ -280,8 +282,28 @@ export default function BustePagaScreen() {
           cud: current.cud.length > 0 || sortedCud.length === 0 ? current.cud : [getDocumentoYear(sortedCud[0])],
         }));
       }
-      if (dashboardRes.status === 'fulfilled') {
-        setDashboard(dashboardRes.value.data);
+
+      if (settingsRes.status === 'fulfilled') {
+        settingsData = settingsRes.value.data;
+        setSettings(settingsData);
+      }
+
+      try {
+        const dashboardResponse = await api.getDashboard();
+        const mergedDashboard = settingsData
+          ? {
+              ...dashboardResponse.data,
+              settings: settingsData,
+            }
+          : dashboardResponse.data;
+        setDashboard(mergedDashboard);
+        if (!settingsData) {
+          setSettings(dashboardResponse.data.settings);
+        }
+      } catch {
+        if (!settingsData) {
+          throw new Error('dashboard-load-failed');
+        }
       }
 
       const failureCount = [busteRes, archivioRes, cudRes].filter((result) => result.status === 'rejected').length;
@@ -292,7 +314,7 @@ export default function BustePagaScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, [setDashboard]);
+  }, [setDashboard, setSettings]);
 
   useEffect(() => {
     loadData();
@@ -560,6 +582,14 @@ export default function BustePagaScreen() {
   };
 
   const requestSingleUpload = async (target: UploadTarget) => {
+    if (!cloudEnabled) {
+      Alert.alert(
+        'Servizi cloud disabilitati',
+        'Il parsing PDF richiede i servizi cloud. Attivali in Altro → Impostazioni → Servizi cloud.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     const asset = await pickSinglePdfAsset();
     if (!asset) {
       return;
@@ -590,6 +620,14 @@ export default function BustePagaScreen() {
   };
 
   const requestBatchUpload = async (scope: BatchScope, directory: boolean) => {
+    if (!cloudEnabled) {
+      Alert.alert(
+        'Servizi cloud disabilitati',
+        'Il parsing PDF richiede i servizi cloud. Attivali in Altro → Impostazioni → Servizi cloud.',
+        [{ text: 'OK' }]
+      );
+      return;
+    }
     const assets = await pickWebPdfAssets(directory);
     await importAssetsInBatch(scope, assets);
   };

@@ -36,6 +36,26 @@ interface SessionStartOverride {
   startedAtMs: number;
 }
 
+interface DashboardStimaFields {
+  periodo_competenza?: string;
+  competenza?: string;
+  mese_competenza?: number;
+  anno_competenza?: number;
+  competenza_mese?: number;
+  competenza_anno?: number;
+  data_pagamento_prevista?: string;
+  pagamento_previsto?: string;
+  pagamento_previsto_giorno?: number;
+  pagamento_previsto_mese?: number;
+  pagamento_previsto_anno?: number;
+  giorno_pagamento_previsto?: number;
+  mese_pagamento_previsto?: number;
+  anno_pagamento_previsto?: number;
+  pagamento_giorno?: number;
+  pagamento_mese?: number;
+  pagamento_anno?: number;
+}
+
 function formatHMS(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
   const m = Math.floor((totalSeconds % 3600) / 60);
@@ -81,6 +101,37 @@ function parseSessionStartMs(data: string, marcatura: Marcatura): number | null 
 function getApiErrorMessage(error: unknown, fallback: string) {
   const response = (error as ApiErrorResponse | null)?.response;
   return response?.data?.detail || fallback;
+}
+
+function formatCompetenzaStima(mese: number, anno: number, stime?: DashboardStimaFields) {
+  if (stime?.periodo_competenza) {
+    return stime.periodo_competenza;
+  }
+  if (stime?.competenza) {
+    return stime.competenza;
+  }
+
+  const meseCompetenza = stime?.mese_competenza ?? stime?.competenza_mese ?? mese;
+  const annoCompetenza = stime?.anno_competenza ?? stime?.competenza_anno ?? anno;
+  return `${getMesiItaliano(meseCompetenza)} ${annoCompetenza}`;
+}
+
+function formatStimaPagamentoPrevisto(mese: number, anno: number, stime?: DashboardStimaFields) {
+  if (stime?.data_pagamento_prevista) {
+    const pagamentoPrevistoData = new Date(stime.data_pagamento_prevista);
+    if (!Number.isNaN(pagamentoPrevistoData.getTime())) {
+      return `${pagamentoPrevistoData.getDate()} ${getMesiItaliano(pagamentoPrevistoData.getMonth() + 1)} ${pagamentoPrevistoData.getFullYear()}`;
+    }
+    return stime.data_pagamento_prevista;
+  }
+  if (stime?.pagamento_previsto) {
+    return stime.pagamento_previsto;
+  }
+
+  const giornoPagamento = stime?.pagamento_previsto_giorno ?? stime?.giorno_pagamento_previsto ?? stime?.pagamento_giorno ?? 27;
+  const mesePagamento = stime?.pagamento_previsto_mese ?? stime?.mese_pagamento_previsto ?? stime?.pagamento_mese ?? (mese === 12 ? 1 : mese + 1);
+  const annoPagamento = stime?.pagamento_previsto_anno ?? stime?.anno_pagamento_previsto ?? stime?.pagamento_anno ?? (mese === 12 ? anno + 1 : anno);
+  return `${giornoPagamento} ${getMesiItaliano(mesePagamento)} ${annoPagamento}`;
 }
 
 export default function DashboardScreen() {
@@ -251,6 +302,12 @@ export default function DashboardScreen() {
   const data = dashboard;
   const today = new Date();
   const meseCorrente = getMesiItaliano(today.getMonth() + 1);
+  const stimaCompetenza = data?.mese_corrente
+    ? formatCompetenzaStima(data.mese_corrente.mese, data.mese_corrente.anno, data.stime)
+    : meseCorrente;
+  const stimaPagamentoPrevisto = data?.mese_corrente
+    ? formatStimaPagamentoPrevisto(data.mese_corrente.mese, data.mese_corrente.anno, data.stime)
+    : formatStimaPagamentoPrevisto(today.getMonth() + 1, today.getFullYear(), data?.stime);
   const marcature = todayTimbratura?.marcature || [];
   const ultimaMarcatura = marcature.length > 0 ? marcature[marcature.length - 1] : null;
   const entrataActive = !ultimaMarcatura || ultimaMarcatura.tipo === 'uscita';
@@ -450,6 +507,7 @@ export default function DashboardScreen() {
             iconColor={colors.success}
             onPress={() => toggle('stima')}
             style={editMode ? styles.cardEditMode : undefined}
+            testID="dashboard-stima-card"
             rightElement={
               editMode ? <OrderControls index={index} /> :
               <Ionicons name={expanded.stima ? 'chevron-up' : 'chevron-down'} size={20} color={colors.textSecondary} />
@@ -459,9 +517,21 @@ export default function DashboardScreen() {
               <>
                 <View style={styles.estimateContainer}>
                   <Text style={styles.estimateValue}>{formatCurrency(data?.stime?.netto_stimato || 0)}</Text>
-                  <Text style={styles.estimateLabel}>netto stimato per {meseCorrente}</Text>
+                  <Text style={styles.estimateLabel}>netto stimato di {stimaCompetenza}</Text>
                 </View>
                 <View style={styles.estimateDetails}>
+                  <View style={styles.estimateRow}>
+                    <Text style={styles.estimateDetailLabel}>Periodo di competenza</Text>
+                    <Text style={styles.estimateDetailValue} testID="dashboard-stima-competenza">
+                      {stimaCompetenza}
+                    </Text>
+                  </View>
+                  <View style={styles.estimateRow}>
+                    <Text style={styles.estimateDetailLabel}>Pagamento previsto</Text>
+                    <Text style={styles.estimateDetailValue} testID="dashboard-stima-pagamento-previsto">
+                      {stimaPagamentoPrevisto}
+                    </Text>
+                  </View>
                   <View style={styles.estimateRow}>
                     <Text style={styles.estimateDetailLabel}>Lordo stimato</Text>
                     <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.lordo_stimato || 0)}</Text>

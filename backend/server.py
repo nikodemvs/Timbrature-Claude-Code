@@ -128,10 +128,17 @@ class UserSettingsUpdate(AppBaseModel):
     livello: Optional[int] = None
     azienda: Optional[str] = None
     sede: Optional[str] = None
+    ccnl: Optional[str] = None
+    data_assunzione: Optional[str] = None
+    orario_tipo: Optional[str] = None
+    ore_giornaliere: Optional[int] = None
     paga_base: Optional[float] = None
     scatti_anzianita: Optional[float] = None
     superminimo: Optional[float] = None
     premio_incarico: Optional[float] = None
+    divisore_orario: Optional[int] = None
+    divisore_giornaliero: Optional[int] = None
+    ticket_valore: Optional[float] = None
     pin_hash: Optional[str] = None
     use_biometric: Optional[bool] = None
 
@@ -766,6 +773,7 @@ async def _salva_upload_busta_paga(
             update_fields["lordo"] = totali["competenze"]
         if totali.get("trattenute"):
             update_fields["trattenute_totali"] = totali["trattenute"]
+        await _aggiorna_settings_da_zucchetti(parse_result)
 
     if sottotipo == "tredicesima":
         if existing_document and not force_overwrite:
@@ -925,6 +933,90 @@ def _public_settings_from_row(row: dict) -> dict:
     safe = dict(settings)
     safe['pin_hash'] = None
     return safe
+
+
+def _normalizza_data_assunzione(value: Optional[str]) -> Optional[str]:
+    if not value:
+        return None
+    testo = str(value).strip()
+    for formato_input, formato_output in (
+        ("%d-%m-%Y", "%Y-%m-%d"),
+        ("%d/%m/%Y", "%Y-%m-%d"),
+        ("%Y-%m-%d", "%Y-%m-%d"),
+    ):
+        try:
+            return datetime.strptime(testo, formato_input).strftime(formato_output)
+        except ValueError:
+            continue
+    return None
+
+
+def _estrai_aggiornamenti_settings_da_zucchetti(parse_result: Dict[str, Any]) -> Dict[str, Any]:
+    if not parse_result.get("success"):
+        return {}
+
+    updates: Dict[str, Any] = {}
+    dipendente = parse_result.get("dipendente") or {}
+    azienda = parse_result.get("azienda") or {}
+    elementi_retributivi = parse_result.get("elementi_retributivi") or {}
+
+    nome = " ".join(str(dipendente.get("nome", "")).split())
+    if nome:
+        updates["nome"] = nome
+
+    livello = dipendente.get("livello")
+    if isinstance(livello, int) and livello > 0:
+        updates["livello"] = livello
+
+    data_assunzione = _normalizza_data_assunzione(dipendente.get("data_assunzione"))
+    if data_assunzione:
+        updates["data_assunzione"] = data_assunzione
+
+    nome_azienda = " ".join(str(azienda.get("nome", "")).split())
+    if nome_azienda:
+        updates["azienda"] = nome_azienda
+
+    for campo in ["paga_base", "scatti_anzianita", "superminimo", "premio_incarico"]:
+        valore = elementi_retributivi.get(campo)
+        if isinstance(valore, (int, float)):
+            updates[campo] = float(valore)
+
+    return updates
+
+
+async def _aggiorna_settings_da_zucchetti(parse_result: Dict[str, Any]) -> None:
+    updates = _estrai_aggiornamenti_settings_da_zucchetti(parse_result)
+    if not updates:
+        return
+
+    updates["updated_at"] = _utc_now_iso()
+    cur = await _db.execute("SELECT * FROM settings LIMIT 1")
+    existing = _row(await cur.fetchone())
+
+    if existing:
+        set_clause = ", ".join(f"{chiave} = ?" for chiave in updates.keys())
+        await _db.execute(
+            f"UPDATE settings SET {set_clause} WHERE id = ?",
+            list(updates.values()) + [existing["id"]],
+        )
+        return
+
+    default_settings = UserSettings()
+    for chiave, valore in updates.items():
+        if chiave == "updated_at":
+            continue
+        setattr(default_settings, chiave, valore)
+    default_settings.updated_at = _utc_now()
+    d = default_settings.model_dump()
+    await _db.execute(
+        "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+        [d['id'], d['nome'], d['qualifica'], d['livello'], d['azienda'], d['sede'],
+         d['ccnl'], d['data_assunzione'], d['orario_tipo'], d['ore_giornaliere'],
+         d['paga_base'], d['scatti_anzianita'], d['superminimo'], d['premio_incarico'],
+         d['divisore_orario'], d['divisore_giornaliero'], d['ticket_valore'],
+         d['pin_hash'], int(d['use_biometric']),
+         d['created_at'].isoformat(), d['updated_at'].isoformat()]
+    )
 
 
 def _settings_personali_vuote() -> UserSettings:
@@ -2200,6 +2292,8 @@ async def get_dashboard():
     ticket_totale = giorni_con_ticket * (settings.get("ticket_valore") or 8)
     lordo_stimato = base_mensile + straordinario_stimato + ticket_totale
     netto_stimato = lordo_stimato * 0.72
+    pagamento_mese = mese + 1 if mese < 12 else 1
+    pagamento_anno = anno if mese < 12 else anno + 1
     return {
         "mese_corrente": {
             "mese": mese, "anno": anno,
@@ -2213,7 +2307,12 @@ async def get_dashboard():
             "lordo_stimato": round(lordo_stimato, 2),
             "netto_stimato": round(netto_stimato, 2),
             "straordinario_stimato": round(straordinario_stimato, 2),
-            "ticket_totale": round(ticket_totale, 2)
+            "ticket_totale": round(ticket_totale, 2),
+            "competenza_mese": mese,
+            "competenza_anno": anno,
+            "pagamento_previsto_giorno": 27,
+            "pagamento_previsto_mese": pagamento_mese,
+            "pagamento_previsto_anno": pagamento_anno,
         },
         "ferie": ferie_data,
         "comporto": comporto_data,

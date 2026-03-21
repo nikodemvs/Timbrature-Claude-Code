@@ -12,6 +12,21 @@ from playwright.sync_api import Page, expect, sync_playwright
 
 pytestmark = pytest.mark.e2e
 
+MONTH_NAMES = [
+    "Gennaio",
+    "Febbraio",
+    "Marzo",
+    "Aprile",
+    "Maggio",
+    "Giugno",
+    "Luglio",
+    "Agosto",
+    "Settembre",
+    "Ottobre",
+    "Novembre",
+    "Dicembre",
+]
+
 
 def apri_app(browser, frontend_url: str, viewport: dict[str, int]) -> tuple:
     context = browser.new_context(viewport=viewport)
@@ -102,6 +117,17 @@ def contrasto_testo_su_sfondo(page: Page, testo: str) -> float:
     )
 
 
+def get_next_payment_label(data: datetime) -> tuple[str, str]:
+    competence_label = f"{MONTH_NAMES[data.month - 1]} {data.year}"
+    payment_month = data.month + 1
+    payment_year = data.year
+    if payment_month > 12:
+        payment_month = 1
+        payment_year += 1
+    payment_label = f"27 {MONTH_NAMES[payment_month - 1]} {payment_year}"
+    return competence_label, payment_label
+
+
 @pytest.fixture
 def browser(stack_applicazione):
     with sync_playwright() as playwright:
@@ -115,6 +141,7 @@ def browser(stack_applicazione):
 def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazione):
     context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
     try:
+        competence_label, payment_label = get_next_payment_label(datetime.now())
         bottone_entrata = page.get_by_test_id("dashboard-clock-in-button")
         bottone_uscita = page.get_by_test_id("dashboard-clock-out-button")
         timer_display = page.get_by_test_id("dashboard-timer-display")
@@ -133,13 +160,16 @@ def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazion
         marcatura_entrata = page.get_by_text(re.compile(r"^E: \d{2}:\d{2}$")).last.text_content()
         marcatura_uscita = page.get_by_text(re.compile(r"^U: \d{2}:\d{2}$")).last.text_content()
 
-        page.get_by_test_id("tab-timbrature").click()
-        page.get_by_test_id("timbrature-screen").wait_for(timeout=30000)
-
         assert marcatura_entrata is not None
         assert marcatura_uscita is not None
         expect(page.get_by_text(marcatura_entrata)).to_be_visible()
         expect(page.get_by_text(marcatura_uscita)).to_be_visible()
+        page.get_by_test_id("dashboard-stima-card").click()
+        expect(page.get_by_test_id("dashboard-stima-competenza")).to_have_text(competence_label)
+        expect(page.get_by_test_id("dashboard-stima-pagamento-previsto")).to_have_text(payment_label)
+
+        page.get_by_test_id("tab-timbrature").click()
+        page.get_by_test_id("timbrature-screen").wait_for(timeout=30000)
         expect(page.get_by_test_id("timbrature-edit-button").first).to_be_visible()
     finally:
         context.close()

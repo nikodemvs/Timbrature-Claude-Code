@@ -16,6 +16,7 @@ import { BottomSheet, Button, Card, InputField, LoadingScreen } from '../../src/
 import * as api from '../../src/services/api';
 import { BustaPaga, Documento } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { useAppStore } from '../../src/store/appStore';
 import { formatCurrency, formatDate, getCurrentMonthYear, getMesiItaliano } from '../../src/utils/helpers';
 
 type TabType = 'cedolini' | 'cud';
@@ -243,14 +244,16 @@ export default function BustePagaScreen() {
   const [straordinariOre, setStraordinariOre] = useState('');
   const [straordinariImporto, setStraordinariImporto] = useState('');
   const [trattenuteTotali, setTrattenuteTotali] = useState('');
+  const { setDashboard } = useAppStore();
 
   const loadData = useCallback(async () => {
     try {
       setLoadError(null);
-      const [busteRes, archivioRes, cudRes] = await Promise.allSettled([
+      const [busteRes, archivioRes, cudRes, dashboardRes] = await Promise.allSettled([
         api.getBustePaga(),
         api.getDocumenti('busta_paga'),
         api.getDocumenti('cud'),
+        api.getDashboard(),
       ]);
 
       if (busteRes.status === 'fulfilled') {
@@ -277,6 +280,9 @@ export default function BustePagaScreen() {
           cud: current.cud.length > 0 || sortedCud.length === 0 ? current.cud : [getDocumentoYear(sortedCud[0])],
         }));
       }
+      if (dashboardRes.status === 'fulfilled') {
+        setDashboard(dashboardRes.value.data);
+      }
 
       const failureCount = [busteRes, archivioRes, cudRes].filter((result) => result.status === 'rejected').length;
       if (failureCount === 3) {
@@ -286,7 +292,7 @@ export default function BustePagaScreen() {
       setLoading(false);
       setRefreshing(false);
     }
-  }, []);
+  }, [setDashboard]);
 
   useEffect(() => {
     loadData();

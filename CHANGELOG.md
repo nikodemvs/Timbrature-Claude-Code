@@ -10,6 +10,16 @@ Cosa: rafforzato il launcher frontend quando apre Responsively App, isolando meg
 Perché: mantenere pulito l'output del tasto Start quando il frontend viene aperto in Responsively senza toccare l'app Expo
 File: start-frontend.ps1, tests/test_unit.py, CHANGELOG.md
 
+## 2026-03-21 — Sincronizzazione automatica dati contrattuali da cedolino
+Cosa: il caricamento della busta paga Zucchetti aggiorna automaticamente i dati contrattuali estraibili dal parser in settings e la schermata Buste Paga rinfresca subito il dashboard locale
+Perché: mantenere nome, azienda, livello, data assunzione ed elementi retributivi allineati ai cedolini senza inserimento manuale
+File: backend/server.py, frontend/app/(tabs)/buste-paga.tsx, tests/test_api.py
+
+## 2026-03-21 — Stima Netto allineata a competenza e pagamento previsto
+Cosa: chiarita la logica della card Home Stima Netto mantenendo il calcolo sulla competenza del mese corrente ma distinguendo nel payload e nella UI il pagamento previsto al 27 del mese successivo, con tipi frontend e test coerenti
+Perché: evitare che la stima sembri un residuo dati e mostrare in modo esplicito quale mensilita si sta stimando e quando verra pagata
+File: backend/server.py, frontend/app/(tabs)/index.tsx, frontend/src/types/index.ts, tests/test_api.py, tests/test_e2e.py, CHANGELOG.md
+
 ## 2026-03-21 — Separazione cancellazione dati operativi e account
 Cosa: aggiunti due flussi distinti nelle impostazioni con conferma esplicita: Cancella dati personali elimina solo PDF, timbrature, buste paga, tredicesime, CUD e documenti; Elimina account azzera solo profilo, dati descrittivi e PIN locale
 Perché: distinguere in modo netto i dati operativi caricati dai dati dell'account ed evitare cancellazioni troppo estese o ambigue durante i test dell'app

@@ -135,6 +135,23 @@ export interface DashboardData {
     netto_stimato: number;
     straordinario_stimato: number;
     ticket_totale: number;
+    periodo_competenza?: string;
+    competenza?: string;
+    mese_competenza?: number;
+    anno_competenza?: number;
+    competenza_mese?: number;
+    competenza_anno?: number;
+    data_pagamento_prevista?: string;
+    pagamento_previsto?: string;
+    pagamento_previsto_giorno?: number;
+    pagamento_previsto_mese?: number;
+    pagamento_previsto_anno?: number;
+    giorno_pagamento_previsto?: number;
+    mese_pagamento_previsto?: number;
+    anno_pagamento_previsto?: number;
+    pagamento_giorno?: number;
+    pagamento_mese?: number;
+    pagamento_anno?: number;
   };
   ferie: {
     anno: number;

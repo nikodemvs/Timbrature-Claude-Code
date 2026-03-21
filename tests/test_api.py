@@ -431,6 +431,18 @@ async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, mon
         lambda _content, filename: {
             "success": True,
             "filename": filename,
+            "dipendente": {
+                "nome": "Mario Rossi",
+                "livello": 4,
+                "data_assunzione": "11-07-2015",
+            },
+            "azienda": {"nome": "Plastiape S.p.A."},
+            "elementi_retributivi": {
+                "paga_base": 2026.64,
+                "scatti_anzianita": 66.88,
+                "superminimo": 469.41,
+                "premio_incarico": 56.90,
+            },
             "netto": 1450.0,
             "ore": {"straordinarie": 12.5},
             "totali": {"competenze": 2400.0, "trattenute": 500.0},
@@ -442,6 +454,7 @@ async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, mon
         files={"file": ("marzo-2026.pdf", BytesIO(b"%PDF-busta"), "application/pdf")},
     )
     dettaglio = await client_api.get("/api/buste-paga/2026/3")
+    settings = await client_api.get("/api/settings")
 
     assert upload.status_code == 200
     assert upload.json()["parse_success"] is True
@@ -451,6 +464,15 @@ async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, mon
     assert dettaglio.json()["netto"] == 1450.0
     assert dettaglio.json()["straordinari_ore"] == 12.5
     assert dettaglio.json()["trattenute_totali"] == 500.0
+    assert settings.status_code == 200
+    assert settings.json()["nome"] == "Mario Rossi"
+    assert settings.json()["livello"] == 4
+    assert settings.json()["azienda"] == "Plastiape S.p.A."
+    assert settings.json()["data_assunzione"] == "2015-07-11"
+    assert settings.json()["paga_base"] == 2026.64
+    assert settings.json()["scatti_anzianita"] == 66.88
+    assert settings.json()["superminimo"] == 469.41
+    assert settings.json()["premio_incarico"] == 56.9
 
 
 async def test_api_upload_busta_paga_rifiuta_report_timbrature(client_api, monkeypatch):
@@ -501,6 +523,18 @@ async def test_api_upload_busta_paga_auto_rileva_periodo_e_chiede_sovrascrittura
         "filename": "marzo-2026.pdf",
         "mese": 3,
         "anno": 2026,
+        "dipendente": {
+            "nome": "Mario Rossi",
+            "livello": 4,
+            "data_assunzione": "11-07-2015",
+        },
+        "azienda": {"nome": "Plastiape S.p.A."},
+        "elementi_retributivi": {
+            "paga_base": 2026.64,
+            "scatti_anzianita": 66.88,
+            "superminimo": 469.41,
+            "premio_incarico": 56.90,
+        },
         "netto": 1450.0,
         "ore": {"straordinarie": 8.5},
         "totali": {"competenze": 2400.0, "trattenute": 500.0},
@@ -526,12 +560,15 @@ async def test_api_upload_busta_paga_auto_rileva_periodo_e_chiede_sovrascrittura
 
     parser_state["netto"] = 1525.0
     parser_state["totali"] = {"competenze": 2500.0, "trattenute": 520.0}
+    parser_state["dipendente"]["livello"] = 5
+    parser_state["elementi_retributivi"]["paga_base"] = 2100.0
     sovrascritta = await client_api.post(
         "/api/buste-paga/upload",
         data={"force_overwrite": "true"},
         files={"file": ("marzo-2026-v2.pdf", BytesIO(b"%PDF-busta-3"), "application/pdf")},
     )
     dettaglio = await client_api.get("/api/buste-paga/2026/3")
+    settings = await client_api.get("/api/settings")
 
     assert prima.status_code == 200
     assert prima.json()["mese"] == 3
@@ -543,6 +580,9 @@ async def test_api_upload_busta_paga_auto_rileva_periodo_e_chiede_sovrascrittura
     assert dettaglio.json()["pdf_nome"] == "marzo-2026-v2.pdf"
     assert dettaglio.json()["netto"] == 1525.0
     assert dettaglio.json()["lordo"] == 2500.0
+    assert settings.status_code == 200
+    assert settings.json()["livello"] == 5
+    assert settings.json()["paga_base"] == 2100.0
 
 
 async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinaria(client_api, db_temporaneo, monkeypatch):
@@ -848,6 +888,9 @@ async def test_api_elimina_account_azzera_profilo_e_lascia_i_dati_operativi(clie
 
 
 async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
+    now = datetime.now()
+    pagamento_mese = now.month + 1 if now.month < 12 else 1
+    pagamento_anno = now.year if now.month < 12 else now.year + 1
     vuota = await client_api.get("/api/dashboard")
     await client_api.put("/api/settings", json={"ticket_valore": 8.0})
     await client_api.post(
@@ -859,6 +902,11 @@ async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
 
     assert vuota.status_code == 200
     assert vuota.json()["mese_corrente"]["ore_lavorate"] == 0
+    assert vuota.json()["stime"]["competenza_mese"] == now.month
+    assert vuota.json()["stime"]["competenza_anno"] == now.year
+    assert vuota.json()["stime"]["pagamento_previsto_giorno"] == 27
+    assert vuota.json()["stime"]["pagamento_previsto_mese"] == pagamento_mese
+    assert vuota.json()["stime"]["pagamento_previsto_anno"] == pagamento_anno
     assert piena.status_code == 200
     assert piena.json()["mese_corrente"]["ore_lavorate"] == 9.0
     assert piena.json()["mese_corrente"]["ticket_maturati"] == 1

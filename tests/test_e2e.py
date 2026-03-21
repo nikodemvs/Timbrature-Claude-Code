@@ -165,6 +165,22 @@ def test_e2e_crea_ferie_e_aggiorna_il_saldo(browser, stack_applicazione):
         context.close()
 
 
+def test_e2e_buste_paga_mostra_archivio_cud_e_azioni_upload(browser, stack_applicazione):
+    context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
+    try:
+        page.get_by_test_id("tab-buste-paga").click()
+        page.get_by_test_id("buste-screen").wait_for(timeout=30000)
+
+        expect(page.get_by_test_id("buste-upload-single-button")).to_be_visible()
+        expect(page.get_by_test_id("buste-add-manual-button")).to_be_visible()
+
+        page.get_by_test_id("buste-tab-cud").click()
+        expect(page.get_by_test_id("cud-upload-single-button")).to_be_visible()
+        expect(page.get_by_text("Archivio CUD")).to_be_visible()
+    finally:
+        context.close()
+
+
 def test_e2e_timbratura_mostra_popup_e_conferma_eliminazione(browser, stack_applicazione):
     data_timbratura = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     crea_timbratura_di_test(stack_applicazione.backend_url, data=data_timbratura)

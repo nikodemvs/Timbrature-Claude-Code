@@ -92,9 +92,10 @@ export interface BustaPaga {
 
 export interface Documento {
   id: string;
-  tipo: 'busta_paga' | 'certificato_medico' | 'timbrature_report' | 'comunicazione';
+  tipo: 'busta_paga' | 'certificato_medico' | 'timbrature_report' | 'comunicazione' | 'cud';
   titolo: string;
   descrizione?: string;
+  sottotipo?: string;
   file_base64: string;
   file_nome: string;
   file_tipo: string;

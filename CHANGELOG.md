@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Storico cedolini, tredicesima separata e archivio CUD
+Cosa: ricostruita la schermata Buste Paga con tab dedicati per Cedolini e CUD, import singolo o storico da più PDF/cartella sul web, archivio distinto dei file caricati, conferma di sovrascrittura sui duplicati e test automatici per tredicesima e Certificazione Unica
+Perché: permettere il caricamento ordinato di storici documentali, distinguere la tredicesima dal cedolino ordinario del mese e iniziare a gestire i CUD con un archivio base senza confonderli con le mensilità standard
+File: backend/server.py, frontend/app/(tabs)/buste-paga.tsx, frontend/src/services/api.ts, frontend/src/types/index.ts, tests/test_api.py, tests/test_e2e.py, CHANGELOG.md
+
 ## 2026-03-21 — Mese automatico PDF e conferma sovrascrittura archivio
 Cosa: il backend ora ricava automaticamente il mese reale dai PDF di timbrature e buste paga, riallinea i record aziendali già salvati alla data effettiva, blocca i duplicati con richiesta esplicita di sovrascrittura e il frontend sposta la vista sul periodo riconosciuto dal parser senza chiedere il mese del file per l'upload busta paga
 Perché: evitare import con mese errato, far sì che il selettore mese della schermata Timbrature condizioni davvero i dati mostrati, associare correttamente report e buste paga al loro periodo e impedire sovrascritture involontarie dell'archivio

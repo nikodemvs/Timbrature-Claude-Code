@@ -23,6 +23,8 @@ export interface PdfUploadResponse {
   documento_id?: string;
   totali?: Record<string, unknown>;
   busta?: BustaPaga;
+  documento?: Documento;
+  sottotipo?: string;
 }
 
 export interface TimbraturaAziendalePayload {
@@ -108,12 +110,17 @@ export const updateBustaPaga = (anno: number, mese: number, data: Partial<BustaP
   api.put(`/buste-paga/${anno}/${mese}`, data);
 
 // Documenti
-export const getDocumenti = (tipo?: string) => api.get<Documento[]>('/documenti', { params: { tipo } });
+export const getDocumenti = (tipo?: string, sottotipo?: string) =>
+  api.get<Documento[]>('/documenti', { params: { tipo, sottotipo } });
 export const getDocumento = (id: string) => api.get<Documento>(`/documenti/${id}`);
 export const uploadDocumento = (formData: FormData) => api.post<Documento>('/documenti', formData, {
   headers: { 'Content-Type': 'multipart/form-data' },
 });
 export const deleteDocumento = (id: string) => api.delete(`/documenti/${id}`);
+export const uploadCud = (file: FormData) =>
+  api.post<{ documento: Documento; anno: number }>('/cud/upload', file, {
+    headers: { 'Content-Type': 'multipart/form-data' },
+  });
 
 // Dashboard
 export const getDashboard = () => api.get<DashboardData>('/dashboard');

@@ -16,6 +16,7 @@ import logging
 import json
 import hashlib
 import hmac
+import re
 from pathlib import Path
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -23,6 +24,7 @@ import uuid
 from datetime import datetime, timedelta, timezone
 import base64
 import io
+import pdfplumber
 from sometime_parser import parse_sometime_pdf
 from zucchetti_parser import parse_zucchetti_pdf
 
@@ -274,6 +276,7 @@ class Documento(AppBaseModel):
     tipo: str
     titolo: str
     descrizione: Optional[str] = None
+    sottotipo: Optional[str] = None
     file_base64: str
     file_nome: str
     file_tipo: str
@@ -408,6 +411,7 @@ async def init_db():
             tipo TEXT,
             titolo TEXT,
             descrizione TEXT,
+            sottotipo TEXT,
             file_base64 TEXT,
             file_nome TEXT,
             file_tipo TEXT,
@@ -435,8 +439,18 @@ async def init_db():
             created_at TEXT
         )
     """)
+    await _ensure_column_exists("documenti", "sottotipo", "TEXT")
     await _sync_timbrature_aziendali_periodi()
     await _db.commit()
+
+
+async def _ensure_column_exists(table_name: str, column_name: str, column_definition: str) -> None:
+    cur = await _db.execute(f"PRAGMA table_info({table_name})")
+    columns = {row["name"] for row in await cur.fetchall()}
+    if column_name not in columns:
+        await _db.execute(
+            f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
+        )
 
 
 def _periodo_da_data_iso(data_iso: str) -> tuple[int, int]:
@@ -459,6 +473,14 @@ def _dettaglio_duplicato(codice: str, messaggio: str, anno: int, mese: int) -> D
         "message": messaggio,
         "anno": anno,
         "mese": mese,
+    }
+
+
+def _dettaglio_duplicato_documento(codice: str, messaggio: str, periodo: str) -> Dict[str, Any]:
+    return {
+        "code": codice,
+        "message": messaggio,
+        "periodo": periodo,
     }
 
 
@@ -538,6 +560,92 @@ async def _sync_timbrature_aziendali_periodi() -> None:
     )
 
 
+def _estrai_testo_pdf_breve(pdf_content: bytes, max_pages: int = 2) -> str:
+    try:
+        with pdfplumber.open(io.BytesIO(pdf_content)) as pdf:
+            testi = []
+            for page in pdf.pages[:max_pages]:
+                testi.append(page.extract_text() or "")
+            return "\n".join(testi)
+    except Exception:
+        return ""
+
+
+def _classifica_busta_caricata(filename: str, parse_result: Dict[str, Any]) -> str:
+    testo = f"{filename} {parse_result.get('raw_text', '')}".lower()
+    if re.search(r"\bcud\b|certificazione\s+unica", testo):
+        return "cud"
+    if re.search(r"tredices|13(?:ma|a)\b|gratifica\s+natal|mensilit[àa]\s+aggiuntiva", testo):
+        return "tredicesima"
+    return "ordinaria"
+
+
+def _titolo_documento_busta(anno: int, mese: int, sottotipo: str) -> str:
+    base = f"{mese:02d}/{anno}"
+    if sottotipo == "tredicesima":
+        return f"Tredicesima {base}"
+    return f"Busta paga {base}"
+
+
+async def _salva_documento_archivio(
+    *,
+    tipo: str,
+    titolo: str,
+    descrizione: Optional[str],
+    sottotipo: Optional[str],
+    data_riferimento: Optional[str],
+    file_nome: str,
+    file_tipo: str,
+    file_base64: str,
+) -> Documento:
+    doc = Documento(
+        tipo=tipo,
+        titolo=titolo,
+        descrizione=descrizione,
+        sottotipo=sottotipo,
+        file_base64=file_base64,
+        file_nome=file_nome,
+        file_tipo=file_tipo,
+        data_riferimento=data_riferimento,
+    )
+    await _db.execute(
+        "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?,?)",
+        [
+            doc.id,
+            doc.tipo,
+            doc.titolo,
+            doc.descrizione,
+            doc.sottotipo,
+            doc.file_base64,
+            doc.file_nome,
+            doc.file_tipo,
+            doc.data_riferimento,
+            doc.created_at.isoformat(),
+        ],
+    )
+    return doc
+
+
+def _risolvi_anno_cud(pdf_content: bytes, filename: str) -> int:
+    testo = f"{filename}\n{_estrai_testo_pdf_breve(pdf_content)}".lower()
+    match = re.search(r"(?:certificazione\s+unica|cud)\s*(20\d{2})", testo)
+    if match:
+        return int(match.group(1))
+
+    anni = [int(value) for value in re.findall(r"\b(20\d{2})\b", testo)]
+    anni_validi = [anno for anno in anni if 2010 <= anno <= datetime.now().year + 1]
+    if anni_validi:
+        return max(anni_validi)
+
+    raise HTTPException(
+        status_code=400,
+        detail=(
+            "Impossibile riconoscere automaticamente l'anno del CUD. "
+            "Carica un PDF o un nome file che riporti chiaramente l'anno della certificazione unica."
+        ),
+    )
+
+
 async def _salva_upload_busta_paga(
     file: UploadFile,
     *,
@@ -560,6 +668,25 @@ async def _salva_upload_busta_paga(
         mese_hint=mese_hint,
         anno_hint=anno_hint,
     )
+    sottotipo = _classifica_busta_caricata(file.filename, parse_result)
+    if sottotipo == "cud":
+        raise HTTPException(
+            status_code=400,
+            detail=(
+                "Il file caricato sembra un CUD o una Certificazione Unica. "
+                "Usa la sezione CUD per archiviarlo correttamente."
+            ),
+        )
+
+    periodo_riferimento = f"{anno_rilevato}-{mese_rilevato:02d}"
+    cur = await _db.execute(
+        """
+        SELECT id FROM documenti
+        WHERE tipo = 'busta_paga' AND data_riferimento = ? AND COALESCE(sottotipo, 'ordinaria') = ?
+        """,
+        [periodo_riferimento, sottotipo],
+    )
+    existing_document = await cur.fetchone()
 
     update_fields = {"pdf_base64": b64, "pdf_nome": file.filename}
     if parse_result["success"]:
@@ -574,12 +701,52 @@ async def _salva_upload_busta_paga(
         if totali.get("trattenute"):
             update_fields["trattenute_totali"] = totali["trattenute"]
 
+    if sottotipo == "tredicesima":
+        if existing_document and not force_overwrite:
+            raise HTTPException(
+                status_code=409,
+                detail=_dettaglio_duplicato(
+                    "duplicato_tredicesima",
+                    (
+                        "Esiste già una tredicesima archiviata per questo mese. "
+                        "Puoi annullare il caricamento oppure sovrascrivere il file esistente."
+                    ),
+                    anno_rilevato,
+                    mese_rilevato,
+                ),
+            )
+
+        if existing_document and force_overwrite:
+            await _db.execute("DELETE FROM documenti WHERE id = ?", [existing_document["id"]])
+
+        documento = await _salva_documento_archivio(
+            tipo="busta_paga",
+            titolo=_titolo_documento_busta(anno_rilevato, mese_rilevato, sottotipo),
+            descrizione="Mensilità aggiuntiva archiviata separatamente dal cedolino ordinario.",
+            sottotipo=sottotipo,
+            data_riferimento=periodo_riferimento,
+            file_nome=file.filename,
+            file_tipo="pdf",
+            file_base64=b64,
+        )
+        await _db.commit()
+        return {
+            "busta": None,
+            "documento": documento.model_dump(),
+            "parse_success": parse_result["success"],
+            "parsed_data": {k: v for k, v in parse_result.items()
+                            if k not in ["raw_text", "success", "errors", "filename"]},
+            "mese": mese_rilevato,
+            "anno": anno_rilevato,
+            "sottotipo": sottotipo,
+        }
+
     cur = await _db.execute(
         "SELECT id FROM buste_paga WHERE anno = ? AND mese = ?",
         [anno_rilevato, mese_rilevato],
     )
     existing = await cur.fetchone()
-    if existing and not force_overwrite:
+    if (existing or existing_document) and not force_overwrite:
         raise HTTPException(
             status_code=409,
             detail=_dettaglio_duplicato(
@@ -592,6 +759,9 @@ async def _salva_upload_busta_paga(
                 mese_rilevato,
             ),
         )
+
+    if existing_document and force_overwrite:
+        await _db.execute("DELETE FROM documenti WHERE id = ?", [existing_document["id"]])
 
     if existing:
         set_clause = ", ".join(f"{k} = ?" for k in update_fields.keys())
@@ -614,6 +784,16 @@ async def _salva_upload_busta_paga(
              int(b.has_discrepancy), b.note_confronto, b.created_at.isoformat()]
         )
 
+    documento = await _salva_documento_archivio(
+        tipo="busta_paga",
+        titolo=_titolo_documento_busta(anno_rilevato, mese_rilevato, sottotipo),
+        descrizione="Cedolino ordinario mensile.",
+        sottotipo=sottotipo,
+        data_riferimento=periodo_riferimento,
+        file_nome=file.filename,
+        file_tipo="pdf",
+        file_base64=b64,
+    )
     await _db.commit()
     cur = await _db.execute(
         "SELECT * FROM buste_paga WHERE anno = ? AND mese = ?",
@@ -622,11 +802,13 @@ async def _salva_upload_busta_paga(
     row = _busta_from_row(_row(await cur.fetchone()))
     return {
         "busta": BustaPaga(**row).model_dump(),
+        "documento": documento.model_dump(),
         "parse_success": parse_result["success"],
         "parsed_data": {k: v for k, v in parse_result.items()
                         if k not in ["raw_text", "success", "errors", "filename"]},
         "mese": mese_rilevato,
         "anno": anno_rilevato,
+        "sottotipo": sottotipo,
     }
 
 # ============== DB HELPERS ==============
@@ -1391,10 +1573,19 @@ async def update_busta_paga(anno: int, mese: int, updates: BustaPagaUpdate):
 # --- Documenti ---
 
 @api_router.get("/documenti", response_model=List[Documento])
-async def get_documenti(tipo: Optional[str] = None):
-    if tipo:
+async def get_documenti(tipo: Optional[str] = None, sottotipo: Optional[str] = None):
+    if tipo and sottotipo:
+        cur = await _db.execute(
+            "SELECT * FROM documenti WHERE tipo = ? AND sottotipo = ? ORDER BY created_at DESC",
+            [tipo, sottotipo],
+        )
+    elif tipo:
         cur = await _db.execute(
             "SELECT * FROM documenti WHERE tipo = ? ORDER BY created_at DESC", [tipo]
+        )
+    elif sottotipo:
+        cur = await _db.execute(
+            "SELECT * FROM documenti WHERE sottotipo = ? ORDER BY created_at DESC", [sottotipo]
         )
     else:
         cur = await _db.execute("SELECT * FROM documenti ORDER BY created_at DESC")
@@ -1416,6 +1607,7 @@ async def upload_documento(
     tipo: str = Form(...),
     titolo: str = Form(...),
     descrizione: str = Form(None),
+    sottotipo: str = Form(None),
     data_riferimento: str = Form(None),
     file: UploadFile = File(...)
 ):
@@ -1427,16 +1619,62 @@ async def upload_documento(
                 'png' if fname.endswith('.png') else 'altro'
     doc = Documento(
         tipo=tipo, titolo=titolo, descrizione=descrizione,
+        sottotipo=sottotipo,
         file_base64=b64, file_nome=file.filename, file_tipo=file_tipo,
         data_riferimento=data_riferimento
     )
     await _db.execute(
-        "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?)",
-        [doc.id, doc.tipo, doc.titolo, doc.descrizione, doc.file_base64,
-         doc.file_nome, doc.file_tipo, doc.data_riferimento, doc.created_at.isoformat()]
+        "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?,?)",
+        [doc.id, doc.tipo, doc.titolo, doc.descrizione, doc.sottotipo,
+         doc.file_base64, doc.file_nome, doc.file_tipo, doc.data_riferimento, doc.created_at.isoformat()]
     )
     await _db.commit()
     return doc
+
+
+@api_router.post("/cud/upload")
+async def upload_cud(
+    file: UploadFile = File(...),
+    force_overwrite: bool = Form(False),
+):
+    content = await file.read()
+    anno_cud = _risolvi_anno_cud(content, file.filename)
+    cur = await _db.execute(
+        "SELECT id FROM documenti WHERE tipo = 'cud' AND data_riferimento = ?",
+        [str(anno_cud)],
+    )
+    existing = await cur.fetchone()
+    if existing and not force_overwrite:
+        raise HTTPException(
+            status_code=409,
+            detail=_dettaglio_duplicato_documento(
+                "duplicato_cud",
+                (
+                    "Esiste già un CUD archiviato per questo anno. "
+                    "Puoi annullare il caricamento oppure sovrascrivere il file esistente."
+                ),
+                str(anno_cud),
+            ),
+        )
+    if existing and force_overwrite:
+        await _db.execute("DELETE FROM documenti WHERE id = ?", [existing["id"]])
+
+    b64 = base64.b64encode(content).decode()
+    documento = await _salva_documento_archivio(
+        tipo="cud",
+        titolo=f"CUD {anno_cud}",
+        descrizione="Certificazione Unica archiviata con informazioni base.",
+        sottotipo="certificazione_unica",
+        data_riferimento=str(anno_cud),
+        file_nome=file.filename,
+        file_tipo="pdf",
+        file_base64=b64,
+    )
+    await _db.commit()
+    return {
+        "documento": documento.model_dump(),
+        "anno": anno_cud,
+    }
 
 @api_router.delete("/documenti/{id}")
 async def delete_documento(id: str):
@@ -1555,17 +1793,15 @@ async def upload_timbrature_aziendali(
     await _db.commit()
 
     b64 = base64.b64encode(content).decode()
-    doc = Documento(
+    doc = await _salva_documento_archivio(
         tipo="timbrature_report",
         titolo=f"Timbrature Aziendali {parsed_mese:02d}/{parsed_anno}",
         descrizione=f"Report timbrature aziendali per {parsed_mese}/{parsed_anno}",
-        file_base64=b64, file_nome=file.filename, file_tipo="pdf",
-        data_riferimento=f"{parsed_anno}-{parsed_mese:02d}"
-    )
-    await _db.execute(
-        "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?)",
-        [doc.id, doc.tipo, doc.titolo, doc.descrizione, doc.file_base64,
-         doc.file_nome, doc.file_tipo, doc.data_riferimento, doc.created_at.isoformat()]
+        sottotipo="report_mensile",
+        data_riferimento=f"{parsed_anno}-{parsed_mese:02d}",
+        file_nome=file.filename,
+        file_tipo="pdf",
+        file_base64=b64,
     )
     await _db.commit()
     return {

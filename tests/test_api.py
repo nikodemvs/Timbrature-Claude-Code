@@ -381,6 +381,82 @@ async def test_api_upload_busta_paga_auto_rileva_periodo_e_chiede_sovrascrittura
     assert dettaglio.json()["lordo"] == 2500.0
 
 
+async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinaria(client_api, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "parse_sometime_pdf",
+        lambda _content, filename: {
+            "success": False,
+            "filename": filename,
+            "timbrature": [],
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "parse_zucchetti_pdf",
+        lambda _content, filename: {
+            "success": True,
+            "filename": filename,
+            "mese": 12,
+            "anno": 2026,
+            "netto": 1600.0,
+            "ore": {"straordinarie": 6.0},
+            "totali": {"competenze": 2600.0, "trattenute": 550.0},
+        },
+    )
+
+    ordinaria = await client_api.post(
+        "/api/buste-paga/upload",
+        files={"file": ("dicembre-2026.pdf", BytesIO(b"%PDF-ordinaria"), "application/pdf")},
+    )
+    tredicesima = await client_api.post(
+        "/api/buste-paga/upload",
+        files={"file": ("tredicesima-2026.pdf", BytesIO(b"%PDF-tredicesima"), "application/pdf")},
+    )
+    dettaglio = await client_api.get("/api/buste-paga/2026/12")
+    documenti = await client_api.get("/api/documenti", params={"tipo": "busta_paga"})
+    sole_tredicesime = await client_api.get("/api/documenti", params={"tipo": "busta_paga", "sottotipo": "tredicesima"})
+
+    assert ordinaria.status_code == 200
+    assert tredicesima.status_code == 200
+    assert tredicesima.json()["sottotipo"] == "tredicesima"
+    assert tredicesima.json()["busta"] is None
+    assert dettaglio.status_code == 200
+    assert dettaglio.json()["pdf_nome"] == "dicembre-2026.pdf"
+    assert documenti.status_code == 200
+    assert len(documenti.json()) == 2
+    assert sole_tredicesime.status_code == 200
+    assert len(sole_tredicesime.json()) == 1
+    assert sole_tredicesime.json()[0]["file_nome"] == "tredicesima-2026.pdf"
+
+
+async def test_api_upload_cud_archivia_file_e_gestisce_sovrascrittura(client_api):
+    primo = await client_api.post(
+        "/api/cud/upload",
+        files={"file": ("CUD 2025.pdf", BytesIO(b"%PDF-CUD-1"), "application/pdf")},
+    )
+    duplicato = await client_api.post(
+        "/api/cud/upload",
+        files={"file": ("CUD 2025 v2.pdf", BytesIO(b"%PDF-CUD-2"), "application/pdf")},
+    )
+    sovrascritto = await client_api.post(
+        "/api/cud/upload",
+        data={"force_overwrite": "true"},
+        files={"file": ("CUD 2025 v2.pdf", BytesIO(b"%PDF-CUD-3"), "application/pdf")},
+    )
+    documenti = await client_api.get("/api/documenti", params={"tipo": "cud"})
+
+    assert primo.status_code == 200
+    assert primo.json()["anno"] == 2025
+    assert duplicato.status_code == 409
+    assert duplicato.json()["detail"]["code"] == "duplicato_cud"
+    assert sovrascritto.status_code == 200
+    assert documenti.status_code == 200
+    assert len(documenti.json()) == 1
+    assert documenti.json()[0]["file_nome"] == "CUD 2025 v2.pdf"
+
+
 async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):
     vuota = await client_api.get("/api/dashboard")
     await client_api.put("/api/settings", json={"ticket_valore": 8.0})

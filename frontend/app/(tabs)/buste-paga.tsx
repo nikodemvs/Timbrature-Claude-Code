@@ -45,6 +45,18 @@ interface UploadAsset {
   relativePath?: string;
 }
 
+interface FileSystemFileHandleLike {
+  kind: 'file';
+  name: string;
+  getFile(): Promise<File>;
+}
+
+interface FileSystemDirectoryHandleLike {
+  kind: 'directory';
+  name: string;
+  values(): AsyncIterable<FileSystemFileHandleLike | FileSystemDirectoryHandleLike>;
+}
+
 interface PendingOverwrite {
   target: UploadTarget;
   asset: UploadAsset;
@@ -63,8 +75,10 @@ interface UploadAttemptResult {
 interface BatchImportSummary {
   importati: number;
   duplicati: number;
-  errori: string[];
+  ignorati: number;
 }
+
+type BatchScope = 'mixed' | 'cud-only';
 
 const getApiErrorDetail = (error: unknown) =>
   (error as ApiErrorResponse | null)?.response?.data?.detail;
@@ -94,6 +108,26 @@ const getConflictDetail = (error: unknown): UploadConflictDetail | null => {
     return null;
   }
   return detail;
+};
+
+const normalizzaTestoFile = (value: string) =>
+  value
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '');
+
+const riconosciTipoPdfDaFile = (asset: UploadAsset): UploadTarget | 'ignore' => {
+  const testo = normalizzaTestoFile(`${asset.relativePath || ''} ${asset.name}`);
+  if (/(cud|certificazione\s+unica)/.test(testo)) {
+    return 'cud';
+  }
+  if (/(tredicesim|13ma|13a|mensilita\s+aggiuntiva|gratifica\s+natal)/.test(testo)) {
+    return 'cedolino';
+  }
+  if (/(busta|cedolino|paga|stipend)/.test(testo)) {
+    return 'cedolino';
+  }
+  return 'ignore';
 };
 
 const appendPdfToFormData = (formData: FormData, asset: UploadAsset) => {
@@ -169,16 +203,26 @@ export default function BustePagaScreen() {
   const loadData = useCallback(async () => {
     try {
       setLoadError(null);
-      const [busteRes, archivioRes, cudRes] = await Promise.all([
+      const [busteRes, archivioRes, cudRes] = await Promise.allSettled([
         api.getBustePaga(),
         api.getDocumenti('busta_paga'),
         api.getDocumenti('cud'),
       ]);
-      setBustePaga(busteRes.data);
-      setArchivioCedolini(sortDocumenti(archivioRes.data));
-      setCudDocuments(sortDocumenti(cudRes.data));
-    } catch (error: unknown) {
-      setLoadError(getApiErrorMessage(error, 'Impossibile caricare l’archivio documenti.'));
+
+      if (busteRes.status === 'fulfilled') {
+        setBustePaga(busteRes.value.data);
+      }
+      if (archivioRes.status === 'fulfilled') {
+        setArchivioCedolini(sortDocumenti(archivioRes.value.data));
+      }
+      if (cudRes.status === 'fulfilled') {
+        setCudDocuments(sortDocumenti(cudRes.value.data));
+      }
+
+      const failureCount = [busteRes, archivioRes, cudRes].filter((result) => result.status === 'rejected').length;
+      if (failureCount === 3) {
+        setLoadError('Impossibile caricare l’archivio documenti.');
+      }
     } finally {
       setLoading(false);
       setRefreshing(false);
@@ -227,6 +271,46 @@ export default function BustePagaScreen() {
     if (Platform.OS !== 'web' || typeof document === 'undefined') {
       Alert.alert('Disponibile solo sul web', 'La selezione multipla o da cartella è disponibile solo nella versione web.');
       return [];
+    }
+
+    const raccogliDaHandle = async (
+      handle: FileSystemDirectoryHandleLike,
+      basePath = '',
+    ): Promise<UploadAsset[]> => {
+      const assets: UploadAsset[] = [];
+      const currentPath = basePath ? `${basePath}/${handle.name}` : handle.name;
+
+      for await (const entry of handle.values()) {
+        if (entry.kind === 'file') {
+          const file = await entry.getFile();
+          if (file.name.toLowerCase().endsWith('.pdf')) {
+            assets.push({
+              name: file.name,
+              mimeType: file.type || 'application/pdf',
+              file,
+              relativePath: `${currentPath}/${file.name}`,
+            });
+          }
+          continue;
+        }
+
+        assets.push(...(await raccogliDaHandle(entry, currentPath)));
+      }
+
+      return assets;
+    };
+
+    const directoryPickerWindow = window as Window & {
+      showDirectoryPicker?: (options?: { mode?: 'read' }) => Promise<FileSystemDirectoryHandleLike>;
+    };
+
+    if (directory && directoryPickerWindow.showDirectoryPicker) {
+      try {
+        const directoryHandle = await directoryPickerWindow.showDirectoryPicker({ mode: 'read' });
+        return await raccogliDaHandle(directoryHandle);
+      } catch {
+        return [];
+      }
     }
 
     return new Promise<UploadAsset[]>((resolve) => {
@@ -339,40 +423,72 @@ export default function BustePagaScreen() {
     }
   };
 
-  const showBatchSummary = (target: UploadTarget, summary: BatchImportSummary) => {
-    const title = target === 'cedolino' ? 'Import storico cedolini' : 'Import storico CUD';
+  const showBatchSummary = (target: BatchScope, summary: BatchImportSummary) => {
+    const title = target === 'mixed' ? 'Import storico documenti' : 'Import storico CUD';
     const lines = [
       `Importati: ${summary.importati}`,
       `Duplicati saltati: ${summary.duplicati}`,
     ];
-    if (summary.errori.length > 0) {
-      lines.push(`Errori: ${summary.errori.length}`);
-      lines.push(summary.errori.slice(0, 3).join('\n'));
+    if (summary.ignorati > 0) {
+      lines.push(`Ignorati: ${summary.ignorati}`);
     }
     Alert.alert(title, lines.join('\n\n'));
   };
 
-  const importAssetsInBatch = async (target: UploadTarget, assets: UploadAsset[]) => {
+  const importAssetsInBatch = async (scope: BatchScope, assets: UploadAsset[]) => {
     if (assets.length === 0) {
       return;
     }
 
     setUploading(true);
-    const summary: BatchImportSummary = { importati: 0, duplicati: 0, errori: [] };
+    const summary: BatchImportSummary = { importati: 0, duplicati: 0, ignorati: 0 };
 
     try {
       for (const asset of assets) {
-        const result = target === 'cedolino' ? await performCedolinoUpload(asset) : await performCudUpload(asset);
+        const pdfType = riconosciTipoPdfDaFile(asset);
+        if (pdfType === 'ignore') {
+          summary.ignorati += 1;
+          continue;
+        }
+
+        const shouldTryCud =
+          scope === 'cud-only' ? true : pdfType === 'cud';
+        const shouldTryCedolino =
+          scope === 'mixed' ? pdfType !== 'cud' : false;
+
+        let result: UploadAttemptResult | null = null;
+        if (shouldTryCud) {
+          result = await performCudUpload(asset);
+        } else if (shouldTryCedolino) {
+          result = await performCedolinoUpload(asset);
+          if (
+            result.status === 'error' &&
+            /(sembra un cud|certificazione unica)/i.test(result.message)
+          ) {
+            result = await performCudUpload(asset);
+          }
+        }
+
+        if (!result) {
+          summary.ignorati += 1;
+          continue;
+        }
+
         if (result.status === 'success') {
           summary.importati += 1;
         } else if (result.status === 'duplicate') {
           summary.duplicati += 1;
         } else {
-          summary.errori.push(`${asset.relativePath || asset.name}: ${result.message}`);
+          summary.ignorati += 1;
         }
       }
-      await loadData();
-      showBatchSummary(target, summary);
+
+      try {
+        await loadData();
+      } catch {
+        // Il refresh non deve interrompere il batch se un archivio non risponde.
+      }
+      showBatchSummary(scope, summary);
     } finally {
       setUploading(false);
     }
@@ -408,9 +524,9 @@ export default function BustePagaScreen() {
     }
   };
 
-  const requestBatchUpload = async (target: UploadTarget, directory: boolean) => {
+  const requestBatchUpload = async (scope: BatchScope, directory: boolean) => {
     const assets = await pickWebPdfAssets(directory);
-    await importAssetsInBatch(target, assets);
+    await importAssetsInBatch(scope, assets);
   };
 
   const confirmOverwrite = async () => {
@@ -566,8 +682,8 @@ export default function BustePagaScreen() {
         </Text>
         <View style={styles.stack}>
           <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" />
-          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cedolino', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" />
-          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cedolino', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" />
+          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" />
+          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" />
         </View>
         {Platform.OS !== 'web' && <Text style={styles.helperText}>Selezione multipla e cartelle disponibili nella versione web.</Text>}
       </Card>
@@ -610,8 +726,8 @@ export default function BustePagaScreen() {
         </Text>
         <View style={styles.stack}>
           <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" />
-          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" />
-          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" />
+          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" />
+          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" />
         </View>
         {Platform.OS !== 'web' && <Text style={styles.helperText}>Selezione multipla e cartelle disponibili nella versione web.</Text>}
       </Card>

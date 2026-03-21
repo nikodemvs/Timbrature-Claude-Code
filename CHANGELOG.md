@@ -5,6 +5,16 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Riparazione archivio documenti
+Cosa: corretto l'ordine di inserimento nella tabella documenti con colonne esplicite, aggiunta una riparazione automatica per le righe gia corrotte e copertura API per upload corretti e recupero dell'archivio senza crash
+Perché: evitare il 500 su GET /api/documenti, rendere leggibile l'archivio esistente e prevenire nuove corruzioni dei record documenti
+File: backend/server.py, tests/test_api.py, CHANGELOG.md
+
+## 2026-03-21 — Import cartella Buste Paga tollerante e misto
+Cosa: reso piu robusto il caricamento da cartella nella schermata Buste Paga con scansione ricorsiva delle sottocartelle sul web, instradamento dei PDF supportati verso cedolini o CUD in base al nome, ignorando i file non supportati senza interrompere il batch e senza bloccare il refresh dell'archivio se una sola sezione fallisce
+Perché: permettere l'import di alberi di cartelle annidati contenenti storici misti senza trasformare un file fuori posto o un archivio parziale in un errore globale della pagina
+File: frontend/app/(tabs)/buste-paga.tsx, tests/test_e2e.py, CHANGELOG.md
+
 ## 2026-03-21 — Propagata orchestrazione anche nei file AGENTS secondari
 Cosa: aggiunta anche in backend/AGENTS.md e frontend/AGENTS.md la regola che definisce Codex come orchestratore, impone ownership chiara ai sub-agent e richiede delega, sblocco o riassegnazione prima dell'esecuzione diretta
 Perché: evitare che la regola resti valida solo nel file root e renderla esplicita anche nei contesti backend e frontend letti da agenti specializzati

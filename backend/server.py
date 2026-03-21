@@ -440,6 +440,7 @@ async def init_db():
         )
     """)
     await _ensure_column_exists("documenti", "sottotipo", "TEXT")
+    await _ripara_documenti_archivio()
     await _sync_timbrature_aziendali_periodi()
     await _db.commit()
 
@@ -451,6 +452,56 @@ async def _ensure_column_exists(table_name: str, column_name: str, column_defini
         await _db.execute(
             f"ALTER TABLE {table_name} ADD COLUMN {column_name} {column_definition}"
         )
+
+
+def _sembra_timestamp_iso(valore: Optional[str]) -> bool:
+    if not valore or not isinstance(valore, str):
+        return False
+    try:
+        datetime.fromisoformat(valore)
+        return True
+    except ValueError:
+        return False
+
+
+async def _ripara_documenti_archivio() -> int:
+    cur = await _db.execute(
+        """
+        SELECT id, tipo, titolo, descrizione, file_base64, file_nome, file_tipo,
+               data_riferimento, created_at, sottotipo
+        FROM documenti
+        """
+    )
+    righe = _rows(await cur.fetchall())
+    riparati = 0
+    for riga in righe:
+        if _sembra_timestamp_iso(riga.get("created_at")) or not _sembra_timestamp_iso(riga.get("sottotipo")):
+            continue
+        await _db.execute(
+            """
+            UPDATE documenti
+            SET file_base64 = ?,
+                file_nome = ?,
+                file_tipo = ?,
+                data_riferimento = ?,
+                created_at = ?,
+                sottotipo = ?
+            WHERE id = ?
+            """,
+            [
+                riga.get("file_nome"),
+                riga.get("file_tipo"),
+                riga.get("data_riferimento"),
+                riga.get("created_at"),
+                riga.get("sottotipo"),
+                riga.get("file_base64"),
+                riga.get("id"),
+            ],
+        )
+        riparati += 1
+    if riparati:
+        await _db.commit()
+    return riparati
 
 
 def _periodo_da_data_iso(data_iso: str) -> tuple[int, int]:
@@ -609,18 +660,23 @@ async def _salva_documento_archivio(
         data_riferimento=data_riferimento,
     )
     await _db.execute(
-        "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?,?)",
+        """
+        INSERT INTO documenti (
+            id, tipo, titolo, descrizione, file_base64, file_nome,
+            file_tipo, data_riferimento, created_at, sottotipo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
         [
             doc.id,
             doc.tipo,
             doc.titolo,
             doc.descrizione,
-            doc.sottotipo,
             doc.file_base64,
             doc.file_nome,
             doc.file_tipo,
             doc.data_riferimento,
             doc.created_at.isoformat(),
+            doc.sottotipo,
         ],
     )
     return doc
@@ -653,6 +709,7 @@ async def _salva_upload_busta_paga(
     mese_hint: Optional[int] = None,
     force_overwrite: bool = False,
 ) -> Dict[str, Any]:
+    await _ripara_documenti_archivio()
     content = await file.read()
     timbrature_result = parse_sometime_pdf(content, file.filename)
     if timbrature_result["success"] and (timbrature_result.get("timbrature") or []):
@@ -1574,6 +1631,7 @@ async def update_busta_paga(anno: int, mese: int, updates: BustaPagaUpdate):
 
 @api_router.get("/documenti", response_model=List[Documento])
 async def get_documenti(tipo: Optional[str] = None, sottotipo: Optional[str] = None):
+    await _ripara_documenti_archivio()
     if tipo and sottotipo:
         cur = await _db.execute(
             "SELECT * FROM documenti WHERE tipo = ? AND sottotipo = ? ORDER BY created_at DESC",
@@ -1596,6 +1654,7 @@ async def get_documenti(tipo: Optional[str] = None, sottotipo: Optional[str] = N
 
 @api_router.get("/documenti/{id}")
 async def get_documento(id: str):
+    await _ripara_documenti_archivio()
     cur = await _db.execute("SELECT * FROM documenti WHERE id = ?", [id])
     row = _row(await cur.fetchone())
     if not row:
@@ -1611,6 +1670,7 @@ async def upload_documento(
     data_riferimento: str = Form(None),
     file: UploadFile = File(...)
 ):
+    await _ripara_documenti_archivio()
     content = await file.read()
     b64 = base64.b64encode(content).decode()
     fname = file.filename.lower()
@@ -1624,9 +1684,24 @@ async def upload_documento(
         data_riferimento=data_riferimento
     )
     await _db.execute(
-        "INSERT INTO documenti VALUES (?,?,?,?,?,?,?,?,?,?)",
-        [doc.id, doc.tipo, doc.titolo, doc.descrizione, doc.sottotipo,
-         doc.file_base64, doc.file_nome, doc.file_tipo, doc.data_riferimento, doc.created_at.isoformat()]
+        """
+        INSERT INTO documenti (
+            id, tipo, titolo, descrizione, file_base64, file_nome,
+            file_tipo, data_riferimento, created_at, sottotipo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            doc.id,
+            doc.tipo,
+            doc.titolo,
+            doc.descrizione,
+            doc.file_base64,
+            doc.file_nome,
+            doc.file_tipo,
+            doc.data_riferimento,
+            doc.created_at.isoformat(),
+            doc.sottotipo,
+        ]
     )
     await _db.commit()
     return doc
@@ -1637,6 +1712,7 @@ async def upload_cud(
     file: UploadFile = File(...),
     force_overwrite: bool = Form(False),
 ):
+    await _ripara_documenti_archivio()
     content = await file.read()
     anno_cud = _risolvi_anno_cud(content, file.filename)
     cur = await _db.execute(
@@ -1710,6 +1786,7 @@ async def upload_timbrature_aziendali(
     file: UploadFile = File(...),
     force_overwrite: bool = Form(False),
 ):
+    await _ripara_documenti_archivio()
     content = await file.read()
     parse_result = parse_sometime_pdf(content, file.filename)
     timbrature_parse = parse_result.get("timbrature") or []

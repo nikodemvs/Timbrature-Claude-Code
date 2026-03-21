@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import base64
 from datetime import datetime, timedelta
 from types import SimpleNamespace
 from io import BytesIO
@@ -381,7 +382,7 @@ async def test_api_upload_busta_paga_auto_rileva_periodo_e_chiede_sovrascrittura
     assert dettaglio.json()["lordo"] == 2500.0
 
 
-async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinaria(client_api, monkeypatch):
+async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinaria(client_api, db_temporaneo, monkeypatch):
     monkeypatch.setattr(
         server,
         "parse_sometime_pdf",
@@ -414,6 +415,14 @@ async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinar
         "/api/buste-paga/upload",
         files={"file": ("tredicesima-2026.pdf", BytesIO(b"%PDF-tredicesima"), "application/pdf")},
     )
+    cur_ordinaria = await db_temporaneo.execute(
+        "SELECT * FROM documenti WHERE tipo = 'busta_paga' AND sottotipo = 'ordinaria' ORDER BY created_at DESC LIMIT 1"
+    )
+    riga_ordinaria = dict(await cur_ordinaria.fetchone())
+    cur_tredicesima = await db_temporaneo.execute(
+        "SELECT * FROM documenti WHERE tipo = 'busta_paga' AND sottotipo = 'tredicesima' ORDER BY created_at DESC LIMIT 1"
+    )
+    riga_tredicesima = dict(await cur_tredicesima.fetchone())
     dettaglio = await client_api.get("/api/buste-paga/2026/12")
     documenti = await client_api.get("/api/documenti", params={"tipo": "busta_paga"})
     sole_tredicesime = await client_api.get("/api/documenti", params={"tipo": "busta_paga", "sottotipo": "tredicesima"})
@@ -422,6 +431,14 @@ async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinar
     assert tredicesima.status_code == 200
     assert tredicesima.json()["sottotipo"] == "tredicesima"
     assert tredicesima.json()["busta"] is None
+    assert riga_ordinaria["file_nome"] == "dicembre-2026.pdf"
+    assert riga_ordinaria["file_tipo"] == "pdf"
+    assert riga_ordinaria["data_riferimento"] == "2026-12"
+    assert riga_ordinaria["sottotipo"] == "ordinaria"
+    assert riga_tredicesima["file_nome"] == "tredicesima-2026.pdf"
+    assert riga_tredicesima["file_tipo"] == "pdf"
+    assert riga_tredicesima["data_riferimento"] == "2026-12"
+    assert riga_tredicesima["sottotipo"] == "tredicesima"
     assert dettaglio.status_code == 200
     assert dettaglio.json()["pdf_nome"] == "dicembre-2026.pdf"
     assert documenti.status_code == 200
@@ -431,7 +448,7 @@ async def test_api_upload_busta_paga_archivia_tredicesima_separata_dalla_ordinar
     assert sole_tredicesime.json()[0]["file_nome"] == "tredicesima-2026.pdf"
 
 
-async def test_api_upload_cud_archivia_file_e_gestisce_sovrascrittura(client_api):
+async def test_api_upload_cud_archivia_file_e_gestisce_sovrascrittura(client_api, db_temporaneo):
     primo = await client_api.post(
         "/api/cud/upload",
         files={"file": ("CUD 2025.pdf", BytesIO(b"%PDF-CUD-1"), "application/pdf")},
@@ -445,6 +462,8 @@ async def test_api_upload_cud_archivia_file_e_gestisce_sovrascrittura(client_api
         data={"force_overwrite": "true"},
         files={"file": ("CUD 2025 v2.pdf", BytesIO(b"%PDF-CUD-3"), "application/pdf")},
     )
+    cur_riga = await db_temporaneo.execute("SELECT * FROM documenti WHERE tipo = 'cud' ORDER BY created_at DESC LIMIT 1")
+    riga = dict(await cur_riga.fetchone())
     documenti = await client_api.get("/api/documenti", params={"tipo": "cud"})
 
     assert primo.status_code == 200
@@ -452,9 +471,85 @@ async def test_api_upload_cud_archivia_file_e_gestisce_sovrascrittura(client_api
     assert duplicato.status_code == 409
     assert duplicato.json()["detail"]["code"] == "duplicato_cud"
     assert sovrascritto.status_code == 200
+    assert riga["file_nome"] == "CUD 2025 v2.pdf"
+    assert riga["file_tipo"] == "pdf"
+    assert riga["data_riferimento"] == "2025"
+    assert riga["sottotipo"] == "certificazione_unica"
     assert documenti.status_code == 200
     assert len(documenti.json()) == 1
     assert documenti.json()[0]["file_nome"] == "CUD 2025 v2.pdf"
+
+
+async def test_api_documenti_generici_salvano_colonne_corrette(client_api, db_temporaneo):
+    risposta = await client_api.post(
+        "/api/documenti",
+        data={
+            "tipo": "nota",
+            "titolo": "Documento base",
+            "descrizione": "Verifica archivio documenti",
+            "sottotipo": "allegato",
+            "data_riferimento": "2026-03",
+        },
+        files={"file": ("documento-base.pdf", BytesIO(b"%PDF-documento-base"), "application/pdf")},
+    )
+
+    cur = await db_temporaneo.execute("SELECT * FROM documenti WHERE id = ?", [risposta.json()["id"]])
+    riga = await cur.fetchone()
+    riga = dict(riga) if riga else None
+
+    assert risposta.status_code == 200
+    assert risposta.json()["file_nome"] == "documento-base.pdf"
+    assert riga is not None
+    assert riga["tipo"] == "nota"
+    assert riga["titolo"] == "Documento base"
+    assert riga["file_base64"] == base64.b64encode(b"%PDF-documento-base").decode()
+    assert riga["file_nome"] == "documento-base.pdf"
+    assert riga["file_tipo"] == "pdf"
+    assert riga["data_riferimento"] == "2026-03"
+    assert riga["sottotipo"] == "allegato"
+
+
+async def test_api_documenti_ripara_righe_corrotte_senza_crash(client_api, db_temporaneo):
+    await db_temporaneo.execute(
+        """
+        INSERT INTO documenti (
+            id, tipo, titolo, descrizione, file_base64, file_nome,
+            file_tipo, data_riferimento, created_at, sottotipo
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        [
+            "doc-corrotto-1",
+            "busta_paga",
+            "Busta paga 03/2026",
+            "Cedolino ordinario mensile.",
+            "ordinaria",
+            "JVBERi0xLjQKcorrotto",
+            "marzo-2026.pdf",
+            "pdf",
+            "2026-03",
+            "2026-03-21T10:00:00+00:00",
+        ],
+    )
+    await db_temporaneo.commit()
+
+    lista = await client_api.get("/api/documenti", params={"tipo": "busta_paga"})
+    cur = await db_temporaneo.execute("SELECT * FROM documenti WHERE id = ?", ["doc-corrotto-1"])
+    riga = await cur.fetchone()
+    riga = dict(riga) if riga else None
+
+    assert lista.status_code == 200
+    assert len(lista.json()) == 1
+    assert lista.json()[0]["sottotipo"] == "ordinaria"
+    assert lista.json()[0]["file_nome"] == "marzo-2026.pdf"
+    assert lista.json()[0]["file_tipo"] == "pdf"
+    assert lista.json()[0]["data_riferimento"] == "2026-03"
+    assert riga is not None
+    assert riga["file_base64"] == "JVBERi0xLjQKcorrotto"
+    assert riga["file_nome"] == "marzo-2026.pdf"
+    assert riga["file_tipo"] == "pdf"
+    assert riga["data_riferimento"] == "2026-03"
+    assert riga["created_at"] == "2026-03-21T10:00:00+00:00"
+    assert riga["sottotipo"] == "ordinaria"
 
 
 async def test_api_dashboard_positivo_errore_ed_edge_vuoto(client_api):

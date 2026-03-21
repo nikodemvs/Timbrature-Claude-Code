@@ -181,6 +181,86 @@ def test_e2e_buste_paga_mostra_archivio_cud_e_azioni_upload(browser, stack_appli
         context.close()
 
 
+def test_e2e_importa_cartella_annidata_instrada_pdf_e_ignora_file_non_supportati(browser, stack_applicazione):
+    context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
+    try:
+        page.get_by_test_id("tab-buste-paga").click()
+        page.get_by_test_id("buste-screen").wait_for(timeout=30000)
+
+        cedolino_requests: list[str] = []
+        cud_requests: list[str] = []
+
+        def estrai_nome_file(route) -> str:
+            corpo = route.request.post_data or ""
+            match = re.search(r'filename="([^"]+)"', corpo)
+            return match.group(1) if match else route.request.url
+
+        def gestisci_upload(route) -> None:
+            nome_file = estrai_nome_file(route)
+            if "/cud/upload" in route.request.url:
+                cud_requests.append(nome_file)
+                route.fulfill(status=200, json={"anno": 2024})
+                return
+
+            cedolino_requests.append(nome_file)
+            if "cedolino-bad.pdf" in nome_file:
+                route.fulfill(status=400, json={"detail": "File PDF non compatibile"})
+                return
+
+            if "tredicesima" in nome_file.lower():
+                route.fulfill(status=200, json={"mese": 12, "anno": 2024, "sottotipo": "tredicesima"})
+                return
+
+            route.fulfill(status=200, json={"mese": 3, "anno": 2024, "sottotipo": "ordinaria"})
+
+        page.route("**/api/buste-paga/upload", gestisci_upload)
+        page.route("**/api/cud/upload", gestisci_upload)
+        page.evaluate(
+            """() => {
+              const creaFile = (name, type = 'application/pdf') => new File(['pdf'], name, { type });
+              const file = (name, type) => ({
+                kind: 'file',
+                name,
+                getFile: async () => creaFile(name, type),
+              });
+              const dir = (name, entries) => ({
+                kind: 'directory',
+                name,
+                values: async function* () {
+                  for (const entry of entries) {
+                    yield entry;
+                  }
+                },
+              });
+
+              window.showDirectoryPicker = async () => dir('storico', [
+                dir('2024', [
+                  file('cedolino-marzo.pdf'),
+                  file('nota.txt', 'text/plain'),
+                  dir('subcartella', [
+                    file('cud-2024.pdf'),
+                    file('tredicesima-dicembre.pdf'),
+                    file('cedolino-bad.pdf'),
+                    file('immagine.png', 'image/png'),
+                  ]),
+                ]),
+              ]);
+            }"""
+        )
+
+        page.get_by_test_id("buste-upload-folder-button").click()
+        for _ in range(40):
+            if len(cedolino_requests) == 3 and len(cud_requests) == 1:
+                break
+            page.wait_for_timeout(250)
+
+        assert len(cedolino_requests) == 3
+        assert len(cud_requests) == 1
+        assert page.get_by_text("Impossibile caricare l’archivio documenti.").count() == 0
+    finally:
+        context.close()
+
+
 def test_e2e_timbratura_mostra_popup_e_conferma_eliminazione(browser, stack_applicazione):
     data_timbratura = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
     crea_timbratura_di_test(stack_applicazione.backend_url, data=data_timbratura)

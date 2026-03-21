@@ -14,6 +14,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
 import * as api from '../../src/services/api';
+import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
 import { Timbratura, WeeklySummary } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';

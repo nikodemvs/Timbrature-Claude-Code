@@ -1,19 +1,36 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
-import { View, StyleSheet, Platform } from 'react-native';
+import { View, Text, StyleSheet, Platform } from 'react-native';
 import { useAppStore } from '../../src/store/appStore';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { DESIGN_TOKENS } from '../../src/utils/colors';
 import { createElevation } from '../../src/utils/shadows';
+import { useNetworkStatus } from '../../src/hooks/useNetworkStatus';
 
 export default function TabLayout() {
-  const { unreadAlerts } = useAppStore();
+  const { unreadAlerts, isOnline, lastSyncAt } = useAppStore();
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
 
+  // Inizializza il monitor di rete (una sola volta, nel layout root)
+  useNetworkStatus();
+
+  const offlineSince = lastSyncAt
+    ? new Date(lastSyncAt).toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })
+    : null;
+
   return (
-    <Tabs
+    <View style={{ flex: 1 }}>
+      {!isOnline && (
+        <View style={styles.offlineBanner}>
+          <Ionicons name="cloud-offline-outline" size={14} color="#fff" />
+          <Text style={styles.offlineText}>
+            Modalità offline{offlineSince ? ` · aggiornato alle ${offlineSince}` : ''}
+          </Text>
+        </View>
+      )}
+      <Tabs
       screenOptions={{
         headerShown: false,
         tabBarActiveTintColor: colors.primary,
@@ -77,7 +94,8 @@ export default function TabLayout() {
           ),
         }}
       />
-    </Tabs>
+      </Tabs>
+    </View>
   );
 }
 
@@ -117,5 +135,19 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       height: 8,
       borderRadius: 4,
       backgroundColor: colors.error,
+    },
+    offlineBanner: {
+      backgroundColor: '#6B7280',
+      flexDirection: 'row',
+      alignItems: 'center',
+      justifyContent: 'center',
+      gap: 6,
+      paddingVertical: 5,
+      paddingTop: Platform.OS === 'ios' ? 50 : 5,
+    },
+    offlineText: {
+      color: '#fff',
+      fontSize: 12,
+      fontWeight: '600',
     },
   });

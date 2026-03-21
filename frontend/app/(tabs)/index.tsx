@@ -15,6 +15,7 @@ import { useFocusEffect } from 'expo-router';
 import { Card, StatCard, LoadingScreen } from '../../src/components';
 import { useAppStore } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
+import * as offlineApi from '../../src/services/offlineApi';
 import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
@@ -209,13 +210,13 @@ export default function DashboardScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [dashboardRes, timbraturaRes] = await Promise.all([
-        api.getDashboard(),
-        api.getTimbraturaByDate(getTodayString()).catch(() => null),
+      const [dashboardData, timbraturaData] = await Promise.all([
+        offlineApi.getDashboard(),
+        offlineApi.getTimbraturaByDate(getTodayString()).catch(() => null),
       ]);
-      setDashboard(dashboardRes.data);
-      setTodayTimbratura(timbraturaRes?.data || null);
-      setUnreadAlerts(dashboardRes.data.alerts_non_letti);
+      setDashboard(dashboardData);
+      setTodayTimbratura(timbraturaData);
+      setUnreadAlerts(dashboardData?.alerts_non_letti ?? 0);
     } catch (error) {
       console.error('Error loading dashboard:', error);
     } finally {
@@ -280,10 +281,10 @@ export default function DashboardScreen() {
   const handleTimbra = async (tipo: 'entrata' | 'uscita') => {
     setTimbraturaLoading(true);
     try {
-      const response = await api.timbra(tipo);
+      const timbraturaResult = await offlineApi.timbra(tipo);
       const sessionStartedAtMs = Date.now();
-      setTodayTimbratura(response.data);
-      const ultimaMarcatura = response.data.marcature[response.data.marcature.length - 1];
+      setTodayTimbratura(timbraturaResult);
+      const ultimaMarcatura = timbraturaResult.marcature[timbraturaResult.marcature.length - 1];
       if (tipo === 'entrata' && ultimaMarcatura?.tipo === 'entrata') {
         setSessionStartOverride({
           marcaturaId: ultimaMarcatura.id,

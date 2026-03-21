@@ -5,6 +5,13 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Fase 3 offline-first: cache layer + timbra offline
+Cosa: installato @react-native-community/netinfo; creati useNetworkStatus hook e offlineApi.ts (wrapper cache-first per settings, dashboard, timbrature, assenze, buste-paga, reperibilità, alerts); aggiunto isOnline/lastSyncAt allo store; banner offline nel layout; timbra() ora salva in SQLite locale immediatamente e tenta sync (aggiunge a offline_queue se offline); dashboard home usa algoritmi TypeScript locali quando offline
+Perché: funzionalità core (timbratura, dashboard) ora funzionano senza rete; il backend rimane il source of truth quando disponibile
+File: frontend/src/hooks/useNetworkStatus.ts, frontend/src/services/offlineApi.ts, frontend/src/store/appStore.ts, frontend/app/(tabs)/_layout.tsx, frontend/app/(tabs)/index.tsx, frontend/app/(tabs)/timbrature.tsx, frontend/package.json
+
+---
+
 ## 2026-03-21 — Fase 2 offline-first: algoritmi TypeScript
 Cosa: creato src/algorithms/calcoli.ts — port fedele 1:1 di tutti gli algoritmi protetti da backend/server.py (arrotondaQuartiOra, calcolaOreLavorate, calcolaStraordinario, calcolaTicket, calcolaReperibilita passiva/attiva, calcolaOreDaMarcature, calcolaOreReperibilita, calcolaMetadatiStima, stimaNetto, calcolaSaldoFerie, calcolaComporto)
 Perché: gli algoritmi devono funzionare offline sul device senza chiamare il backend; traduzione 1:1, stessa logica, nessuna ottimizzazione

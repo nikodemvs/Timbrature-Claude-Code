@@ -121,6 +121,12 @@ interface AppState {
   unreadAlerts: number;
   setUnreadAlerts: (count: number) => void;
   resetUserData: () => void;
+
+  // Connettività
+  isOnline: boolean;
+  setIsOnline: (value: boolean) => void;
+  lastSyncAt: string | null;
+  setLastSyncAt: (iso: string | null) => void;
   
   // Theme
   theme: ThemeKey;
@@ -167,6 +173,9 @@ export const useAppStore = create<AppState>()(
                 settings: {
                   ...state.dashboard.settings,
                   nome: '',
+                  cognome: '',
+                  matricola: '',
+                  numero_badge: '',
                   pin_hash: undefined,
                   use_biometric: false,
                 },
@@ -176,6 +185,9 @@ export const useAppStore = create<AppState>()(
             ? {
                 ...state.settings,
                 nome: '',
+                cognome: '',
+                matricola: '',
+                numero_badge: '',
                 pin_hash: undefined,
                 use_biometric: false,
               }
@@ -185,6 +197,12 @@ export const useAppStore = create<AppState>()(
           unreadAlerts: 0,
         })),
       
+      // Connettività
+      isOnline: true,
+      setIsOnline: (value) => set({ isOnline: value }),
+      lastSyncAt: null,
+      setLastSyncAt: (iso) => set({ lastSyncAt: iso }),
+
       // Theme
       theme: 'blue',
       setTheme: (theme) => set({ theme }),

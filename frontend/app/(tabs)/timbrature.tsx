@@ -17,8 +17,17 @@ import * as api from '../../src/services/api';
 import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
 import { Timbratura, WeeklySummary } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { useAppStore } from '../../src/store/appStore';
 
 type TabType = 'personali' | 'aziendali' | 'confronto';
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+}
 
 interface ConfrontoItem {
   data: string;
@@ -33,6 +42,13 @@ interface ConfrontoItem {
   has_discrepancy: boolean;
 }
 
+interface ConfrontoRiepilogo {
+  ore_personali_totali: number;
+  ore_aziendali_totali: number;
+  differenza_ore_totale: number;
+  giorni_con_discrepanza: number;
+}
+
 interface TimbraturaAziendale {
   id: string;
   data: string;
@@ -42,25 +58,33 @@ interface TimbraturaAziendale {
   descrizione: string | null;
 }
 
+const getApiErrorMessage = (error: unknown, fallback: string) => {
+  const response = (error as ApiErrorResponse | null)?.response;
+  return response?.data?.detail || fallback;
+};
+
 export default function TimbraturaScreen() {
   const { colors } = useAppTheme();
+  const { setTodayTimbratura } = useAppStore();
   const styles = createStyles(colors);
   const [activeTab, setActiveTab] = useState<TabType>('personali');
   const [timbrature, setTimbrature] = useState<Timbratura[]>([]);
   const [timbratureAziendali, setTimbratureAziendali] = useState<TimbraturaAziendale[]>([]);
   const [confronto, setConfronto] = useState<ConfrontoItem[]>([]);
-  const [confrontoRiepilogo, setConfrontoRiepilogo] = useState<any>(null);
+  const [confrontoRiepilogo, setConfrontoRiepilogo] = useState<ConfrontoRiepilogo | null>(null);
   const [weeklySummary, setWeeklySummary] = useState<WeeklySummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [showAddSheet, setShowAddSheet] = useState(false);
+  const [timbraturaDaEliminare, setTimbraturaDaEliminare] = useState<Timbratura | null>(null);
   const [editingDate, setEditingDate] = useState<string | null>(null);
   const [selectedDate, setSelectedDate] = useState(getTodayString());
   const [oraEntrata, setOraEntrata] = useState('');
   const [oraUscita, setOraUscita] = useState('');
   const [note, setNote] = useState('');
   const [saving, setSaving] = useState(false);
+  const [deleting, setDeleting] = useState(false);
   const [isReperibilita, setIsReperibilita] = useState(false);
   
   // Selettore mese/anno
@@ -91,7 +115,16 @@ export default function TimbraturaScreen() {
       try {
         const confRes = await api.getConfrontoTimbrature(meseSelezionato, annoSelezionato);
         setConfronto(confRes.data.confronti || []);
-        setConfrontoRiepilogo(confRes.data.riepilogo);
+        setConfrontoRiepilogo(
+          confRes.data.riepilogo
+            ? {
+                ore_personali_totali: confRes.data.riepilogo.ore_personali_totali ?? 0,
+                ore_aziendali_totali: confRes.data.riepilogo.ore_aziendali_totali ?? 0,
+                differenza_ore_totale: confRes.data.riepilogo.differenza_ore_totale ?? 0,
+                giorni_con_discrepanza: confRes.data.riepilogo.giorni_con_discrepanza ?? 0,
+              }
+            : null
+        );
       } catch {
         console.log('No confronto data');
       }
@@ -131,7 +164,7 @@ export default function TimbraturaScreen() {
         uri: file.uri,
         name: file.name,
         type: 'application/pdf',
-      } as any);
+      } as unknown as Blob);
       formData.append('mese', meseSelezionato.toString());
       formData.append('anno', annoSelezionato.toString());
       
@@ -142,9 +175,9 @@ export default function TimbraturaScreen() {
         `File "${file.name}" caricato con successo.\n\n${response.data.timbrature_importate || 0} timbrature importate automaticamente.`,
         [{ text: 'OK', onPress: loadData }]
       );
-    } catch (error: any) {
+    } catch (error: unknown) {
       console.error('Upload error:', error);
-      Alert.alert('Errore', 'Impossibile caricare il file PDF');
+      Alert.alert('Errore', getApiErrorMessage(error, 'Impossibile caricare il file PDF'));
     } finally {
       setUploading(false);
     }
@@ -183,33 +216,46 @@ export default function TimbraturaScreen() {
       resetForm();
       loadData();
       Alert.alert('Successo', 'Timbratura salvata');
-    } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore nel salvataggio');
+    } catch (error: unknown) {
+      Alert.alert('Errore', getApiErrorMessage(error, 'Errore nel salvataggio'));
     } finally {
       setSaving(false);
     }
   };
 
-  const handleDelete = async (data: string) => {
-    Alert.alert(
-      'Conferma',
-      'Vuoi eliminare questa timbratura?',
-      [
-        { text: 'Annulla', style: 'cancel' },
-        {
-          text: 'Elimina',
-          style: 'destructive',
-          onPress: async () => {
-            try {
-              await api.deleteTimbratura(data);
-              loadData();
-            } catch {
-              Alert.alert('Errore', 'Impossibile eliminare');
-            }
-          },
-        },
-      ]
-    );
+  const handleDelete = (item: Timbratura) => {
+    setTimbraturaDaEliminare(item);
+  };
+
+  const closeDeleteSheet = () => {
+    if (deleting) {
+      return;
+    }
+
+    setTimbraturaDaEliminare(null);
+  };
+
+  const confirmDelete = async () => {
+    if (!timbraturaDaEliminare) {
+      return;
+    }
+
+    setDeleting(true);
+    const dataDaEliminare = timbraturaDaEliminare.data;
+
+    try {
+      await api.deleteTimbratura(dataDaEliminare);
+      setTimbrature((current) => current.filter((item) => item.data !== dataDaEliminare));
+      if (dataDaEliminare === getTodayString()) {
+        setTodayTimbratura(null);
+      }
+      setTimbraturaDaEliminare(null);
+      await loadData();
+    } catch (error: unknown) {
+      Alert.alert('Errore', getApiErrorMessage(error, 'Impossibile eliminare la timbratura'));
+    } finally {
+      setDeleting(false);
+    }
   };
 
   const closeAddSheet = () => {
@@ -269,14 +315,20 @@ export default function TimbraturaScreen() {
       </View>
       {item.note && <Text style={styles.timbraturaNote}>{item.note}</Text>}
       <View style={styles.inlineActions}>
-        <TouchableOpacity style={styles.inlineActionButton} onPress={() => editTimbratura(item)} activeOpacity={0.8}>
+        <TouchableOpacity
+          style={styles.inlineActionButton}
+          onPress={() => editTimbratura(item)}
+          activeOpacity={0.8}
+          testID="timbrature-edit-button"
+        >
           <Ionicons name="create-outline" size={16} color={colors.primary} />
           <Text style={styles.inlineActionText}>Modifica</Text>
         </TouchableOpacity>
         <TouchableOpacity
           style={[styles.inlineActionButton, styles.inlineActionDanger]}
-          onPress={() => handleDelete(item.data)}
+          onPress={() => handleDelete(item)}
           activeOpacity={0.8}
+          testID="timbrature-delete-button"
         >
           <Ionicons name="trash-outline" size={16} color={colors.error} />
           <Text style={[styles.inlineActionText, styles.inlineActionDangerText]}>Elimina</Text>
@@ -371,6 +423,8 @@ export default function TimbraturaScreen() {
       : activeTab === 'aziendali'
         ? 'Importa il PDF del mese attivo per popolare le timbrature ufficiali.'
         : 'Controlla subito le discrepanze e confronta le ore tra dati personali e aziendali.';
+  const giorniConDiscrepanza = confrontoRiepilogo?.giorni_con_discrepanza ?? 0;
+  const differenzaOreTotale = confrontoRiepilogo?.differenza_ore_totale ?? 0;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']} testID="timbrature-screen">
@@ -465,9 +519,9 @@ export default function TimbraturaScreen() {
           testID="timbrature-tab-confronto"
         >
           <Text style={[styles.tabText, activeTab === 'confronto' && styles.tabTextActive]}>Confronto</Text>
-          {confrontoRiepilogo?.giorni_con_discrepanza > 0 && (
+          {giorniConDiscrepanza > 0 && (
             <View style={styles.badge}>
-              <Text style={styles.badgeText}>{confrontoRiepilogo.giorni_con_discrepanza}</Text>
+              <Text style={styles.badgeText}>{giorniConDiscrepanza}</Text>
             </View>
           )}
         </TouchableOpacity>
@@ -549,25 +603,25 @@ export default function TimbraturaScreen() {
                 </View>
                 <View style={styles.summaryStat}>
                   <Text style={[styles.summaryValue, { color: colors.secondary }]}>
-                    {confrontoRiepilogo.ore_aziendali_totali?.toFixed(1) || '0.0'}
+                    {confrontoRiepilogo.ore_aziendali_totali.toFixed(1)}
                   </Text>
                   <Text style={styles.summaryLabel}>Ore Azienda</Text>
                 </View>
                 <View style={styles.summaryStat}>
                   <Text style={[
                     styles.summaryValue,
-                    { color: confrontoRiepilogo.differenza_ore_totale > 0 ? colors.success : confrontoRiepilogo.differenza_ore_totale < 0 ? colors.error : colors.text }
+                    { color: differenzaOreTotale > 0 ? colors.success : differenzaOreTotale < 0 ? colors.error : colors.text }
                   ]}>
-                    {confrontoRiepilogo.differenza_ore_totale > 0 ? '+' : ''}{confrontoRiepilogo.differenza_ore_totale?.toFixed(1) || '0.0'}
+                    {differenzaOreTotale > 0 ? '+' : ''}{differenzaOreTotale.toFixed(1)}
                   </Text>
                   <Text style={styles.summaryLabel}>Differenza</Text>
                 </View>
               </View>
-              {confrontoRiepilogo.giorni_con_discrepanza > 0 && (
+              {giorniConDiscrepanza > 0 && (
                 <View style={styles.alertBox}>
                   <Ionicons name="alert-circle" size={20} color={colors.warning} />
                   <Text style={styles.alertText}>
-                    {confrontoRiepilogo.giorni_con_discrepanza} giorni con discrepanze
+                    {giorniConDiscrepanza} giorni con discrepanze
                   </Text>
                 </View>
               )}
@@ -594,6 +648,45 @@ export default function TimbraturaScreen() {
       )}
 
       {/* Add/Edit Sheet */}
+      <BottomSheet
+        visible={Boolean(timbraturaDaEliminare)}
+        onClose={closeDeleteSheet}
+        title="Conferma eliminazione"
+        height="40%"
+        testID="timbrature-delete-sheet"
+        closeButtonTestID="timbrature-delete-sheet-close"
+      >
+        <View style={styles.deleteSheetContent}>
+          <View style={styles.deleteIconContainer}>
+            <Ionicons name="trash-outline" size={22} color={colors.error} />
+          </View>
+          <Text style={styles.deleteSheetTitle}>Elimina la timbratura selezionata?</Text>
+          <Text style={styles.deleteSheetText}>
+            {timbraturaDaEliminare
+              ? `Puoi annullare oppure confermare l'eliminazione della timbratura del ${formatDate(timbraturaDaEliminare.data, 'dd MMM yyyy')}.`
+              : 'Puoi annullare oppure confermare l\'eliminazione della timbratura selezionata.'}
+          </Text>
+          <View style={styles.sheetButtons}>
+            <Button
+              title="Annulla"
+              variant="outline"
+              onPress={closeDeleteSheet}
+              disabled={deleting}
+              style={styles.sheetButton}
+              testID="timbrature-delete-cancel-button"
+            />
+            <Button
+              title="Conferma"
+              variant="danger"
+              onPress={confirmDelete}
+              loading={deleting}
+              style={styles.sheetButton}
+              testID="timbrature-delete-confirm-button"
+            />
+          </View>
+        </View>
+      </BottomSheet>
+
       <BottomSheet
         visible={showAddSheet}
         onClose={closeAddSheet}
@@ -913,6 +1006,33 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     inlineActionDangerText: {
       color: colors.error,
+    },
+    deleteSheetContent: {
+      paddingBottom: 8,
+    },
+    deleteIconContainer: {
+      width: 52,
+      height: 52,
+      borderRadius: 26,
+      backgroundColor: `${colors.error}12`,
+      alignItems: 'center',
+      justifyContent: 'center',
+      marginBottom: 16,
+      alignSelf: 'center',
+    },
+    deleteSheetTitle: {
+      fontSize: 17,
+      fontWeight: '700',
+      color: colors.text,
+      textAlign: 'center',
+      marginBottom: 10,
+    },
+    deleteSheetText: {
+      fontSize: 14,
+      lineHeight: 21,
+      color: colors.textSecondary,
+      textAlign: 'center',
+      marginBottom: 8,
     },
     confrontoRow: {
       flexDirection: 'row',

@@ -11,15 +11,30 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
+import { useFocusEffect } from 'expo-router';
 import { Card, StatCard, LoadingScreen } from '../../src/components';
 import { useAppStore } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
 import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { Marcatura } from '../../src/types';
 
 const CARD_ORDER_KEY = 'home_card_order';
 const DEFAULT_ORDER = ['timbratura', 'riepilogo', 'stima', 'ferie', 'comporto', 'busta'];
+
+interface ApiErrorResponse {
+  response?: {
+    data?: {
+      detail?: string;
+    };
+  };
+}
+
+interface SessionStartOverride {
+  marcaturaId: string;
+  startedAtMs: number;
+}
 
 function formatHMS(totalSeconds: number): string {
   const h = Math.floor(totalSeconds / 3600);
@@ -31,6 +46,41 @@ function formatHMS(totalSeconds: number): string {
 function parseOraToSeconds(ora: string): number {
   const parts = ora.split(':');
   return parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parts[2] ? parseInt(parts[2]) : 0);
+}
+
+function parseSessionStartMs(data: string, marcatura: Marcatura): number | null {
+  if (marcatura.created_at) {
+    const parsedCreatedAt = new Date(marcatura.created_at);
+    if (!Number.isNaN(parsedCreatedAt.getTime())) {
+      return parsedCreatedAt.getTime();
+    }
+  }
+
+  const timeParts = marcatura.ora.split(':');
+  if (timeParts.length < 2) {
+    return null;
+  }
+
+  const fallback = new Date(`${data}T${marcatura.ora}`);
+  if (!Number.isNaN(fallback.getTime())) {
+    return fallback.getTime();
+  }
+
+  const today = new Date();
+  return new Date(
+    today.getFullYear(),
+    today.getMonth(),
+    today.getDate(),
+    Number.parseInt(timeParts[0], 10),
+    Number.parseInt(timeParts[1], 10),
+    timeParts[2] ? Number.parseInt(timeParts[2], 10) : 0,
+    0
+  ).getTime();
+}
+
+function getApiErrorMessage(error: unknown, fallback: string) {
+  const response = (error as ApiErrorResponse | null)?.response;
+  return response?.data?.detail || fallback;
 }
 
 export default function DashboardScreen() {
@@ -52,6 +102,7 @@ export default function DashboardScreen() {
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
   const [editMode, setEditMode] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [sessionStartOverride, setSessionStartOverride] = useState<SessionStartOverride | null>(null);
 
   const toggle = (key: string) => {
     if (editMode) return;
@@ -99,7 +150,11 @@ export default function DashboardScreen() {
     }
   }, [setDashboard, setTodayTimbratura, setUnreadAlerts]);
 
-  useEffect(() => { loadData(); }, [loadData]);
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -113,28 +168,56 @@ export default function DashboardScreen() {
     return last?.tipo === 'entrata' ? (last.ora as string) : null;
   })();
 
+  const activeEntrataMarcatura = (() => {
+    const marcature = todayTimbratura?.marcature || [];
+    const ultimaMarcatura = marcature.length > 0 ? marcature[marcature.length - 1] : null;
+    return ultimaMarcatura?.tipo === 'entrata' ? ultimaMarcatura : null;
+  })();
+
+  const activeSessionStartMs = (() => {
+    if (!todayTimbratura || !activeEntrataMarcatura) {
+      return null;
+    }
+
+    if (sessionStartOverride?.marcaturaId === activeEntrataMarcatura.id) {
+      return sessionStartOverride.startedAtMs;
+    }
+
+    return parseSessionStartMs(todayTimbratura.data, activeEntrataMarcatura);
+  })();
+
   useEffect(() => {
-    if (!activeEntrataOra) {
+    if (!activeEntrataOra || !activeSessionStartMs) {
       setElapsedSeconds(0);
       return;
     }
-    const now = new Date();
-    const parts = activeEntrataOra.split(':');
-    const start = new Date(
-      now.getFullYear(), now.getMonth(), now.getDate(),
-      parseInt(parts[0]), parseInt(parts[1]), parts[2] ? parseInt(parts[2]) : 0, 0
-    );
-    const compute = () => Math.max(0, Math.floor((Date.now() - start.getTime()) / 1000));
+    const compute = () => Math.max(0, Math.floor((Date.now() - activeSessionStartMs) / 1000));
     setElapsedSeconds(compute());
     const interval = setInterval(() => setElapsedSeconds(compute()), 1000);
     return () => clearInterval(interval);
-  }, [activeEntrataOra]);
+  }, [activeEntrataOra, activeSessionStartMs]);
+
+  useEffect(() => {
+    if (!activeEntrataMarcatura) {
+      setSessionStartOverride(null);
+    }
+  }, [activeEntrataMarcatura]);
 
   const handleTimbra = async (tipo: 'entrata' | 'uscita') => {
     setTimbraturaLoading(true);
     try {
       const response = await api.timbra(tipo);
+      const sessionStartedAtMs = Date.now();
       setTodayTimbratura(response.data);
+      const ultimaMarcatura = response.data.marcature[response.data.marcature.length - 1];
+      if (tipo === 'entrata' && ultimaMarcatura?.tipo === 'entrata') {
+        setSessionStartOverride({
+          marcaturaId: ultimaMarcatura.id,
+          startedAtMs: sessionStartedAtMs,
+        });
+      } else {
+        setSessionStartOverride(null);
+      }
       Alert.alert(
         'Timbratura registrata',
         `${tipo === 'entrata' ? 'Entrata' : 'Uscita'} registrata alle ${
@@ -142,8 +225,8 @@ export default function DashboardScreen() {
         }`,
       );
       loadData();
-    } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore durante la timbratura');
+    } catch (error: unknown) {
+      Alert.alert('Errore', getApiErrorMessage(error, 'Errore durante la timbratura'));
     } finally {
       setTimbraturaLoading(false);
     }
@@ -238,11 +321,14 @@ export default function DashboardScreen() {
 
             {!editMode && expanded.timbratura && marcature.length > 0 && (
               <View style={styles.timerContainer}>
-                <Text style={[styles.timerDisplay, activeEntrataOra ? styles.timerActive : styles.timerStopped]}>
+                <Text
+                  style={[styles.timerDisplay, activeEntrataOra ? styles.timerActive : styles.timerStopped]}
+                  testID="dashboard-timer-display"
+                >
                   {formatHMS(workedSecondsTotal)}
                 </Text>
-                <Text style={styles.timerSubLabel}>
-                  {activeEntrataOra ? `in corso dal ${activeEntrataOra}` : 'sessione conclusa'}
+                <Text style={styles.timerSubLabel} testID="dashboard-timer-status">
+                  {activeEntrataOra ? `Oggi sei entrato alle ${activeEntrataOra}` : 'Per oggi hai finito'}
                 </Text>
               </View>
             )}
@@ -251,7 +337,7 @@ export default function DashboardScreen() {
               <View style={styles.clockInfo}>
                 {marcature.length > 0 ? (
                   <View style={styles.marcatureList}>
-                    {marcature.map((m: any, idx: number) => (
+                    {marcature.map((m, idx: number) => (
                       <View key={m.id || idx} style={styles.marcaturaItem}>
                           <Ionicons
                             name={m.tipo === 'entrata' ? 'log-in' : 'log-out'}

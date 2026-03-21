@@ -5,6 +5,31 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-21 — Timer Home timbratura parte da zero
+Cosa: corretto il timer della card Home timbrature usando il timestamp reale dell'ultima entrata e un override locale alla conferma della timbratura, aggiunti testID dedicati e rafforzata la verifica E2E sul primo secondo di conteggio
+Perché: evitare che il timer parta gia avanzato dopo il tap su Entrata e rendere affidabile la percezione del conteggio in tempo reale
+File: frontend/app/(tabs)/index.tsx, tests/test_e2e.py, CHANGELOG.md
+
+## 2026-03-21 — Aggiornamento testi stato timbratura Home
+Cosa: aggiornati i messaggi sotto il timer della card Home timbrature con testi piu espliciti per sessione attiva e giornata conclusa, e adeguata la verifica E2E
+Perché: rendere piu chiaro all'utente lo stato corrente della timbratura nella schermata principale
+File: frontend/app/(tabs)/index.tsx, tests/test_e2e.py, CHANGELOG.md
+
+## 2026-03-21 — Riavvio forzato dal tasto Start
+Cosa: aggiornati gli script di avvio locale per chiudere backend e frontend gia attivi prima di rilanciare lo stack completo quando viene eseguito `start-app.ps1`
+Perché: rendere il tasto Start di Codex affidabile anche quando l'app e gia in esecuzione, evitando stato sporco e processi duplicati
+File: start-app.ps1, start-backend.ps1, start-frontend.ps1, tests/test_unit.py, CHANGELOG.md
+
+## 2026-03-21 — Correzione elimina timbratura con conferma esplicita
+Cosa: sostituita la conferma nativa della cancellazione nella scheda Timbrature con uno sheet interno all'app, corretta la funzione elimina con refresh affidabile dello stato, sincronizzata la scheda Home quando viene rimossa la timbratura del giorno e aggiunti test API ed E2E per annulla/conferma della rimozione
+Perché: rendere stabile la cancellazione della timbratura anche sul web, dare all'utente una conferma chiara prima dell'azione distruttiva e mantenere allineate Home e Timbrature
+File: frontend/app/(tabs)/timbrature.tsx, frontend/app/(tabs)/index.tsx, tests/test_api.py, tests/test_e2e.py, CHANGELOG.md
+
+## 2026-03-19 — Script di avvio locale per Codex
+Cosa: aggiunti tre launcher PowerShell in root per avviare backend, frontend e stack completo in locale con log runtime in `%TEMP%\\Timbrature-Codex-runtime`, piu un test unitario che blocca regressioni sui comandi di bootstrap
+Perché: rendere riutilizzabile dal tasto Start di Codex l'avvio locale dell'app senza dover riscrivere ogni volta i comandi manuali
+File: start-backend.ps1, start-frontend.ps1, start-app.ps1, tests/test_unit.py, CHANGELOG.md
+
 ## 2026-03-19 — Fix warning deprecazione FastAPI/Pydantic/datetime
 Cosa: sostituiti gli usi deprecati di `datetime.utcnow()`, introdotta una compatibilita runtime per FastAPI/Starlette su Python 3.14+, rimossi gli usi Pydantic v1 fuori dalla zona protetta e mantenuti filtri mirati solo per warning di librerie terze
 Perché: ottenere output pulito nei test, evitare regressioni con versioni future di Python e librerie e mantenere intatti gli algoritmi validati manualmente

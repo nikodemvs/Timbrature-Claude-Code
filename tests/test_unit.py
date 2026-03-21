@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import sys
 from datetime import datetime, timedelta, timezone
+from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
@@ -310,3 +311,29 @@ def test_unit_parse_zucchetti_pdf_e_download_url(monkeypatch):
     assert da_url["success"] is True
     assert da_url["filename"] == "busta-marzo.pdf"
     assert da_url["size"] == 3
+
+
+def test_unit_script_avvio_locale_esistono_e_puntano_ai_comandi_attesi():
+    root_dir = Path(__file__).resolve().parents[1]
+    backend_script = root_dir / "start-backend.ps1"
+    frontend_script = root_dir / "start-frontend.ps1"
+    app_script = root_dir / "start-app.ps1"
+
+    for script in [backend_script, frontend_script, app_script]:
+        assert script.exists(), f"Script mancante: {script.name}"
+
+    backend_source = backend_script.read_text(encoding="utf-8")
+    frontend_source = frontend_script.read_text(encoding="utf-8")
+    app_source = app_script.read_text(encoding="utf-8")
+
+    assert "uvicorn server:app" in backend_source
+    assert "backend.log" in backend_source
+    assert "[switch]$ForceRestart" in backend_source
+    assert "taskkill" in backend_source
+    assert "expo start --web" in frontend_source
+    assert "EXPO_PUBLIC_BACKEND_URL" in frontend_source
+    assert "[switch]$ForceRestart" in frontend_source
+    assert "taskkill" in frontend_source
+    assert "start-backend.ps1" in app_source
+    assert "start-frontend.ps1" in app_source
+    assert "-ForceRestart" in app_source

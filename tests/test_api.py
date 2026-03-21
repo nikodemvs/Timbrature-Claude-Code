@@ -78,6 +78,23 @@ async def test_api_timbrature_lista_creazione_duplicato_ed_edge_notturno(client_
     assert errore.status_code == 422
 
 
+async def test_api_timbrature_eliminazione_positiva_errore_ed_edge_vuoto(client_api):
+    await client_api.post(
+        "/api/timbrature",
+        json={"data": "2026-03-20", "ora_entrata": "08:00", "ora_uscita": "17:00"},
+    )
+
+    eliminata = await client_api.delete("/api/timbrature/2026-03-20")
+    dettaglio = await client_api.get("/api/timbrature/2026-03-20")
+    errore = await client_api.delete("/api/timbrature/2026-03-20")
+
+    assert eliminata.status_code == 200
+    assert eliminata.json()["message"] == "Timbratura eliminata"
+    assert dettaglio.status_code == 404
+    assert errore.status_code == 404
+    assert errore.json()["detail"] == "Timbratura non trovata"
+
+
 async def test_api_timbra_registra_flusso_completo_errore_e_reperibilita(client_api):
     errore = await client_api.post("/api/timbrature/timbra", params={"tipo": "uscita"})
     entrata = await client_api.post("/api/timbrature/timbra", params={"tipo": "entrata", "is_reperibilita": True})

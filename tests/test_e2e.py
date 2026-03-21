@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import json
 import re
+from datetime import datetime, timedelta
 from pathlib import Path
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 import pytest
 from playwright.sync_api import Page, expect, sync_playwright
@@ -24,6 +28,37 @@ def salva_screenshot(page: Page, output_dir: Path, nome: str) -> Path:
     destinazione.parent.mkdir(parents=True, exist_ok=True)
     page.screenshot(path=str(destinazione), full_page=True)
     return destinazione
+
+
+def crea_timbratura_di_test(backend_url: str, *, data: str, ora_entrata: str = "08:00", ora_uscita: str = "17:00") -> None:
+    richiesta = Request(
+        url=f"{backend_url}/api/timbrature",
+        data=json.dumps(
+            {
+                "data": data,
+                "ora_entrata": ora_entrata,
+                "ora_uscita": ora_uscita,
+                "note": "Setup e2e eliminazione",
+            }
+        ).encode("utf-8"),
+        headers={"Content-Type": "application/json"},
+        method="POST",
+    )
+    with urlopen(richiesta, timeout=15) as risposta:
+        assert risposta.status == 200
+
+
+def elimina_timbratura_di_test(backend_url: str, *, data: str) -> None:
+    richiesta = Request(
+        url=f"{backend_url}/api/timbrature/{data}",
+        method="DELETE",
+    )
+    try:
+        with urlopen(richiesta, timeout=15) as risposta:
+            assert risposta.status == 200
+    except HTTPError as errore:
+        if errore.code != 404:
+            raise
 
 
 def contrasto_testo_su_sfondo(page: Page, testo: str) -> float:
@@ -82,12 +117,18 @@ def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazion
     try:
         bottone_entrata = page.get_by_test_id("dashboard-clock-in-button")
         bottone_uscita = page.get_by_test_id("dashboard-clock-out-button")
+        timer_display = page.get_by_test_id("dashboard-timer-display")
+        timer_status = page.get_by_test_id("dashboard-timer-status")
 
         expect(bottone_entrata).to_be_visible()
         bottone_entrata.click()
-        page.wait_for_timeout(1000)
+        expect(timer_status).to_have_text(re.compile(r"^Oggi sei entrato alle \d{2}:\d{2}$"))
+        expect(timer_display).to_have_text(re.compile(r"^00:00:0[0-1]$"))
+        page.wait_for_timeout(1200)
+        expect(timer_display).to_have_text(re.compile(r"^00:00:0[1-2]$"))
         bottone_uscita.click()
         page.wait_for_timeout(1000)
+        expect(timer_status).to_have_text("Per oggi hai finito")
 
         marcatura_entrata = page.get_by_text(re.compile(r"^E: \d{2}:\d{2}$")).last.text_content()
         marcatura_uscita = page.get_by_text(re.compile(r"^U: \d{2}:\d{2}$")).last.text_content()
@@ -99,7 +140,7 @@ def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazion
         assert marcatura_uscita is not None
         expect(page.get_by_text(marcatura_entrata)).to_be_visible()
         expect(page.get_by_text(marcatura_uscita)).to_be_visible()
-        expect(page.get_by_text("Modifica")).to_be_visible()
+        expect(page.get_by_test_id("timbrature-edit-button").first).to_be_visible()
     finally:
         context.close()
 
@@ -120,6 +161,64 @@ def test_e2e_crea_ferie_e_aggiorna_il_saldo(browser, stack_applicazione):
 
         expect(page.get_by_text("Ferie")).to_be_visible()
         assert saldo_finale == pytest.approx(saldo_iniziale - 8.0, abs=0.01)
+    finally:
+        context.close()
+
+
+def test_e2e_timbratura_mostra_popup_e_conferma_eliminazione(browser, stack_applicazione):
+    data_timbratura = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+    crea_timbratura_di_test(stack_applicazione.backend_url, data=data_timbratura)
+
+    context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
+    try:
+        page.get_by_test_id("tab-timbrature").click()
+        page.get_by_test_id("timbrature-screen").wait_for(timeout=30000)
+        page.wait_for_timeout(1200)
+
+        delete_buttons = page.get_by_test_id("timbrature-delete-button")
+        count_before = delete_buttons.count()
+        assert count_before >= 1
+
+        delete_buttons.first.click()
+        page.get_by_test_id("timbrature-delete-sheet").wait_for(timeout=10000)
+        expect(page.get_by_test_id("timbrature-delete-confirm-button")).to_be_visible()
+        page.get_by_test_id("timbrature-delete-cancel-button").click()
+        page.get_by_test_id("timbrature-delete-sheet").wait_for(state="hidden", timeout=10000)
+        assert page.get_by_test_id("timbrature-delete-button").count() == count_before
+
+        page.get_by_test_id("timbrature-delete-button").first.click()
+        page.get_by_test_id("timbrature-delete-sheet").wait_for(timeout=10000)
+        page.get_by_test_id("timbrature-delete-confirm-button").click()
+        page.wait_for_timeout(1500)
+
+        assert page.get_by_test_id("timbrature-delete-button").count() == count_before - 1
+    finally:
+        context.close()
+
+
+def test_e2e_eliminazione_timbratura_aggiorna_anche_la_home(browser, stack_applicazione):
+    data_timbratura = datetime.now().strftime("%Y-%m-%d")
+    elimina_timbratura_di_test(stack_applicazione.backend_url, data=data_timbratura)
+    crea_timbratura_di_test(stack_applicazione.backend_url, data=data_timbratura)
+
+    context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
+    try:
+        expect(page.get_by_text("Ore lavorate:")).to_be_visible()
+
+        page.get_by_test_id("tab-timbrature").click()
+        page.get_by_test_id("timbrature-screen").wait_for(timeout=30000)
+        page.wait_for_timeout(1200)
+
+        page.get_by_test_id("timbrature-delete-button").first.click()
+        page.get_by_test_id("timbrature-delete-sheet").wait_for(timeout=10000)
+        page.get_by_test_id("timbrature-delete-confirm-button").click()
+        page.wait_for_timeout(1500)
+
+        page.get_by_test_id("tab-home").click()
+        page.get_by_test_id("dashboard-screen").wait_for(timeout=30000)
+        page.wait_for_timeout(1200)
+
+        expect(page.get_by_text("Nessuna timbratura oggi")).to_be_visible()
     finally:
         context.close()
 

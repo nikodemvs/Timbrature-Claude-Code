@@ -295,9 +295,7 @@ export default function DashboardScreen() {
       }
       Alert.alert(
         'Timbratura registrata',
-        `${tipo === 'entrata' ? 'Entrata' : 'Uscita'} registrata alle ${
-          tipo === 'entrata' ? response.data.ora_entrata : response.data.ora_uscita
-        }`,
+        `${tipo === 'entrata' ? 'Entrata' : 'Uscita'} registrata alle ${ultimaMarcatura?.ora ?? '--:--'}`,
       );
       loadData();
     } catch (error: unknown) {

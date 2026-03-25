@@ -1,0 +1,25 @@
+{
+  "version": "0.0.1",
+  "configurations": [
+    {
+      "name": "backend",
+      "runtimeExecutable": "python",
+      "runtimeArgs": ["-m", "uvicorn", "server:app", "--host", "127.0.0.1", "--port", "8001"],
+      "cwd": "backend",
+      "port": 8001
+    },
+    {
+      "name": "frontend",
+      "runtimeExecutable": "node",
+      "runtimeArgs": ["node_modules/expo/bin/cli", "start", "--web", "--port", "8086", "--clear"],
+      "cwd": "frontend",
+      "port": 8086,
+            "env": {
+        "CI": "1",
+        "BROWSER": "none",
+        "EXPO_PUBLIC_BACKEND_URL": "http://127.0.0.1:8001"
+      }
+    }
+  ],
+  "autoVerify": true
+}

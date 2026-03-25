@@ -8,9 +8,10 @@
 import { useEffect } from 'react';
 import NetInfo, { NetInfoState } from '@react-native-community/netinfo';
 import { useAppStore } from '../store/appStore';
+import { syncOfflineQueue } from '../services/offlineApi';
 
 export function useNetworkStatus() {
-  const { setIsOnline, isOnline } = useAppStore();
+  const { setIsOnline, isOnline, cloudEnabled } = useAppStore();
 
   useEffect(() => {
     // Stato iniziale
@@ -26,6 +27,12 @@ export function useNetworkStatus() {
 
     return () => unsubscribe();
   }, [setIsOnline]);
+
+  useEffect(() => {
+    if (isOnline && cloudEnabled) {
+      void syncOfflineQueue();
+    }
+  }, [cloudEnabled, isOnline]);
 
   return { isOnline };
 }

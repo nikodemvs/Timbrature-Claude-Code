@@ -1,17 +1,29 @@
 param(
-    [int]$Port = 8081,
-    [int]$BackendPort = 8000,
+    [int]$Port = 8083,
+    [int]$BackendPort = 8001,
     [switch]$WaitForReady,
     [switch]$NoClearCache,
     [switch]$ForceRestart,
-    [switch]$NoResponsively
+    [switch]$NoResponsively,
+    [switch]$Foreground,
+    [string]$FrontendDir,
+    [string]$RuntimeDir
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = $PSScriptRoot
-$frontendDir = Join-Path $repoRoot "frontend"
-$runtimeDir = Join-Path $env:TEMP "Timbrature-Codex-runtime"
+if (-not $FrontendDir) {
+    $frontendDir = Join-Path $repoRoot "frontend"
+} else {
+    $frontendDir = $FrontendDir
+}
+if (-not (Test-Path -LiteralPath $frontendDir)) {
+    throw "Directory frontend non trovata: $frontendDir"
+}
+if (-not $RuntimeDir) {
+    $runtimeDir = Join-Path $env:TEMP "Timbrature-runtime"
+}
 $pidPath = Join-Path $runtimeDir "frontend.pid"
 $logPath = Join-Path $runtimeDir "frontend.log"
 $errorLogPath = Join-Path $runtimeDir "frontend.err.log"
@@ -55,6 +67,23 @@ function Stop-RunningProcess {
     Start-Sleep -Seconds 2
 }
 
+function Stop-ProcessesOnPort {
+    param([int]$Port)
+
+    $pids = @()
+    netstat -aon | Select-String ":${Port}\s" | ForEach-Object {
+        $parts = $_.ToString().Trim() -split '\s+'
+        $pidValue = $parts[-1]
+        if ($pidValue -match '^\d+$' -and [int]$pidValue -gt 0) {
+            $pids += [int]$pidValue
+        }
+    }
+
+    foreach ($pidValue in ($pids | Select-Object -Unique)) {
+        & taskkill /PID $pidValue /T /F | Out-Null
+    }
+}
+
 function Wait-UrlReady {
     param(
         [string]$Url,
@@ -83,18 +112,18 @@ function Wait-UrlReady {
     throw "Timeout in attesa di $Url"
 }
 
-function Get-NpxCommand {
-    $npx = Get-Command npx -ErrorAction SilentlyContinue
-    if ($npx) {
-        return $npx.Source
+function Get-NodeCommand {
+    $node = Get-Command node -ErrorAction SilentlyContinue
+    if ($node) {
+        return $node.Source
     }
 
-    $npxCmd = Get-Command npx.cmd -ErrorAction SilentlyContinue
-    if ($npxCmd) {
-        return $npxCmd.Source
+    $nodeCmd = Get-Command node.exe -ErrorAction SilentlyContinue
+    if ($nodeCmd) {
+        return $nodeCmd.Source
     }
 
-    throw "npx non trovato nel PATH."
+    throw "node non trovato nel PATH."
 }
 
 function Get-ResponsivelyLauncher {
@@ -188,6 +217,7 @@ if ($processoEsistente) {
     if ($ForceRestart) {
         Write-Host "Frontend gia attivo: riavvio forzato in corso..."
         Stop-RunningProcess -Process $processoEsistente -PidFile $pidPath
+        Stop-ProcessesOnPort -Port $Port
     } else {
         Write-Host "Frontend gia avviato su http://127.0.0.1:$Port"
         if ($WaitForReady) {
@@ -195,12 +225,27 @@ if ($processoEsistente) {
         }
         return
     }
+} elseif ($ForceRestart) {
+    Stop-ProcessesOnPort -Port $Port
 }
 
-$npxCommand = Get-NpxCommand
-$clearFlag = ""
+$nodeCommand = Get-NodeCommand
+$clearArgument = ""
 if (-not $NoClearCache) {
-    $clearFlag = "--clear"
+    $clearArgument = " --clear"
+}
+
+if ($Foreground) {
+    Set-Location -LiteralPath $frontendDir
+    $env:CI = "1"
+    $env:BROWSER = "none"
+    $env:EXPO_PUBLIC_BACKEND_URL = "http://127.0.0.1:$BackendPort"
+    if ($NoClearCache) {
+        & $nodeCommand "node_modules/expo/bin/cli" start --web --port $Port
+    } else {
+        & $nodeCommand "node_modules/expo/bin/cli" start --web --port $Port --clear
+    }
+    exit $LASTEXITCODE
 }
 
 $command = @"
@@ -208,7 +253,7 @@ Set-Location -LiteralPath '$frontendDir'
 `$env:CI = '1'
 `$env:BROWSER = 'none'
 `$env:EXPO_PUBLIC_BACKEND_URL = 'http://127.0.0.1:$BackendPort'
-& '$npxCommand' expo start --web --port $Port $clearFlag
+& '$nodeCommand' 'node_modules/expo/bin/cli' start --web --port $Port$clearArgument
 "@
 
 $process = Start-Process `

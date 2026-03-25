@@ -5,6 +5,7 @@ markers = [
   "unit: test unitari rapidi sulle funzioni pure e sugli aggregatori diretti",
   "api: test HTTP su FastAPI con httpx senza avviare il server",
   "e2e: flussi utente completi con Playwright nel browser",
+  "e2e_smoke: smoke test di avvio frontend senza backend reale — rapido, usato in pre-push",
   "visual: verifiche visuali responsive, dark mode e touch target con Playwright",
 ]
 filterwarnings = [

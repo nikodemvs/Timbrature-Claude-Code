@@ -32,9 +32,12 @@ def apri_app(browser, frontend_url: str, viewport: dict[str, int]) -> tuple:
     context = browser.new_context(viewport=viewport)
     page = context.new_page()
     page.on("dialog", lambda dialog: dialog.accept())
+    page_errors: list[str] = []
+    page.on("pageerror", lambda error: page_errors.append(str(error)))
     page.goto(frontend_url, wait_until="domcontentloaded")
     page.get_by_test_id("dashboard-screen").wait_for(timeout=90000)
     page.wait_for_timeout(1500)
+    assert not page_errors, f"Errori runtime all'avvio: {page_errors}"
     return context, page
 
 
@@ -149,13 +152,16 @@ def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazion
 
         expect(bottone_entrata).to_be_visible()
         bottone_entrata.click()
-        expect(timer_status).to_have_text(re.compile(r"^Oggi sei entrato alle \d{2}:\d{2}$"))
-        expect(timer_display).to_have_text(re.compile(r"^00:00:0[0-1]$"))
+        expect(timer_status).to_have_text(
+            re.compile(r"^Oggi sei entrato alle \d{2}:\d{2}$"),
+            timeout=30000,
+        )
+        expect(timer_display).to_have_text(re.compile(r"^00:00:0[0-1]$"), timeout=30000)
         page.wait_for_timeout(1200)
-        expect(timer_display).to_have_text(re.compile(r"^00:00:0[1-2]$"))
+        expect(timer_display).to_have_text(re.compile(r"^00:00:0[1-2]$"), timeout=30000)
         bottone_uscita.click()
         page.wait_for_timeout(1000)
-        expect(timer_status).to_have_text("Per oggi hai finito")
+        expect(timer_status).to_have_text("Per oggi hai finito", timeout=30000)
 
         marcatura_entrata = page.get_by_text(re.compile(r"^E: \d{2}:\d{2}$")).last.text_content()
         marcatura_uscita = page.get_by_text(re.compile(r"^U: \d{2}:\d{2}$")).last.text_content()
@@ -176,6 +182,22 @@ def test_e2e_timbratura_completa_e_dashboard_coerente(browser, stack_applicazion
         context.close()
 
 
+@pytest.mark.e2e_smoke
+def test_e2e_startup_render_home_senza_errori(stack_frontend_mock):
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch()
+        try:
+            context, page = apri_app(browser, stack_frontend_mock.frontend_url, {"width": 390, "height": 844})
+            try:
+                expect(page.get_by_test_id("dashboard-screen")).to_be_visible()
+                expect(page.get_by_test_id("dashboard-clock-in-button")).to_be_visible()
+                expect(page.get_by_test_id("tab-home")).to_be_visible()
+            finally:
+                context.close()
+        finally:
+            browser.close()
+
+
 def test_e2e_crea_ferie_e_aggiorna_il_saldo(browser, stack_applicazione):
     context, page = apri_app(browser, stack_applicazione.frontend_url, {"width": 390, "height": 844})
     try:
@@ -190,7 +212,7 @@ def test_e2e_crea_ferie_e_aggiorna_il_saldo(browser, stack_applicazione):
 
         saldo_finale = float(page.get_by_test_id("assenze-ferie-value").text_content().replace("h", ""))
 
-        expect(page.get_by_text("Ferie")).to_be_visible()
+        expect(page.get_by_test_id("assenze-ferie-value")).to_have_text(re.compile(r"^\d+(\.\d)?h$"))
         assert saldo_finale == pytest.approx(saldo_iniziale - 8.0, abs=0.01)
     finally:
         context.close()
@@ -291,18 +313,41 @@ def test_e2e_altro_mostra_doppia_cancellazione_con_popup(browser, stack_applicaz
         page.get_by_test_id("altro-account-manual-cta").click()
         page.get_by_test_id("altro-settings-screen").wait_for(timeout=10000)
         page.get_by_test_id("altro-settings-edit-sheet").wait_for(timeout=10000)
+        edit_sheet = page.get_by_test_id("altro-settings-edit-sheet")
+        expect(edit_sheet.get_by_text("Nome", exact=True)).to_be_visible()
+        expect(edit_sheet.get_by_text("Cognome", exact=True)).to_be_visible()
+        expect(edit_sheet.get_by_text("Matricola", exact=True)).to_be_visible()
+        expect(edit_sheet.get_by_text("Numero badge", exact=True)).to_be_visible()
+        expect(edit_sheet.get_by_text("Gli altri dati verranno completati automaticamente al caricamento della prima busta paga.", exact=True)).to_be_visible()
         page.get_by_test_id("altro-settings-edit-cancel-button").click()
         page.get_by_test_id("altro-settings-edit-sheet").wait_for(state="hidden", timeout=10000)
         page.get_by_test_id("altro-back-button").click()
         page.get_by_test_id("altro-screen").wait_for(timeout=10000)
 
-        page.get_by_test_id("altro-account-upload-cta").click()
-        page.get_by_test_id("buste-screen").wait_for(timeout=30000)
-        expect(page.get_by_test_id("buste-upload-single-button")).to_be_visible()
+        richiesta = Request(
+            url=f"{stack_applicazione.backend_url}/api/settings",
+            data=json.dumps(
+                {
+                    "nome": "Mario",
+                    "cognome": "Rossi",
+                    "matricola": "",
+                    "numero_badge": "",
+                    "use_biometric": False,
+                }
+            ).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+            method="PUT",
+        )
+        with urlopen(richiesta, timeout=15) as risposta:
+            assert risposta.status == 200
 
         page.get_by_test_id("tab-home").click()
         page.get_by_test_id("dashboard-screen").wait_for(timeout=30000)
-        expect(page.get_by_test_id("dashboard-stima-card")).to_be_visible()
+        page.get_by_test_id("tab-altro").click()
+        page.get_by_test_id("altro-screen").wait_for(timeout=30000)
+        expect(page.get_by_text("Mario Rossi", exact=True)).to_be_visible()
+        expect(page.get_by_text("Nessun account attivo")).to_have_count(0)
+        expect(page.get_by_test_id("altro-account-manual-cta")).to_have_count(0)
     finally:
         context.close()
 

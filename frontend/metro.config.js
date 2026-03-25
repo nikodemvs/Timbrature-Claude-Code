@@ -13,6 +13,9 @@ config.cacheStores = [
 // Fix zustand import.meta issue
 config.resolver.unstable_conditionNames = ['require', 'react-native', 'browser'];
 
+// Support .wasm files (expo-sqlite web)
+config.resolver.assetExts.push('wasm');
+
 config.maxWorkers = 2;
 
 module.exports = config;

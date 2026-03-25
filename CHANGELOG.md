@@ -5,6 +5,102 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-25 — Fix: bottone Entrata card Timbratura Rapida non funzionava su web
+Cosa: aggiunto pattern `SELECT * FROM timbrature WHERE data = ?` nel `memoryDb.getAllAsync` di `localDb.ts`; il pattern mancante causava un'eccezione silenziata in `handleTimbra` che impediva qualsiasi aggiornamento UI e chiamata al backend
+Perché: `getTimbraturaByData` usa questa query per leggere la timbratura del giorno; il memoryDb (fallback web di expo-sqlite) non la gestiva e lanciava `Unsupported web getAllAsync SQL`
+File: frontend/src/db/localDb.ts
+
+## 2026-03-22 — BUG APERTO: Card Timbratura Rapida non registra entrata (web)
+Cosa: identificato bug in home page — click su "Entrata" non genera POST a backend né aggiorna UI; causa: `offlineApi.timbra()` chiama `db.upsertTimbratura()` su expo-sqlite web che genera "Invalid VFS state" nonostante fix precedente in `localDb.ts`; il catch block mostra Alert RN che non è intercettabile in preview web
+Perché: fallback in-memory di localDb.ts non copre tutti i metodi usati da offlineApi; da investigare in prossima sessione
+Task: verificare `localDb.ts` fallback web + `offlineApi.ts` L421 + comportamento `canUseCloud()`
+File: nessuna modifica — solo diagnosi
+
+## 2026-03-22 — Config preview tool: launch.json e metro.config.js
+Cosa: aggiornato `.claude/launch.json` con configurazione diretta python/node (backend 8001, frontend 8086, senza wrapper PowerShell); aggiunto `wasm` agli `assetExts` di Metro per supporto expo-sqlite web; impostato `EXPO_PUBLIC_BACKEND_URL=http://127.0.0.1:8001` nell'env del frontend
+Perché: i wrapper PowerShell causavano timeout nel preview tool di Claude Code; Metro non risolveva i file .wasm per expo-sqlite
+File: .claude/launch.json, frontend/metro.config.js
+
+## 2026-03-22 — Rimosso e2e_smoke dal pre-push locale
+Cosa: aggiornato `tools/checks.py` per eseguire `pre-commit` e `pre-push` solo con `pytest -m "unit or api"`; spostato `e2e_smoke` in `CI` insieme a `e2e` e `visual`; aggiornati `AGENTS.md`, `CLAUDE.md`, `memory/MEMORY.md` e i test di coerenza (`tests/test_checks_runner.py`, `tests/test_docs_config.py`) per riflettere il nuovo flusso locale ultra-rapido e l'uso locale di Playwright CLI / Playwright Interactive / Screenshot.
+Perché: il bootstrap Metro+Expo rendeva `e2e_smoke` troppo lento in pre-push locale; il controllo completo resta in CI asincrona senza bloccare il ciclo di sviluppo.
+File: tools/checks.py, AGENTS.md, CLAUDE.md, memory/MEMORY.md, tests/test_checks_runner.py, tests/test_docs_config.py, CHANGELOG.md
+
+## 2026-03-22 — Policy locale ultra-rapida: e2e/visual solo CI
+Cosa: aggiornato `tools/checks.py` per applicare gate locali fissi e veloci (`pre-commit`: `pytest -m "unit or api"`, `pre-push`: `pytest -m "unit or api"` + `pytest -m e2e_smoke`) e spostare in `CI` i controlli più costosi (`docs_config`, `offline_runtime`, `tsc`, `e2e`, `visual`); aggiornati test runner/documentali e documentazione root/frontend per dichiarare che in locale E2E/visual si fanno con Playwright CLI Skill o Playwright Interactive, non con `pytest -m e2e|visual`
+Perché: ridurre drasticamente i tempi del flusso locale ed evitare avvii stack completi nei gate locali, mantenendo la copertura completa asincrona in CI
+File: tools/checks.py, tests/test_checks_runner.py, tests/test_docs_config.py, AGENTS.md, CLAUDE.md, frontend/CLAUDE.md, memory/MEMORY.md, CHANGELOG.md
+
+## 2026-03-22 — Testing unificato + governance + file ciclo (Claude Code × Codex)
+Cosa: piano concordato tra Claude Code e Codex — aggiunto `PROTECTED_ZONES.md` come fonte unica delle zone protette; aggiunte fixture `stack_frontend_mock` e `stack_full_integration` in conftest.py; test startup marcato `e2e_smoke` con fixture senza backend; marker `e2e_smoke` in pyproject.toml; `pytest-xdist` in requirements-test.txt; rimossi check porte hardcodate da test_docs_config.py con check di coerenza strutturale; creati CHANGES.md e TEST_RUN.md con template rotate-and-replace; aggiornato AGENTS.md e CLAUDE.md con reference a PROTECTED_ZONES.md; fix metro.config.js per supporto .wasm (expo-sqlite web)
+Perché: rendere i test E2E più veloci separando smoke test (solo frontend) dai test di integrazione reale; unificare governance con fonte unica per zone protette; eliminare valori fissi fragili nei test documentali; definire protocollo condiviso per tracciare cicli modifica→test
+File: PROTECTED_ZONES.md, CHANGES.md, TEST_RUN.md, AGENTS.md, CLAUDE.md, tests/conftest.py, tests/test_e2e.py, tests/test_docs_config.py, pyproject.toml, requirements-test.txt, frontend/metro.config.js
+
+## 2026-03-22 — Gate startup-smoke rapido e de-duplicazione E2E
+Cosa: aggiunto `tools/startup_smoke.py` per verificare in automatico bootstrap backend+frontend e rendering home con Playwright headless; integrato nel runner path-aware come check `startup_smoke` in `pre-push`; spostata la suite E2E/visual completa al solo `CI`; escluso dal comando E2E il test startup gia coperto da smoke; aggiornati test del runner e documentazione operativa
+Perché: evitare timeout e ridurre i tempi dei controlli automatici locali mantenendo una verifica reale dell'avvio dell'app senza duplicare la stessa copertura in più livelli
+File: tools/startup_smoke.py, tools/checks.py, tests/test_checks_runner.py, tests/test_docs_config.py, AGENTS.md, CLAUDE.md, memory/MEMORY.md, CHANGELOG.md
+
+## 2026-03-22 — Separazione netta tra policy test e skill
+Cosa: ripulite le sezioni guida per rendere i controlli automatici una policy autonoma e le skill una sezione separata e non vincolante; riorganizzata anche `memory/MEMORY.md` in blocchi distinti controlli/skill; rafforzato il test documentale sulla distinzione
+Perché: evitare commistioni inutili tra regole di test e competenze/skill, così Codex e Claude leggono subito cosa è obbligatorio e cosa è solo raccomandato
+File: AGENTS.md, CLAUDE.md, memory/MEMORY.md, tests/test_docs_config.py, CHANGELOG.md
+
+## 2026-03-22 — Runner test coerente con la policy CI
+Cosa: aggiornato `tools/checks.py` per far eseguire sempre in CI il gate rapido `pytest -m "unit or api"` anche quando il diff tocca solo docs o configurazione, esteso `tests/test_checks_runner.py` per bloccare questa regola e reso `_run-checks.sh` più robusto su Windows con fallback `python` / `python3` / `py -3`
+Perché: riallineare il comportamento reale del runner alla policy documentata e rendere affidabile l'avvio automatico dei check locali senza dover lanciare test manualmente
+File: tools/checks.py, .githooks/_run-checks.sh, tests/test_checks_runner.py, CHANGELOG.md
+
+## 2026-03-22 — Stabilizzato bootstrap SQLite nella preview web
+Cosa: corretto il gate runtime in `frontend/src/db/localDb.ts` per trattare ogni esecuzione `Platform.OS === 'web'` come ambiente web e usare sempre il fallback in-memory gia presente, evitando il ramo `expo-sqlite` persistente durante la preview browser; rafforzato il test offline runtime sul comportamento web
+Perché: la preview locale avviata con gli script `.claude` si bloccava su web con errori `cannot create file` / `xFileControl` / `Invalid VFS state` nel worker SQLite perche il bootstrap poteva entrare nel ramo sbagliato invece del fallback web
+File: frontend/src/db/localDb.ts, tests/test_offline_runtime.py, CHANGELOG.md
+
+## 2026-03-22 — Metodo di avvio locale unificato
+Cosa: allineati `start-backend.ps1`, `start-frontend.ps1` e `start-app.ps1` alle porte locali `8001/8083`, aggiunta modalita `-Foreground` ai servizi root, convertiti gli script `.claude/preview-*` in wrapper sottili che delegano agli script root e aggiornato `.claude/launch.json` per usare la stessa catena di avvio; adeguati docs e test documentali
+Perché: eliminare la doppia implementazione tra repo e Claude Preview e avere un unico metodo di avvio locale realmente condiviso e verificabile
+File: start-backend.ps1, start-frontend.ps1, start-app.ps1, .claude/preview-backend.ps1, .claude/preview-frontend.ps1, .claude/launch.json, AGENTS.md, CLAUDE.md, backend/AGENTS.md, tests/test_docs_config.py, CHANGELOG.md
+
+## 2026-03-22 — Formalizzata automazione test e anti-duplicazione
+Cosa: riscritta la policy test nei file guida root, backend, frontend e memoria condivisa con una sequenza chiara `pre-commit` / `pre-push` / `CI`, gate reali per path, regola anti-duplicazione tra unit, api, e2e e visual, e aggiornato il test documentale per bloccare la nuova struttura
+Perché: rendere univoco per Codex e Claude Code quando i test partono automaticamente, quali suite usare e come evitare ripetizioni inutili tra livelli di test
+File: AGENTS.md, CLAUDE.md, backend/AGENTS.md, backend/CLAUDE.md, frontend/AGENTS.md, frontend/CLAUDE.md, memory/MEMORY.md, tests/test_docs_config.py, CHANGELOG.md
+
+## 2026-03-21 — Formalizzato toolchain di controllo e skill utili
+Cosa: aggiunte nei file guida root, backend, frontend e memoria condivisa le sezioni operative su controlli standard (`pytest`, marker, test docs/offline, `tsc --noEmit` quando rilevante), controlli condizionali per UI e sync offline, strumenti di sviluppo utili (`playwright-interactive`, `screenshot`, `pdf`, MCP Preview/Chrome) e skill raccomandate per questo progetto; esteso il test documentale per bloccare regressioni sulla policy di toolchain e skill
+Perché: rendere stabile e condiviso tra Codex e Claude Code l'insieme degli strumenti da usare per sviluppo, debug e verifica dell'app senza doverlo ridefinire a ogni sessione
+File: AGENTS.md, CLAUDE.md, backend/AGENTS.md, backend/CLAUDE.md, frontend/AGENTS.md, frontend/CLAUDE.md, memory/MEMORY.md, tests/test_docs_config.py, CHANGELOG.md
+
+---
+
+## 2026-03-21 — Allineamento offline-first, preview Claude e policy Gemini
+Cosa: riallineati AGENTS/CLAUDE root, backend e frontend alla realtà corrente del progetto; chiarito che Gemini può accedere ai dati e ai file utente necessari a rispondere senza log superflui; rese coerenti le porte preview Claude su 8001/8083 con backend URL allineato; creata `memory/MEMORY.md` come memoria condivisa locale; implementato il replay della `offline_queue` con flush automatico al ritorno online o alla riattivazione del cloud; aggiornati tipi frontend e helper locali al modello path-based e corretta la semantica di `clearAccount`; aggiunti test di coerenza docs/config e runtime offline
+Perché: eliminare i disallineamenti tra documentazione, configurazione locale e comportamento reale dell'app, mantenendo coerenti la policy Gemini e il flusso offline-first
+File: AGENTS.md, CLAUDE.md, backend/AGENTS.md, backend/CLAUDE.md, frontend/AGENTS.md, frontend/CLAUDE.md, .claude/launch.json, .claude/preview-backend.ps1, .claude/preview-frontend.ps1, memory/MEMORY.md, frontend/src/services/offlineApi.ts, frontend/src/db/localDb.ts, frontend/src/hooks/useNetworkStatus.ts, frontend/src/types/index.ts, tests/test_docs_config.py, tests/test_offline_runtime.py, CHANGELOG.md
+
+---
+
+## 2026-03-21 — Creati contratti agenti condivisi
+Cosa: creata la cartella `agents/` con contratti operativi per `PRODUCT_REQUIREMENTS_AGENT`, `ARCHITECTURE_AGENT`, `BACKEND_API_AGENT`, `FRONTEND_UI_AGENT`, `OFFLINE_DATA_AGENT`, `PAYROLL_LOGIC_AGENT` e `QA_AGENT`; aggiornati i file guida root, backend e frontend per renderli discoverable sia da Codex sia da Claude Code
+Perché: rendere concreta la regola di orchestrazione con ownership chiare, delega preventiva e parallelismo esplicito tra agenti specializzati
+File: agents/README.md, agents/PRODUCT_REQUIREMENTS_AGENT.md, agents/ARCHITECTURE_AGENT.md, agents/BACKEND_API_AGENT.md, agents/FRONTEND_UI_AGENT.md, agents/OFFLINE_DATA_AGENT.md, agents/PAYROLL_LOGIC_AGENT.md, agents/QA_AGENT.md, AGENTS.md, CLAUDE.md, backend/AGENTS.md, backend/CLAUDE.md, frontend/AGENTS.md, frontend/CLAUDE.md, CHANGELOG.md
+
+---
+
+## 2026-03-21 — Porte preview spostate (8001/8083)
+Cosa: backend spostato da porta 8000 a 8001, frontend da 8082 a 8083 in .claude/launch.json
+Perché: porte 8000 e 8082 occupate da Codex in parallelo
+File: .claude/launch.json
+
+---
+
+## 2026-03-21 — Allineamento file di documentazione
+Cosa: aggiunto calcoli.ts alla zona protetta di AGENTS.md; aggiornata nota cartelle ignorabili in AGENTS.md; corretti percorsi file critici e frase calcoli in frontend/AGENTS.md; aggiunto endpoint /api/documenti in backend/AGENTS.md; aggiornato stato memoria offline-first a "completato"; aggiunte in CLAUDE.md la procedura di allineamento documenti e la regola avviso compattazione chat
+Perché: correggere i disallineamenti emersi dal report di allineamento e codificare in CLAUDE.md le procedure operative per sessioni future
+File: AGENTS.md, CLAUDE.md, frontend/AGENTS.md, backend/AGENTS.md, memory/project_offline_architecture.md
+
+---
+
 ## 2026-03-21 — Fase 4 offline-first: backend cloud opzionale
 Cosa: aggiunto cloudEnabled (toggle persistito) allo store; offlineApi usa canUseCloud() (isOnline && cloudEnabled) per tutte le chiamate backend; sezione "Servizi cloud" in Impostazioni con switch on/off e descrizione funzionalità; guard cloud su upload PDF in buste-paga.tsx; guard cloud su chat AI in altro.tsx
 Perché: l'utente può disabilitare completamente il backend cloud — l'app funziona in modalità puramente locale; il cloud rimane necessario solo per parsing PDF e chat AI

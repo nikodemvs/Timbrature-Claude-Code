@@ -1,14 +1,26 @@
 param(
-    [int]$Port = 8000,
+    [int]$Port = 8001,
     [switch]$WaitForReady,
-    [switch]$ForceRestart
+    [switch]$ForceRestart,
+    [switch]$Foreground,
+    [string]$BackendDir,
+    [string]$RuntimeDir
 )
 
 $ErrorActionPreference = "Stop"
 
 $repoRoot = $PSScriptRoot
-$backendDir = Join-Path $repoRoot "backend"
-$runtimeDir = Join-Path $env:TEMP "Timbrature-Codex-runtime"
+if (-not $BackendDir) {
+    $backendDir = Join-Path $repoRoot "backend"
+} else {
+    $backendDir = $BackendDir
+}
+if (-not (Test-Path -LiteralPath $backendDir)) {
+    throw "Directory backend non trovata: $backendDir"
+}
+if (-not $RuntimeDir) {
+    $runtimeDir = Join-Path $env:TEMP "Timbrature-runtime"
+}
 $pidPath = Join-Path $runtimeDir "backend.pid"
 $logPath = Join-Path $runtimeDir "backend.log"
 $errorLogPath = Join-Path $runtimeDir "backend.err.log"
@@ -48,6 +60,23 @@ function Stop-RunningProcess {
     & taskkill /PID $Process.Id /T /F | Out-Null
     Remove-Item -LiteralPath $PidFile -Force -ErrorAction SilentlyContinue
     Start-Sleep -Seconds 2
+}
+
+function Stop-ProcessesOnPort {
+    param([int]$Port)
+
+    $pids = @()
+    netstat -aon | Select-String ":${Port}\s" | ForEach-Object {
+        $parts = $_.ToString().Trim() -split '\s+'
+        $pidValue = $parts[-1]
+        if ($pidValue -match '^\d+$' -and [int]$pidValue -gt 0) {
+            $pids += [int]$pidValue
+        }
+    }
+
+    foreach ($pidValue in ($pids | Select-Object -Unique)) {
+        & taskkill /PID $pidValue /T /F | Out-Null
+    }
 }
 
 function Wait-UrlReady {
@@ -99,6 +128,7 @@ if ($processoEsistente) {
     if ($ForceRestart) {
         Write-Host "Backend gia attivo: riavvio forzato in corso..."
         Stop-RunningProcess -Process $processoEsistente -PidFile $pidPath
+        Stop-ProcessesOnPort -Port $Port
     } else {
         Write-Host "Backend gia avviato su http://127.0.0.1:$Port"
         if ($WaitForReady) {
@@ -106,9 +136,18 @@ if ($processoEsistente) {
         }
         return
     }
+} elseif ($ForceRestart) {
+    Stop-ProcessesOnPort -Port $Port
 }
 
 $pythonCommand = Get-PythonCommand
+
+if ($Foreground) {
+    Set-Location -LiteralPath $backendDir
+    & $pythonCommand -m uvicorn server:app --host 127.0.0.1 --port $Port
+    exit $LASTEXITCODE
+}
+
 $command = @"
 Set-Location -LiteralPath '$backendDir'
 & '$pythonCommand' -m uvicorn server:app --host 127.0.0.1 --port $Port

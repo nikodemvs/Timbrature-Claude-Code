@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__Claude_Preview__preview_start",
+      "Bash(python -m pytest -m \"unit or api\" -q)",
+      "Bash(python -m pytest tests/test_e2e.py --collect-only -q -m \"\")",
+      "Bash(curl -s http://127.0.0.1:8001/api/health)"
+    ]
+  }
+}

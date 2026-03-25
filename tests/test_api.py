@@ -5,6 +5,7 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 from io import BytesIO
 
+import aiosqlite
 import pytest
 
 import server
@@ -206,20 +207,111 @@ async def test_api_root_e_health_espongono_stato_app(client_api):
 
 async def test_api_settings_get_put_errore_e_caso_edge(client_api):
     iniziale = await client_api.get("/api/settings")
-    aggiornata = await client_api.put("/api/settings", json={"nome": "Mario Rossi", "use_biometric": False})
+    aggiornata = await client_api.put(
+        "/api/settings",
+        json={
+            "nome": "Mario",
+            "cognome": "Rossi",
+            "matricola": "1234",
+            "numero_badge": "B-77",
+            "use_biometric": False,
+        },
+    )
     errore = await client_api.put("/api/settings", json={"livello": "alto"})
     edge = await client_api.put("/api/settings", json={"pin_hash": ""})
 
     assert iniziale.status_code == 200
     assert iniziale.json()["nome"] == ""
+    assert iniziale.json()["cognome"] == ""
+    assert iniziale.json()["matricola"] == ""
+    assert iniziale.json()["numero_badge"] == ""
     assert iniziale.json()["azienda"] == ""
     assert iniziale.json()["paga_base"] == 0
     assert iniziale.json()["use_biometric"] is False
     assert aggiornata.status_code == 200
-    assert aggiornata.json()["nome"] == "Mario Rossi"
+    assert aggiornata.json()["nome"] == "Mario"
+    assert aggiornata.json()["cognome"] == "Rossi"
+    assert aggiornata.json()["matricola"] == "1234"
+    assert aggiornata.json()["numero_badge"] == "B-77"
     assert aggiornata.json()["use_biometric"] is False
     assert errore.status_code == 422
     assert edge.status_code == 200
+
+
+async def test_api_settings_migra_schema_legacy_e_normalizza_nome(modulo_backend):
+    conn = await aiosqlite.connect(":memory:")
+    conn.row_factory = aiosqlite.Row
+    modulo_backend._db = conn
+    modulo_backend._gemini_client = None
+    await conn.execute(
+        """
+        CREATE TABLE settings (
+            id TEXT PRIMARY KEY,
+            nome TEXT DEFAULT '',
+            qualifica TEXT DEFAULT '',
+            livello INTEGER DEFAULT 0,
+            azienda TEXT DEFAULT '',
+            sede TEXT DEFAULT '',
+            ccnl TEXT DEFAULT '',
+            data_assunzione TEXT DEFAULT '',
+            orario_tipo TEXT DEFAULT '',
+            ore_giornaliere INTEGER DEFAULT 0,
+            paga_base REAL DEFAULT 0,
+            scatti_anzianita REAL DEFAULT 0,
+            superminimo REAL DEFAULT 0,
+            premio_incarico REAL DEFAULT 0,
+            divisore_orario INTEGER DEFAULT 0,
+            divisore_giornaliero INTEGER DEFAULT 0,
+            ticket_valore REAL DEFAULT 0,
+            pin_hash TEXT,
+            use_biometric INTEGER DEFAULT 0,
+            created_at TEXT,
+            updated_at TEXT
+        )
+        """
+    )
+    await conn.execute(
+        """
+        INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        [
+            "legacy-settings",
+            "Mario Rossi",
+            "Impiegato",
+            3,
+            "Azienda Srl",
+            "Milano",
+            "CCNL Metalmeccanici",
+            "2015-07-11",
+            "Full-time",
+            8,
+            2000.0,
+            66.88,
+            469.41,
+            56.9,
+            173,
+            22,
+            8.5,
+            None,
+            0,
+            "2026-03-21T10:00:00+00:00",
+            "2026-03-21T10:00:00+00:00",
+        ],
+    )
+    await conn.commit()
+
+    try:
+        await modulo_backend.init_db()
+        risposta = await server._db.execute("SELECT * FROM settings LIMIT 1")
+        row = dict(await risposta.fetchone())
+        assert row["nome"] == "Mario"
+        assert row["cognome"] == "Rossi"
+        assert row["matricola"] == ""
+        assert row["numero_badge"] == ""
+    finally:
+        await conn.close()
+        modulo_backend._db = None
+        modulo_backend._gemini_client = None
 
 
 async def test_api_timbrature_lista_creazione_duplicato_ed_edge_notturno(client_api):
@@ -436,6 +528,7 @@ async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, mon
             "filename": filename,
             "dipendente": {
                 "nome": "Mario Rossi",
+                "matricola": "1234",
                 "livello": 4,
                 "data_assunzione": "11-07-2015",
             },
@@ -468,7 +561,10 @@ async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, mon
     assert dettaglio.json()["straordinari_ore"] == 12.5
     assert dettaglio.json()["trattenute_totali"] == 500.0
     assert settings.status_code == 200
-    assert settings.json()["nome"] == "Mario Rossi"
+    assert settings.json()["nome"] == "Mario"
+    assert settings.json()["cognome"] == "Rossi"
+    assert settings.json()["matricola"] == "1234"
+    assert settings.json()["numero_badge"] == ""
     assert settings.json()["livello"] == 4
     assert settings.json()["azienda"] == "Plastiape S.p.A."
     assert settings.json()["data_assunzione"] == "2015-07-11"
@@ -476,6 +572,110 @@ async def test_api_upload_busta_paga_importa_valori_e_allega_pdf(client_api, mon
     assert settings.json()["scatti_anzianita"] == 66.88
     assert settings.json()["superminimo"] == 469.41
     assert settings.json()["premio_incarico"] == 56.9
+
+
+async def test_api_upload_busta_paga_popola_nome_e_cognome_da_raw_text_zucchetti(client_api, monkeypatch):
+    monkeypatch.setattr(
+        server,
+        "parse_sometime_pdf",
+        lambda _content, filename: {
+            "success": False,
+            "filename": filename,
+            "timbrature": [],
+            "errors": [],
+        },
+    )
+    monkeypatch.setattr(
+        server,
+        "parse_zucchetti_pdf",
+        lambda _content, filename: {
+            "success": True,
+            "filename": filename,
+            "dipendente": {"livello": 5},
+            "azienda": {"nome": "Plastiape S.p.A."},
+            "raw_text": "0000345 ZAMBARA MARCO ZMBMRC88C24I625I 629 Operaio Livello 5",
+            "elementi_retributivi": {},
+        },
+    )
+
+    upload = await client_api.post(
+        "/api/buste-paga/2026/3/upload",
+        files={"file": ("marzo-2026.pdf", BytesIO(b"%PDF-busta"), "application/pdf")},
+    )
+    settings = await client_api.get("/api/settings")
+    dashboard = await client_api.get("/api/dashboard")
+
+    assert upload.status_code == 200
+    assert upload.json()["parse_success"] is True
+    assert settings.status_code == 200
+    assert dashboard.status_code == 200
+    assert settings.json()["nome"] == "Marco"
+    assert settings.json()["cognome"] == "Zambara"
+    assert settings.json()["matricola"] == "629"
+    assert settings.json()["numero_badge"] == ""
+    assert dashboard.json()["settings"]["nome"] == "Marco"
+    assert dashboard.json()["settings"]["cognome"] == "Zambara"
+
+
+async def test_api_dashboard_ripara_identita_e_matricola_da_ultima_busta_gia_archiviata(client_api, monkeypatch):
+    await client_api.put(
+        "/api/settings",
+        json={
+            "nome": "",
+            "cognome": "",
+            "matricola": "",
+            "numero_badge": "",
+        },
+    )
+
+    await server._db.execute(
+        """
+        INSERT INTO buste_paga VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        """,
+        [
+            "busta-repair",
+            2,
+            2026,
+            base64.b64encode(b"%PDF-cedolino").decode(),
+            "2026_02_febbraio.pdf",
+            0.0,
+            1590.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0.0,
+            0,
+            None,
+            "2026-03-21T16:22:29.825195+00:00",
+        ],
+    )
+    await server._db.commit()
+
+    monkeypatch.setattr(
+        server,
+        "parse_zucchetti_pdf",
+        lambda _content, filename: {
+            "success": True,
+            "filename": filename,
+            "dipendente": {"livello": 5},
+            "azienda": {"nome": "Plastiape S.p.A."},
+            "raw_text": "0000345 ZAMBARA MARCO ZMBMRC88C24I625I 629 Operaio Livello 5",
+            "elementi_retributivi": {},
+        },
+    )
+
+    dashboard = await client_api.get("/api/dashboard")
+    settings = await client_api.get("/api/settings")
+
+    assert dashboard.status_code == 200
+    assert dashboard.json()["settings"]["nome"] == "Marco"
+    assert dashboard.json()["settings"]["cognome"] == "Zambara"
+    assert dashboard.json()["settings"]["matricola"] == "629"
+    assert settings.status_code == 200
+    assert settings.json()["nome"] == "Marco"
+    assert settings.json()["cognome"] == "Zambara"
+    assert settings.json()["matricola"] == "629"
 
 
 async def test_api_upload_busta_paga_rifiuta_report_timbrature(client_api, monkeypatch):
@@ -762,7 +962,10 @@ async def test_api_cancella_dati_personali_svuota_solo_i_dati_operativi(client_a
     await client_api.put(
         "/api/settings",
         json={
-            "nome": "Mario Rossi",
+            "nome": "Mario",
+            "cognome": "Rossi",
+            "matricola": "1234",
+            "numero_badge": "B-77",
             "qualifica": "Impiegato",
             "azienda": "Azienda Srl",
             "sede": "Milano",
@@ -800,7 +1003,10 @@ async def test_api_cancella_dati_personali_svuota_solo_i_dati_operativi(client_a
     settings = await client_api.get("/api/settings")
     dashboard = await client_api.get("/api/dashboard")
     assert settings.status_code == 200
-    assert settings.json()["nome"] == "Mario Rossi"
+    assert settings.json()["nome"] == "Mario"
+    assert settings.json()["cognome"] == "Rossi"
+    assert settings.json()["matricola"] == "1234"
+    assert settings.json()["numero_badge"] == "B-77"
     assert settings.json()["azienda"] == "Azienda Srl"
     assert settings.json()["paga_base"] == 2400.0
     assert settings.json()["use_biometric"] is False
@@ -835,7 +1041,10 @@ async def test_api_elimina_account_azzera_identita_e_sicurezza_ma_conserva_contr
     await client_api.put(
         "/api/settings",
         json={
-            "nome": "Mario Rossi",
+            "nome": "Mario",
+            "cognome": "Rossi",
+            "matricola": "1234",
+            "numero_badge": "B-77",
             "qualifica": "Impiegato",
             "livello": 4,
             "azienda": "Azienda Srl",
@@ -875,6 +1084,9 @@ async def test_api_elimina_account_azzera_identita_e_sicurezza_ma_conserva_contr
     settings = await client_api.get("/api/settings")
     assert settings.status_code == 200
     assert settings.json()["nome"] == ""
+    assert settings.json()["cognome"] == ""
+    assert settings.json()["matricola"] == ""
+    assert settings.json()["numero_badge"] == ""
     assert settings.json()["qualifica"] == "Impiegato"
     assert settings.json()["azienda"] == "Azienda Srl"
     assert settings.json()["sede"] == "Milano"

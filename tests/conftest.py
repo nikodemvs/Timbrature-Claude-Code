@@ -59,6 +59,13 @@ class StackApplicazione:
     frontend_log: Path
 
 
+@dataclass
+class StackFrontend:
+    frontend_url: str
+    output_dir: Path
+    frontend_log: Path
+
+
 def trova_porta_libera() -> int:
     with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as sock:
         sock.bind(("127.0.0.1", 0))
@@ -80,15 +87,25 @@ def attendi_url(url: str, timeout: float = 180.0) -> None:
     raise RuntimeError(f"Timeout in attesa di {url}: {ultimo_errore}")
 
 
-def termina_albero_processo(processo: subprocess.Popen[str] | None) -> None:
-    if not processo or processo.poll() is not None:
+def termina_processo_da_pid_file(pid_file: Path) -> None:
+    if not pid_file.exists():
         return
+    try:
+        pid_text = pid_file.read_text(encoding="utf-8").strip()
+        if not pid_text:
+            return
+        pid = int(pid_text)
+    except (ValueError, OSError):
+        pid_file.unlink(missing_ok=True)
+        return
+
     subprocess.run(
-        ["taskkill", "/PID", str(processo.pid), "/T", "/F"],
+        ["taskkill", "/PID", str(pid), "/T", "/F"],
         check=False,
         capture_output=True,
         text=True,
     )
+    pid_file.unlink(missing_ok=True)
 
 
 @pytest.fixture(scope="session")
@@ -124,9 +141,67 @@ async def client_api(db_temporaneo):
 
 
 @pytest.fixture(scope="session")
+def stack_frontend_mock(tmp_path_factory: pytest.TempPathFactory) -> Iterator[StackFrontend]:
+    """Avvia solo il frontend (nessun backend). Usata per test e2e-smoke."""
+    base_dir = tmp_path_factory.mktemp("stack-smoke")
+    runtime_dir = base_dir / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+    OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+
+    frontend_port = trova_porta_libera()
+    fake_backend_port = trova_porta_libera()
+    frontend_log = runtime_dir / "frontend.log"
+    frontend_pid = runtime_dir / "frontend.pid"
+    frontend_script = ROOT_DIR / "start-frontend.ps1"
+
+    try:
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(frontend_script),
+                "-Port",
+                str(frontend_port),
+                "-BackendPort",
+                str(fake_backend_port),
+                "-WaitForReady",
+                "-ForceRestart",
+                "-NoClearCache",
+                "-NoResponsively",
+                "-RuntimeDir",
+                str(runtime_dir),
+                "-FrontendDir",
+                str(FRONTEND_DIR),
+            ],
+            cwd=ROOT_DIR,
+            env=os.environ.copy(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            check=True,
+        )
+        attendi_url(f"http://127.0.0.1:{frontend_port}", timeout=120.0)
+        yield StackFrontend(
+            frontend_url=f"http://127.0.0.1:{frontend_port}",
+            output_dir=OUTPUT_DIR,
+            frontend_log=frontend_log,
+        )
+    finally:
+        termina_processo_da_pid_file(frontend_pid)
+
+
+@pytest.fixture(scope="session")
 def stack_applicazione(tmp_path_factory: pytest.TempPathFactory) -> Iterator[StackApplicazione]:
     base_dir = tmp_path_factory.mktemp("stack-e2e")
     backend_copy = base_dir / "backend"
+    runtime_dir = base_dir / "runtime"
+    runtime_dir.mkdir(parents=True, exist_ok=True)
+
     shutil.copytree(
         BACKEND_DIR,
         backend_copy,
@@ -139,56 +214,73 @@ def stack_applicazione(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Sta
     backend_port = trova_porta_libera()
     frontend_port = trova_porta_libera()
 
-    backend_log = base_dir / "backend.log"
-    frontend_log = base_dir / "frontend.log"
-
-    backend_handle = backend_log.open("w", encoding="utf-8", errors="ignore")
-    frontend_handle = frontend_log.open("w", encoding="utf-8", errors="ignore")
+    backend_log = runtime_dir / "backend.log"
+    frontend_log = runtime_dir / "frontend.log"
+    backend_pid = runtime_dir / "backend.pid"
+    frontend_pid = runtime_dir / "frontend.pid"
+    backend_script = ROOT_DIR / "start-backend.ps1"
+    frontend_script = ROOT_DIR / "start-frontend.ps1"
 
     env_backend = os.environ.copy()
     env_backend.setdefault("PYTHONUTF8", "1")
-    env_frontend = os.environ.copy()
-    env_frontend["CI"] = "1"
-    env_frontend["EXPO_PUBLIC_BACKEND_URL"] = f"http://127.0.0.1:{backend_port}"
-
-    backend_proc = subprocess.Popen(
-        [
-            sys.executable,
-            "-m",
-            "uvicorn",
-            "server:app",
-            "--host",
-            "127.0.0.1",
-            "--port",
-            str(backend_port),
-        ],
-        cwd=backend_copy,
-        env=env_backend,
-        stdout=backend_handle,
-        stderr=subprocess.STDOUT,
-        text=True,
-        encoding="utf-8",
-        errors="ignore",
-    )
-
-    frontend_proc = None
 
     try:
-        attendi_url(f"http://127.0.0.1:{backend_port}/api/health", timeout=90.0)
-
-        frontend_proc = subprocess.Popen(
+        subprocess.run(
             [
-                "cmd.exe",
-                "/c",
-                f"npx expo start --web --port {frontend_port} --clear --non-interactive",
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(backend_script),
+                "-Port",
+                str(backend_port),
+                "-WaitForReady",
+                "-ForceRestart",
+                "-BackendDir",
+                str(backend_copy),
+                "-RuntimeDir",
+                str(runtime_dir),
             ],
-            cwd=FRONTEND_DIR,
-            env=env_frontend,
-            stdout=frontend_handle,
+            cwd=ROOT_DIR,
+            env=env_backend,
+            stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT,
             text=True,
             encoding="utf-8",
             errors="ignore",
+            check=True,
+        )
+        attendi_url(f"http://127.0.0.1:{backend_port}/api/health", timeout=90.0)
+
+        subprocess.run(
+            [
+                "powershell",
+                "-NoProfile",
+                "-ExecutionPolicy",
+                "Bypass",
+                "-File",
+                str(frontend_script),
+                "-Port",
+                str(frontend_port),
+                "-BackendPort",
+                str(backend_port),
+                "-WaitForReady",
+                "-ForceRestart",
+                "-NoResponsively",
+                "-RuntimeDir",
+                str(runtime_dir),
+                "-FrontendDir",
+                str(FRONTEND_DIR),
+            ],
+            cwd=ROOT_DIR,
+            env=os.environ.copy(),
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            check=True,
         )
 
         attendi_url(f"http://127.0.0.1:{frontend_port}", timeout=240.0)
@@ -201,7 +293,11 @@ def stack_applicazione(tmp_path_factory: pytest.TempPathFactory) -> Iterator[Sta
             frontend_log=frontend_log,
         )
     finally:
-        termina_albero_processo(frontend_proc)
-        termina_albero_processo(backend_proc)
-        backend_handle.close()
-        frontend_handle.close()
+        termina_processo_da_pid_file(frontend_pid)
+        termina_processo_da_pid_file(backend_pid)
+
+
+@pytest.fixture(scope="session")
+def stack_full_integration(stack_applicazione: StackApplicazione) -> StackApplicazione:
+    """Alias semantico di stack_applicazione — usa questo nei test che richiedono backend reale."""
+    return stack_applicazione

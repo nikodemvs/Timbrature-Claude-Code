@@ -329,11 +329,16 @@ def test_unit_script_avvio_locale_esistono_e_puntano_ai_comandi_attesi():
     assert "uvicorn server:app" in backend_source
     assert "backend.log" in backend_source
     assert "[switch]$ForceRestart" in backend_source
+    assert "[string]$BackendDir" in backend_source
+    assert "[string]$RuntimeDir" in backend_source
     assert "taskkill" in backend_source
-    assert "expo start --web" in frontend_source
+    assert "node_modules/expo/bin/cli" in frontend_source
+    assert "start --web" in frontend_source
     assert "EXPO_PUBLIC_BACKEND_URL" in frontend_source
     assert "[switch]$ForceRestart" in frontend_source
     assert "[switch]$NoResponsively" in frontend_source
+    assert "[string]$FrontendDir" in frontend_source
+    assert "[string]$RuntimeDir" in frontend_source
     assert "RESPONSIVELY_APP_PATH" in frontend_source
     assert "responsively://" in frontend_source
     assert "ArgumentList @($Url)" in frontend_source
@@ -346,5 +351,8 @@ def test_unit_script_avvio_locale_esistono_e_puntano_ai_comandi_attesi():
     assert "taskkill" in frontend_source
     assert "start-backend.ps1" in app_source
     assert "start-frontend.ps1" in app_source
-    assert "-ForceRestart" in app_source
+    assert "ForceRestart = $true" in app_source
     assert "[switch]$NoResponsively" in app_source
+    assert "[string]$BackendDir" in app_source
+    assert "[string]$FrontendDir" in app_source
+    assert "[string]$RuntimeDir" in app_source

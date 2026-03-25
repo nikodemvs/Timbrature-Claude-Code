@@ -102,6 +102,9 @@ class AppBaseModel(BaseModel):
 class UserSettings(AppBaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     nome: str = ""
+    cognome: str = ""
+    matricola: str = ""
+    numero_badge: str = ""
     qualifica: str = ""
     livello: int = 0
     azienda: str = ""
@@ -124,6 +127,9 @@ class UserSettings(AppBaseModel):
 
 class UserSettingsUpdate(AppBaseModel):
     nome: Optional[str] = None
+    cognome: Optional[str] = None
+    matricola: Optional[str] = None
+    numero_badge: Optional[str] = None
     qualifica: Optional[str] = None
     livello: Optional[int] = None
     azienda: Optional[str] = None
@@ -318,6 +324,146 @@ class Alert(AppBaseModel):
     letto: bool = False
     created_at: datetime = Field(default_factory=_utc_now)
 
+
+SETTINGS_COLUMN_ORDER = [
+    "id",
+    "nome",
+    "cognome",
+    "matricola",
+    "numero_badge",
+    "qualifica",
+    "livello",
+    "azienda",
+    "sede",
+    "ccnl",
+    "data_assunzione",
+    "orario_tipo",
+    "ore_giornaliere",
+    "paga_base",
+    "scatti_anzianita",
+    "superminimo",
+    "premio_incarico",
+    "divisore_orario",
+    "divisore_giornaliero",
+    "ticket_valore",
+    "pin_hash",
+    "use_biometric",
+    "created_at",
+    "updated_at",
+]
+
+
+def _settings_insert_values(settings: UserSettings) -> List[Any]:
+    return [
+        settings.id,
+        settings.nome,
+        settings.cognome,
+        settings.matricola,
+        settings.numero_badge,
+        settings.qualifica,
+        settings.livello,
+        settings.azienda,
+        settings.sede,
+        settings.ccnl,
+        settings.data_assunzione,
+        settings.orario_tipo,
+        settings.ore_giornaliere,
+        settings.paga_base,
+        settings.scatti_anzianita,
+        settings.superminimo,
+        settings.premio_incarico,
+        settings.divisore_orario,
+        settings.divisore_giornaliero,
+        settings.ticket_valore,
+        settings.pin_hash,
+        int(settings.use_biometric),
+        settings.created_at.isoformat(),
+        settings.updated_at.isoformat(),
+    ]
+
+
+def _split_nome_completo(value: Optional[str]) -> tuple[str, str]:
+    testo = " ".join(str(value or "").split()).strip()
+    if not testo:
+        return "", ""
+    parti = testo.split()
+    if len(parti) == 1:
+        return parti[0], ""
+    return parti[0], " ".join(parti[1:])
+
+
+def _normalizza_testo_persona(value: Optional[str]) -> str:
+    return " ".join(str(value or "").split()).strip().title()
+
+
+def _split_cognome_nome_zucchetti(value: Optional[str]) -> tuple[str, str]:
+    testo = " ".join(str(value or "").split()).strip()
+    if not testo:
+        return "", ""
+    parti = testo.split()
+    if len(parti) == 1:
+        return _normalizza_testo_persona(parti[0]), ""
+    cognome = _normalizza_testo_persona(" ".join(parti[:-1]))
+    nome = _normalizza_testo_persona(parti[-1])
+    return nome, cognome
+
+
+def _estrai_identita_da_raw_zucchetti(raw_text: Optional[str]) -> Dict[str, str]:
+    testo = " ".join(str(raw_text or "").split())
+    if not testo:
+        return {}
+
+    match = re.search(
+        r"\b\d{4,}\s+([A-ZÀ-ÖØ-Þ' ]{4,}?)\s+([A-Z0-9]{16})(?:\s+(\d+))?\b",
+        testo,
+    )
+    if not match:
+        return {}
+
+    nome, cognome = _split_cognome_nome_zucchetti(match.group(1))
+    matricola = (match.group(3) or "").strip()
+    updates: Dict[str, str] = {}
+    if nome:
+        updates["nome"] = nome
+    if cognome:
+        updates["cognome"] = cognome
+    if matricola:
+        updates["matricola"] = matricola
+    return updates
+
+
+async def _ensure_settings_schema() -> None:
+    cur = await _db.execute("PRAGMA table_info(settings)")
+    colonne_presenti = {row["name"] for row in await cur.fetchall()}
+    colonne_da_aggiungere = {
+        "cognome": "TEXT DEFAULT ''",
+        "matricola": "TEXT DEFAULT ''",
+        "numero_badge": "TEXT DEFAULT ''",
+    }
+
+    for colonna, ddl in colonne_da_aggiungere.items():
+        if colonna not in colonne_presenti:
+            await _db.execute(f"ALTER TABLE settings ADD COLUMN {colonna} {ddl}")
+
+    cur = await _db.execute("SELECT * FROM settings LIMIT 1")
+    row = _row(await cur.fetchone())
+    if not row:
+        return
+
+    aggiornamenti: Dict[str, Any] = {}
+    nome_norm, cognome_norm = _split_nome_completo(row.get("nome"))
+    if not (row.get("cognome") or "").strip() and nome_norm:
+        aggiornamenti["nome"] = nome_norm
+        aggiornamenti["cognome"] = cognome_norm
+
+    if aggiornamenti:
+        aggiornamenti["updated_at"] = _utc_now_iso()
+        set_clause = ", ".join(f"{chiave} = ?" for chiave in aggiornamenti.keys())
+        await _db.execute(
+            f"UPDATE settings SET {set_clause} WHERE id = ?",
+            list(aggiornamenti.values()) + [row["id"]],
+        )
+
 # ============== DB INIT ==============
 
 async def init_db():
@@ -325,6 +471,9 @@ async def init_db():
         CREATE TABLE IF NOT EXISTS settings (
             id TEXT PRIMARY KEY,
             nome TEXT DEFAULT '',
+            cognome TEXT DEFAULT '',
+            matricola TEXT DEFAULT '',
+            numero_badge TEXT DEFAULT '',
             qualifica TEXT DEFAULT '',
             livello INTEGER DEFAULT 0,
             azienda TEXT DEFAULT '',
@@ -346,6 +495,7 @@ async def init_db():
             updated_at TEXT
         )
     """)
+    await _ensure_settings_schema()
     await _db.execute("""
         CREATE TABLE IF NOT EXISTS timbrature (
             id TEXT PRIMARY KEY,
@@ -960,9 +1110,23 @@ def _estrai_aggiornamenti_settings_da_zucchetti(parse_result: Dict[str, Any]) ->
     azienda = parse_result.get("azienda") or {}
     elementi_retributivi = parse_result.get("elementi_retributivi") or {}
 
-    nome = " ".join(str(dipendente.get("nome", "")).split())
-    if nome:
-        updates["nome"] = nome
+    nome_completo = dipendente.get("nome") or parse_result.get("nome")
+    cognome = dipendente.get("cognome") or parse_result.get("cognome")
+    if isinstance(nome_completo, str) and nome_completo.strip():
+        nome_norm, cognome_norm = _split_nome_completo(nome_completo)
+        if nome_norm:
+            updates["nome"] = nome_norm
+        if isinstance(cognome, str) and cognome.strip():
+            updates["cognome"] = _normalizza_testo_persona(cognome)
+        elif cognome_norm:
+            updates["cognome"] = cognome_norm
+
+    matricola = dipendente.get("matricola") or parse_result.get("matricola")
+    if isinstance(matricola, str) and matricola.strip():
+        updates["matricola"] = matricola.strip()
+
+    if not (updates.get("nome") or updates.get("cognome")):
+        updates.update(_estrai_identita_da_raw_zucchetti(parse_result.get("raw_text")))
 
     livello = dipendente.get("livello")
     if isinstance(livello, int) and livello > 0:
@@ -1007,16 +1171,50 @@ async def _aggiorna_settings_da_zucchetti(parse_result: Dict[str, Any]) -> None:
             continue
         setattr(default_settings, chiave, valore)
     default_settings.updated_at = _utc_now()
-    d = default_settings.model_dump()
     await _db.execute(
-        "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [d['id'], d['nome'], d['qualifica'], d['livello'], d['azienda'], d['sede'],
-         d['ccnl'], d['data_assunzione'], d['orario_tipo'], d['ore_giornaliere'],
-         d['paga_base'], d['scatti_anzianita'], d['superminimo'], d['premio_incarico'],
-         d['divisore_orario'], d['divisore_giornaliero'], d['ticket_valore'],
-         d['pin_hash'], int(d['use_biometric']),
-         d['created_at'].isoformat(), d['updated_at'].isoformat()]
+        f"INSERT INTO settings ({', '.join(SETTINGS_COLUMN_ORDER)}) VALUES ({', '.join(['?'] * len(SETTINGS_COLUMN_ORDER))})",
+        _settings_insert_values(default_settings),
     )
+
+
+async def _ripara_identita_account_da_ultima_busta() -> bool:
+    cur = await _db.execute("SELECT * FROM settings LIMIT 1")
+    settings_row = _row(await cur.fetchone())
+    if not settings_row:
+        return False
+
+    nome_presente = (settings_row.get("nome") or "").strip()
+    cognome_presente = (settings_row.get("cognome") or "").strip()
+    matricola_presente = (settings_row.get("matricola") or "").strip()
+    if nome_presente and cognome_presente and matricola_presente:
+        return False
+
+    cur = await _db.execute(
+        """
+        SELECT pdf_base64, pdf_nome
+        FROM buste_paga
+        WHERE pdf_base64 IS NOT NULL AND pdf_base64 != ''
+        ORDER BY created_at DESC
+        LIMIT 1
+        """
+    )
+    ultima_busta = _row(await cur.fetchone())
+    if not ultima_busta:
+        return False
+
+    try:
+        contenuto = base64.b64decode(ultima_busta["pdf_base64"])
+    except Exception:
+        return False
+
+    parse_result = parse_zucchetti_pdf(contenuto, ultima_busta.get("pdf_nome") or "busta-paga.pdf")
+    updates = _estrai_aggiornamenti_settings_da_zucchetti(parse_result)
+    if not (updates.get("nome") or updates.get("cognome") or updates.get("matricola")):
+        return False
+
+    await _aggiorna_settings_da_zucchetti(parse_result)
+    await _db.commit()
+    return True
 
 
 def _settings_personali_vuote() -> UserSettings:
@@ -1032,6 +1230,9 @@ async def _scrivi_settings_neutre() -> None:
             """
             UPDATE settings
             SET nome = ?,
+                cognome = ?,
+                matricola = ?,
+                numero_badge = ?,
                 qualifica = ?,
                 livello = ?,
                 azienda = ?,
@@ -1055,6 +1256,9 @@ async def _scrivi_settings_neutre() -> None:
             """,
             [
                 settings_vuote["nome"],
+                settings_vuote["cognome"],
+                settings_vuote["matricola"],
+                settings_vuote["numero_badge"],
                 settings_vuote["qualifica"],
                 settings_vuote["livello"],
                 settings_vuote["azienda"],
@@ -1079,40 +1283,17 @@ async def _scrivi_settings_neutre() -> None:
         )
     else:
         await _db.execute(
-            """
-            INSERT INTO settings VALUES (
-                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
-            )
-            """,
-            [
-                settings_vuote["id"],
-                settings_vuote["nome"],
-                settings_vuote["qualifica"],
-                settings_vuote["livello"],
-                settings_vuote["azienda"],
-                settings_vuote["sede"],
-                settings_vuote["ccnl"],
-                settings_vuote["data_assunzione"],
-                settings_vuote["orario_tipo"],
-                settings_vuote["ore_giornaliere"],
-                settings_vuote["paga_base"],
-                settings_vuote["scatti_anzianita"],
-                settings_vuote["superminimo"],
-                settings_vuote["premio_incarico"],
-                settings_vuote["divisore_orario"],
-                settings_vuote["divisore_giornaliero"],
-                settings_vuote["ticket_valore"],
-                settings_vuote["pin_hash"],
-                int(settings_vuote["use_biometric"]),
-                settings_vuote["created_at"].isoformat(),
-                settings_vuote["updated_at"].isoformat(),
-            ],
+            f"INSERT INTO settings ({', '.join(SETTINGS_COLUMN_ORDER)}) VALUES ({', '.join(['?'] * len(SETTINGS_COLUMN_ORDER))})",
+            _settings_insert_values(_settings_personali_vuote()),
         )
 
 
 async def _azzera_identita_account_e_sicurezza() -> None:
     aggiornamenti = {
         "nome": "",
+        "cognome": "",
+        "matricola": "",
+        "numero_badge": "",
         "pin_hash": None,
         "use_biometric": 0,
         "updated_at": _utc_now_iso(),
@@ -1124,6 +1305,9 @@ async def _azzera_identita_account_e_sicurezza() -> None:
             """
             UPDATE settings
             SET nome = ?,
+                cognome = ?,
+                matricola = ?,
+                numero_badge = ?,
                 pin_hash = ?,
                 use_biometric = ?,
                 updated_at = ?
@@ -1131,6 +1315,9 @@ async def _azzera_identita_account_e_sicurezza() -> None:
             """,
             [
                 aggiornamenti["nome"],
+                aggiornamenti["cognome"],
+                aggiornamenti["matricola"],
+                aggiornamenti["numero_badge"],
                 aggiornamenti["pin_hash"],
                 aggiornamenti["use_biometric"],
                 aggiornamenti["updated_at"],
@@ -1141,30 +1328,8 @@ async def _azzera_identita_account_e_sicurezza() -> None:
 
     settings_vuote = _settings_personali_vuote().model_dump()
     await _db.execute(
-        "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        [
-            settings_vuote["id"],
-            settings_vuote["nome"],
-            settings_vuote["qualifica"],
-            settings_vuote["livello"],
-            settings_vuote["azienda"],
-            settings_vuote["sede"],
-            settings_vuote["ccnl"],
-            settings_vuote["data_assunzione"],
-            settings_vuote["orario_tipo"],
-            settings_vuote["ore_giornaliere"],
-            settings_vuote["paga_base"],
-            settings_vuote["scatti_anzianita"],
-            settings_vuote["superminimo"],
-            settings_vuote["premio_incarico"],
-            settings_vuote["divisore_orario"],
-            settings_vuote["divisore_giornaliero"],
-            settings_vuote["ticket_valore"],
-            settings_vuote["pin_hash"],
-            int(settings_vuote["use_biometric"]),
-            settings_vuote["created_at"].isoformat(),
-            settings_vuote["updated_at"].isoformat(),
-        ],
+        f"INSERT INTO settings ({', '.join(SETTINGS_COLUMN_ORDER)}) VALUES ({', '.join(['?'] * len(SETTINGS_COLUMN_ORDER))})",
+        _settings_insert_values(_settings_personali_vuote()),
     )
 
 
@@ -1378,19 +1543,14 @@ def calcola_ore_reperibilita(marcature: List[Dict]) -> float:
 
 @api_router.get("/settings", response_model=UserSettings)
 async def get_settings():
+    await _ripara_identita_account_da_ultima_busta()
     cur = await _db.execute("SELECT * FROM settings LIMIT 1")
     row = _row(await cur.fetchone())
     if not row:
         default = UserSettings()
-        d = default.model_dump()
         await _db.execute(
-            "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [d['id'], d['nome'], d['qualifica'], d['livello'], d['azienda'], d['sede'],
-             d['ccnl'], d['data_assunzione'], d['orario_tipo'], d['ore_giornaliere'],
-             d['paga_base'], d['scatti_anzianita'], d['superminimo'], d['premio_incarico'],
-             d['divisore_orario'], d['divisore_giornaliero'], d['ticket_valore'],
-             d['pin_hash'], int(d['use_biometric']),
-             d['created_at'].isoformat(), d['updated_at'].isoformat()]
+            f"INSERT INTO settings ({', '.join(SETTINGS_COLUMN_ORDER)}) VALUES ({', '.join(['?'] * len(SETTINGS_COLUMN_ORDER))})",
+            _settings_insert_values(default),
         )
         await _db.commit()
         return UserSettings(**_public_settings_from_row(default.model_dump()))
@@ -1418,15 +1578,9 @@ async def update_settings(updates: UserSettingsUpdate):
         await _db.commit()
     else:
         default = UserSettings(**update_data)
-        d = default.model_dump()
         await _db.execute(
-            "INSERT INTO settings VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-            [d['id'], d['nome'], d['qualifica'], d['livello'], d['azienda'], d['sede'],
-             d['ccnl'], d['data_assunzione'], d['orario_tipo'], d['ore_giornaliere'],
-             d['paga_base'], d['scatti_anzianita'], d['superminimo'], d['premio_incarico'],
-             d['divisore_orario'], d['divisore_giornaliero'], d['ticket_valore'],
-             d['pin_hash'], int(d['use_biometric']),
-             d['created_at'].isoformat(), d['updated_at'].isoformat()]
+            f"INSERT INTO settings ({', '.join(SETTINGS_COLUMN_ORDER)}) VALUES ({', '.join(['?'] * len(SETTINGS_COLUMN_ORDER))})",
+            _settings_insert_values(default),
         )
         await _db.commit()
 
@@ -2330,6 +2484,7 @@ async def get_confronto_timbrature(mese: int, anno: int):
 
 @api_router.get("/dashboard")
 async def get_dashboard():
+    await _ripara_identita_account_da_ultima_busta()
     now = datetime.now()
     mese = now.month
     anno = now.year

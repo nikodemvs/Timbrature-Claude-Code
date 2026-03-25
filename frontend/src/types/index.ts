@@ -3,6 +3,9 @@
 export interface UserSettings {
   id: string;
   nome: string;
+  cognome: string;
+  matricola: string;
+  numero_badge: string;
   qualifica: string;
   livello: number;
   azienda: string;
@@ -54,7 +57,7 @@ export interface Assenza {
   data_fine: string;
   ore_totali: number;
   note?: string;
-  certificato_base64?: string;
+  certificato_path?: string;
   certificato_nome?: string;
   created_at: string;
 }
@@ -76,7 +79,7 @@ export interface BustaPaga {
   id: string;
   mese: number;
   anno: number;
-  pdf_base64?: string;
+  pdf_path?: string;
   pdf_nome?: string;
   lordo: number;
   netto: number;
@@ -96,7 +99,7 @@ export interface Documento {
   titolo: string;
   descrizione?: string;
   sottotipo?: string;
-  file_base64: string;
+  file_path: string;
   file_nome: string;
   file_tipo: string;
   data_riferimento?: string;

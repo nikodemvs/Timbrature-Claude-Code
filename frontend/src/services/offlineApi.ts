@@ -25,6 +25,24 @@ import {
   Marcatura,
 } from '../algorithms/calcoli';
 
+type QueuedOperation = {
+  id: number;
+  operation: string;
+  endpoint: string;
+  method: string;
+  payload: string | null;
+  created_at: string;
+  retry_count: number;
+};
+
+type TimbraturaSnapshot = {
+  data?: string;
+  ora_entrata?: string | null;
+  ora_uscita?: string | null;
+  is_reperibilita_attiva?: boolean;
+  note?: string | null;
+};
+
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
 /** Verifica se il backend cloud è raggiungibile e abilitato dall'utente. */
@@ -33,8 +51,168 @@ function canUseCloud(): boolean {
   return isOnline && cloudEnabled;
 }
 
+let offlineQueueSyncPromise: Promise<void> | null = null;
+
 function markSynced(): void {
   useAppStore.getState().setLastSyncAt(new Date().toISOString());
+}
+
+function parseQueuedPayload(payload: string | null): Record<string, unknown> {
+  if (!payload) return {};
+  try {
+    const parsed = JSON.parse(payload);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, unknown>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function readString(value: unknown): string | undefined {
+  return typeof value === 'string' && value.trim() ? value : undefined;
+}
+
+function readBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
+}
+
+function extractTimbraturaSnapshot(payload: Record<string, unknown>): TimbraturaSnapshot | null {
+  const source = payload.timbratura && typeof payload.timbratura === 'object'
+    ? (payload.timbratura as Record<string, unknown>)
+    : payload;
+
+  const data = readString(source.data);
+  if (!data) return null;
+
+  return {
+    data,
+    ora_entrata: source.ora_entrata === null ? null : readString(source.ora_entrata) ?? null,
+    ora_uscita: source.ora_uscita === null ? null : readString(source.ora_uscita) ?? null,
+    is_reperibilita_attiva: readBoolean(source.is_reperibilita_attiva) ?? false,
+    note: source.note === null ? null : readString(source.note) ?? null,
+  };
+}
+
+function buildTimbraturaCreatePayload(snapshot: TimbraturaSnapshot): {
+  data: string;
+  ora_entrata?: string;
+  ora_uscita?: string;
+  is_reperibilita_attiva?: boolean;
+  note?: string;
+} {
+  if (!snapshot.data) {
+    throw new Error('Timbratura offline senza data');
+  }
+
+  const payload: {
+    data: string;
+    ora_entrata?: string;
+    ora_uscita?: string;
+    is_reperibilita_attiva?: boolean;
+    note?: string;
+  } = { data: snapshot.data };
+
+  if (snapshot.ora_entrata) payload.ora_entrata = snapshot.ora_entrata;
+  if (snapshot.ora_uscita) payload.ora_uscita = snapshot.ora_uscita;
+  if (typeof snapshot.is_reperibilita_attiva === 'boolean') {
+    payload.is_reperibilita_attiva = snapshot.is_reperibilita_attiva;
+  }
+  if (snapshot.note) payload.note = snapshot.note;
+
+  return payload;
+}
+
+function buildTimbraturaUpdatePayload(snapshot: TimbraturaSnapshot): {
+  ora_entrata?: string;
+  ora_uscita?: string;
+  is_reperibilita_attiva?: boolean;
+  note?: string;
+} {
+  const payload: {
+    ora_entrata?: string;
+    ora_uscita?: string;
+    is_reperibilita_attiva?: boolean;
+    note?: string;
+  } = {};
+
+  if (snapshot.ora_entrata) payload.ora_entrata = snapshot.ora_entrata;
+  if (snapshot.ora_uscita) payload.ora_uscita = snapshot.ora_uscita;
+  if (typeof snapshot.is_reperibilita_attiva === 'boolean') {
+    payload.is_reperibilita_attiva = snapshot.is_reperibilita_attiva;
+  }
+  if (snapshot.note) payload.note = snapshot.note;
+
+  return payload;
+}
+
+async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
+  if (entry.operation === 'updateSettings') {
+    const payload = parseQueuedPayload(entry.payload);
+    const response = await api.updateSettings(payload as Partial<UserSettings>);
+    await db.upsertSettings(response.data as unknown as Record<string, unknown>);
+    return;
+  }
+
+  if (entry.operation === 'timbra') {
+    const payload = parseQueuedPayload(entry.payload);
+    const snapshot = extractTimbraturaSnapshot(payload);
+
+    if (snapshot) {
+      const createPayload = buildTimbraturaCreatePayload(snapshot);
+      const updatePayload = buildTimbraturaUpdatePayload(snapshot);
+
+      try {
+        const response = await api.updateTimbratura(createPayload.data, updatePayload);
+        await db.upsertTimbratura(response.data as unknown as Record<string, unknown>);
+        return;
+      } catch {
+        try {
+          const response = await api.createTimbratura(createPayload);
+          await db.upsertTimbratura(response.data as unknown as Record<string, unknown>);
+          return;
+        } catch {
+          const response = await api.updateTimbratura(createPayload.data, updatePayload);
+          await db.upsertTimbratura(response.data as unknown as Record<string, unknown>);
+          return;
+        }
+      }
+    }
+
+    const tipo = payload.tipo === 'uscita' ? 'uscita' : 'entrata';
+    const isReperibilita = Boolean(payload.is_reperibilita);
+    const response = await api.timbra(tipo, isReperibilita);
+    await db.upsertTimbratura(response.data as unknown as Record<string, unknown>);
+    return;
+  }
+
+  throw new Error(`Operazione offline non supportata: ${entry.operation}`);
+}
+
+export async function syncOfflineQueue(): Promise<void> {
+  if (!canUseCloud()) return;
+  if (offlineQueueSyncPromise) return offlineQueueSyncPromise;
+
+  offlineQueueSyncPromise = (async () => {
+    const pending = (await db.getPendingOperations()) as QueuedOperation[];
+
+    for (const entry of pending) {
+      if (!canUseCloud()) {
+        break;
+      }
+
+      try {
+        await replayQueuedOperation(entry);
+        await db.removeQueuedOperation(entry.id);
+        markSynced();
+      } catch {
+        await db.incrementRetryCount(entry.id);
+        break;
+      }
+    }
+  })().finally(() => {
+    offlineQueueSyncPromise = null;
+  });
+
+  return offlineQueueSyncPromise;
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
@@ -61,6 +239,8 @@ export async function updateSettings(data: Partial<UserSettings>): Promise<UserS
     try {
       const res = await api.updateSettings(data);
       await db.upsertSettings(res.data as unknown as Record<string, unknown>);
+      markSynced();
+      void syncOfflineQueue();
       return res.data;
     } catch {
       await db.enqueueOperation('updateSettings', '/settings', 'PUT', data);
@@ -247,12 +427,21 @@ export async function timbra(
       // Aggiorna locale con i dati ufficiali del backend
       await db.upsertTimbratura(res.data as unknown as Record<string, unknown>);
       markSynced();
+      void syncOfflineQueue();
       return res.data;
     } catch {
-      await db.enqueueOperation('timbra', '/timbrature/timbra', 'POST', { tipo, is_reperibilita: isReperibilita });
+      await db.enqueueOperation('timbra', '/timbrature/timbra', 'POST', {
+        tipo,
+        is_reperibilita: isReperibilita,
+        timbratura: timbraturaLocale,
+      });
     }
   } else {
-    await db.enqueueOperation('timbra', '/timbrature/timbra', 'POST', { tipo, is_reperibilita: isReperibilita });
+    await db.enqueueOperation('timbra', '/timbrature/timbra', 'POST', {
+      tipo,
+      is_reperibilita: isReperibilita,
+      timbratura: timbraturaLocale,
+    });
   }
 
   // Ritorna la versione locale

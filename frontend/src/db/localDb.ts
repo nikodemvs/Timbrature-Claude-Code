@@ -5,22 +5,541 @@
  * Fonte di verità sul device. Il backend è opzionale.
  */
 
-import * as SQLite from 'expo-sqlite';
+import { Platform } from 'react-native';
 
-let _db: SQLite.SQLiteDatabase | null = null;
+type SQLiteModule = typeof import('expo-sqlite');
+
+type DatabaseLike = {
+  execAsync(sql: string): Promise<void>;
+  runAsync(sql: string, ...params: unknown[]): Promise<{ lastInsertRowId: number }>;
+  getAllAsync<T>(sql: string, ...params: unknown[]): Promise<T[]>;
+  getFirstAsync<T>(sql: string, ...params: unknown[]): Promise<T | null>;
+};
+
+let _db: DatabaseLike | null = null;
+let _dbPromise: Promise<DatabaseLike> | null = null;
+let _sqliteModulePromise: Promise<SQLiteModule> | null = null;
+
+function isWebRuntime(): boolean {
+  return Platform.OS === 'web';
+}
+
+async function getSQLiteModule(): Promise<SQLiteModule> {
+  if (!_sqliteModulePromise) {
+    _sqliteModulePromise = import('expo-sqlite');
+  }
+  return _sqliteModulePromise;
+}
+
+type WebRecord = Record<string, unknown>;
+
+type WebStore = {
+  settings: WebRecord | null;
+  timbrature: WebRecord[];
+  timbratureAziendali: WebRecord[];
+  assenze: WebRecord[];
+  reperibilita: WebRecord[];
+  bustePaga: WebRecord[];
+  documenti: WebRecord[];
+  chatHistory: WebRecord[];
+  alerts: WebRecord[];
+  offlineQueue: WebRecord[];
+  seq: Record<string, number>;
+};
+
+const WEB_STORE: WebStore = {
+  settings: null,
+  timbrature: [],
+  timbratureAziendali: [],
+  assenze: [],
+  reperibilita: [],
+  bustePaga: [],
+  documenti: [],
+  chatHistory: [],
+  alerts: [],
+  offlineQueue: [],
+  seq: {
+    assenze: 1,
+    reperibilita: 1,
+    bustePaga: 1,
+    documenti: 1,
+    chatHistory: 1,
+    alerts: 1,
+    offlineQueue: 1,
+  },
+};
+
+function cloneRecord<T extends WebRecord>(record: T): T {
+  return { ...record };
+}
+
+function cloneRecords<T extends WebRecord>(records: T[]): T[] {
+  return records.map(cloneRecord);
+}
+
+function nextWebId(key: keyof WebStore['seq']): number {
+  const current = WEB_STORE.seq[key] ?? 1;
+  WEB_STORE.seq[key] = current + 1;
+  return current;
+}
+
+function setWebSingle(table: 'settings', data: WebRecord | null): void {
+  WEB_STORE[table] = data ? cloneRecord(data) : null;
+}
+
+function clearWebData(includeSettings = false): void {
+  WEB_STORE.timbrature = [];
+  WEB_STORE.timbratureAziendali = [];
+  WEB_STORE.assenze = [];
+  WEB_STORE.reperibilita = [];
+  WEB_STORE.bustePaga = [];
+  WEB_STORE.documenti = [];
+  WEB_STORE.chatHistory = [];
+  WEB_STORE.alerts = [];
+  WEB_STORE.offlineQueue = [];
+  if (includeSettings) {
+    WEB_STORE.settings = null;
+  }
+}
+
+function parseMarcature(value: unknown): WebRecord[] {
+  if (Array.isArray(value)) {
+    return value as WebRecord[];
+  }
+  if (typeof value === 'string' && value.trim()) {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? (parsed as WebRecord[]) : [];
+    } catch {
+      return [];
+    }
+  }
+  return [];
+}
+
+function compareCreatedAtDesc(a: WebRecord, b: WebRecord): number {
+  const left = typeof a.created_at === 'string' ? a.created_at : '';
+  const right = typeof b.created_at === 'string' ? b.created_at : '';
+  return right.localeCompare(left);
+}
+
+function compareCreatedAtAsc(a: WebRecord, b: WebRecord): number {
+  const left = typeof a.created_at === 'string' ? a.created_at : '';
+  const right = typeof b.created_at === 'string' ? b.created_at : '';
+  return left.localeCompare(right);
+}
+
+function compareDataDesc(a: WebRecord, b: WebRecord): number {
+  const left = typeof a.data === 'string' ? a.data : '';
+  const right = typeof b.data === 'string' ? b.data : '';
+  return right.localeCompare(left);
+}
+
+function compareDataAsc(a: WebRecord, b: WebRecord): number {
+  const left = typeof a.data === 'string' ? a.data : '';
+  const right = typeof b.data === 'string' ? b.data : '';
+  return left.localeCompare(right);
+}
+
+function normalizeSql(sql: string): string {
+  return sql.replace(/\s+/g, ' ').trim();
+}
+
+function normalizeParams(params: unknown[]): unknown[] {
+  return params.length === 1 && Array.isArray(params[0]) ? params[0] as unknown[] : params;
+}
+
+function monthPrefix(anno: number, mese: number): string {
+  return `${anno}-${String(mese).padStart(2, '0')}`;
+}
+
+function getTableRows(table: keyof Pick<WebStore, 'timbrature' | 'timbratureAziendali' | 'assenze' | 'reperibilita' | 'bustePaga' | 'documenti' | 'chatHistory' | 'alerts' | 'offlineQueue'>): WebRecord[] {
+  return WEB_STORE[table];
+}
+
+function upsertByKey(
+  table: keyof Pick<WebStore, 'timbrature' | 'timbratureAziendali' | 'bustePaga'>,
+  key: string,
+  data: WebRecord,
+): void {
+  const rows = getTableRows(table);
+  const index = rows.findIndex(row => row[key] === data[key]);
+  if (index >= 0) {
+    rows[index] = { ...rows[index], ...cloneRecord(data) };
+  } else {
+    rows.push(cloneRecord(data));
+  }
+}
+
+function deleteByKey(
+  table: keyof Pick<WebStore, 'timbrature' | 'timbratureAziendali' | 'assenze' | 'reperibilita' | 'bustePaga' | 'documenti' | 'alerts' | 'offlineQueue'>,
+  key: string,
+  value: unknown,
+): void {
+  const rows = getTableRows(table);
+  const filtered = rows.filter(row => row[key] !== value);
+  WEB_STORE[table] = filtered;
+}
+
+function createMemoryDb(): DatabaseLike {
+  return {
+    async execAsync(sql: string): Promise<void> {
+      const normalized = normalizeSql(sql);
+      if (normalized === 'DELETE FROM timbrature; DELETE FROM timbrature_aziendali; DELETE FROM assenze; DELETE FROM reperibilita; DELETE FROM buste_paga; DELETE FROM documenti; DELETE FROM chat_history; DELETE FROM alerts; DELETE FROM offline_queue;') {
+        clearWebData(false);
+        return;
+      }
+      if (normalized === 'DELETE FROM settings;') {
+        setWebSingle('settings', null);
+        return;
+      }
+      if (normalized.startsWith('CREATE TABLE IF NOT EXISTS') || normalized.startsWith('PRAGMA ')) {
+        return;
+      }
+      if (normalized === 'DELETE FROM timbrature;' || normalized === 'DELETE FROM timbrature_aziendali;' || normalized === 'DELETE FROM assenze;' || normalized === 'DELETE FROM reperibilita;' || normalized === 'DELETE FROM buste_paga;' || normalized === 'DELETE FROM documenti;' || normalized === 'DELETE FROM chat_history;' || normalized === 'DELETE FROM alerts;' || normalized === 'DELETE FROM offline_queue;') {
+        clearWebData(false);
+        return;
+      }
+      throw new Error(`Unsupported web execAsync SQL: ${normalized}`);
+    },
+    async runAsync(sql: string, ...rawParams: unknown[]): Promise<{ lastInsertRowId: number }> {
+      const params = normalizeParams(rawParams);
+      const normalized = normalizeSql(sql);
+
+      if (normalized.startsWith('UPDATE settings SET ')) {
+        const data: WebRecord = WEB_STORE.settings ? { ...WEB_STORE.settings } : { id: 1 };
+        const updatedKeys = normalized
+          .slice('UPDATE settings SET '.length, normalized.indexOf(', updated_at = ? WHERE id = ?'))
+          .split(', ')
+          .map(part => part.split(' = ?')[0]);
+        updatedKeys.forEach((key, index) => {
+          data[key] = params[index];
+        });
+        data.updated_at = params[updatedKeys.length];
+        data.id = params[updatedKeys.length + 1] ?? 1;
+        setWebSingle('settings', data);
+        return { lastInsertRowId: 1 };
+      }
+
+      if (normalized.startsWith('INSERT INTO settings ')) {
+        const data: WebRecord = { id: 1 };
+        const keys = ['id', 'nome', 'cognome', 'matricola', 'numero_badge', 'qualifica', 'livello', 'azienda', 'sede', 'ccnl', 'data_assunzione', 'orario_tipo', 'ore_giornaliere', 'paga_base', 'scatti_anzianita', 'superminimo', 'premio_incarico', 'divisore_orario', 'divisore_giornaliero', 'ticket_valore', 'pin_hash', 'use_biometric', 'created_at', 'updated_at'];
+        keys.forEach((key, index) => {
+          data[key] = params[index];
+        });
+        setWebSingle('settings', data);
+        return { lastInsertRowId: 1 };
+      }
+
+      if (normalized.startsWith('INSERT INTO timbrature ')) {
+        const data: WebRecord = {
+          data: params[0],
+          ora_entrata: params[1] ?? null,
+          ora_uscita: params[2] ?? null,
+          marcature: params[3] ?? '[]',
+          ore_lavorate: params[4] ?? 0,
+          ore_arrotondate: params[5] ?? 0,
+          ore_reperibilita: params[6] ?? 0,
+          is_reperibilita_attiva: params[7] ? 1 : 0,
+          note: params[8] ?? null,
+          created_at: params[9],
+          synced: 0,
+        };
+        upsertByKey('timbrature', 'data', data);
+        return { lastInsertRowId: 1 };
+      }
+
+      if (normalized === 'DELETE FROM timbrature WHERE data = ?') {
+        deleteByKey('timbrature', 'data', params[0]);
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized.startsWith('INSERT INTO timbrature_aziendali ')) {
+        const data: WebRecord = {
+          data: params[0],
+          ora_entrata: params[1] ?? null,
+          ora_uscita: params[2] ?? null,
+          ore_lavorate: params[3] ?? 0,
+          fonte: params[4] ?? null,
+          note: params[5] ?? null,
+          created_at: params[6],
+        };
+        upsertByKey('timbratureAziendali', 'data', data);
+        return { lastInsertRowId: 1 };
+      }
+
+      if (normalized === 'DELETE FROM timbrature_aziendali WHERE data LIKE ?') {
+        const prefix = String(params[0]).replace(/%$/, '');
+        WEB_STORE.timbratureAziendali = WEB_STORE.timbratureAziendali.filter(row => typeof row.data !== 'string' || !row.data.startsWith(prefix));
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized.startsWith('INSERT INTO assenze ')) {
+        const id = nextWebId('assenze');
+        WEB_STORE.assenze.push({
+          id,
+          tipo: params[0],
+          data_inizio: params[1],
+          data_fine: params[2],
+          ore_totali: params[3] ?? 0,
+          note: params[4] ?? null,
+          certificato_path: params[5] ?? null,
+          certificato_nome: params[6] ?? null,
+          created_at: params[7],
+          synced: 0,
+        });
+        return { lastInsertRowId: id };
+      }
+
+      if (normalized === 'DELETE FROM assenze WHERE id = ?') {
+        deleteByKey('assenze', 'id', params[0]);
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized.startsWith('INSERT INTO reperibilita ')) {
+        const id = nextWebId('reperibilita');
+        WEB_STORE.reperibilita.push({
+          id,
+          data: params[0],
+          ora_inizio: params[1] ?? null,
+          ora_fine: params[2] ?? null,
+          ore_totali: params[3] ?? 0,
+          interventi: params[4] ?? 0,
+          compenso_calcolato: params[5] ?? 0,
+          tipo: params[6] ?? 'passiva',
+          note: params[7] ?? null,
+          created_at: params[8],
+          synced: 0,
+        });
+        return { lastInsertRowId: id };
+      }
+
+      if (normalized === 'DELETE FROM reperibilita WHERE id = ?') {
+        deleteByKey('reperibilita', 'id', params[0]);
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized.startsWith('INSERT INTO buste_paga ')) {
+        const data: WebRecord = {
+          id: nextWebId('bustePaga'),
+          mese: params[0],
+          anno: params[1],
+          pdf_path: params[2] ?? null,
+          pdf_nome: params[3] ?? null,
+          lordo: params[4] ?? 0,
+          netto: params[5] ?? 0,
+          straordinari_ore: params[6] ?? 0,
+          straordinari_importo: params[7] ?? 0,
+          trattenute_totali: params[8] ?? 0,
+          netto_calcolato: params[9] ?? 0,
+          differenza: params[10] ?? 0,
+          has_discrepancy: params[11] ? 1 : 0,
+          note_confronto: params[12] ?? null,
+          created_at: params[13],
+          synced: 0,
+        };
+        const existingIndex = WEB_STORE.bustePaga.findIndex(row => row.mese === data.mese && row.anno === data.anno);
+        if (existingIndex >= 0) {
+          WEB_STORE.bustePaga[existingIndex] = data;
+        } else {
+          WEB_STORE.bustePaga.push(data);
+        }
+        return { lastInsertRowId: Number(data.id) };
+      }
+
+      if (normalized === 'INSERT INTO documenti (tipo, titolo, descrizione, sottotipo, file_path, file_nome, file_tipo, data_riferimento, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)') {
+        const id = nextWebId('documenti');
+        WEB_STORE.documenti.push({
+          id,
+          tipo: params[0],
+          titolo: params[1],
+          descrizione: params[2] ?? null,
+          sottotipo: params[3] ?? null,
+          file_path: params[4],
+          file_nome: params[5],
+          file_tipo: params[6],
+          data_riferimento: params[7] ?? null,
+          created_at: params[8],
+          synced: 0,
+        });
+        return { lastInsertRowId: id };
+      }
+
+      if (normalized === 'DELETE FROM documenti WHERE id = ?') {
+        deleteByKey('documenti', 'id', params[0]);
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized === 'INSERT INTO chat_history (session_id, ruolo, contenuto, created_at) VALUES (?, ?, ?, ?)') {
+        const id = nextWebId('chatHistory');
+        WEB_STORE.chatHistory.push({
+          id,
+          session_id: params[0] ?? null,
+          ruolo: params[1],
+          contenuto: params[2],
+          created_at: params[3],
+        });
+        return { lastInsertRowId: id };
+      }
+
+      if (normalized === 'DELETE FROM chat_history') {
+        WEB_STORE.chatHistory = [];
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized === 'UPDATE alerts SET letto = 1 WHERE id = ?') {
+        const row = WEB_STORE.alerts.find(item => item.id === params[0]);
+        if (row) {
+          row.letto = 1;
+        }
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized === 'INSERT INTO alerts (tipo, titolo, messaggio, data_scadenza, created_at) VALUES (?, ?, ?, ?, ?)') {
+        const id = nextWebId('alerts');
+        WEB_STORE.alerts.push({
+          id,
+          tipo: params[0],
+          titolo: params[1],
+          messaggio: params[2],
+          data_scadenza: params[3] ?? null,
+          letto: 0,
+          created_at: params[4],
+        });
+        return { lastInsertRowId: id };
+      }
+
+      if (normalized === 'INSERT INTO offline_queue (operation, endpoint, method, payload, created_at) VALUES (?, ?, ?, ?, ?)') {
+        const id = nextWebId('offlineQueue');
+        WEB_STORE.offlineQueue.push({
+          id,
+          operation: params[0],
+          endpoint: params[1],
+          method: params[2],
+          payload: params[3] ?? null,
+          created_at: params[4],
+          retry_count: 0,
+        });
+        return { lastInsertRowId: id };
+      }
+
+      if (normalized === 'DELETE FROM offline_queue WHERE id = ?') {
+        deleteByKey('offlineQueue', 'id', params[0]);
+        return { lastInsertRowId: 0 };
+      }
+
+      if (normalized === 'UPDATE offline_queue SET retry_count = retry_count + 1 WHERE id = ?') {
+        const row = WEB_STORE.offlineQueue.find(item => item.id === params[0]);
+        if (row) {
+          row.retry_count = Number(row.retry_count ?? 0) + 1;
+        }
+        return { lastInsertRowId: 0 };
+      }
+
+      throw new Error(`Unsupported web runAsync SQL: ${normalized}`);
+    },
+    async getAllAsync<T>(sql: string, ...rawParams: unknown[]): Promise<T[]> {
+      const params = normalizeParams(rawParams);
+      const normalized = normalizeSql(sql);
+
+      if (normalized === 'SELECT * FROM settings WHERE id = 1') {
+        return WEB_STORE.settings ? [cloneRecord(WEB_STORE.settings) as T] : [];
+      }
+      if (normalized === 'SELECT * FROM timbrature ORDER BY data DESC') {
+        return cloneRecords(WEB_STORE.timbrature.sort(compareDataDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM timbrature WHERE data = ?') {
+        return cloneRecords(WEB_STORE.timbrature.filter(row => row.data === params[0])) as T[];
+      }
+      if (normalized === 'SELECT * FROM timbrature WHERE data LIKE ? ORDER BY data DESC') {
+        const prefix = String(params[0]).replace(/%$/, '');
+        return cloneRecords(WEB_STORE.timbrature.filter(row => typeof row.data === 'string' && row.data.startsWith(prefix)).sort(compareDataDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM timbrature_aziendali ORDER BY data') {
+        return cloneRecords(WEB_STORE.timbratureAziendali.sort(compareDataAsc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM timbrature_aziendali WHERE data LIKE ? ORDER BY data') {
+        const prefix = String(params[0]).replace(/%$/, '');
+        return cloneRecords(WEB_STORE.timbratureAziendali.filter(row => typeof row.data === 'string' && row.data.startsWith(prefix)).sort(compareDataAsc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM assenze ORDER BY data_inizio DESC') {
+        return cloneRecords(WEB_STORE.assenze.sort((a, b) => String(b.data_inizio ?? '').localeCompare(String(a.data_inizio ?? '')))) as T[];
+      }
+      if (normalized === 'SELECT * FROM reperibilita ORDER BY data DESC') {
+        return cloneRecords(WEB_STORE.reperibilita.sort(compareDataDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM reperibilita WHERE data LIKE ? ORDER BY data') {
+        const prefix = String(params[0]).replace(/%$/, '');
+        return cloneRecords(WEB_STORE.reperibilita.filter(row => typeof row.data === 'string' && row.data.startsWith(prefix)).sort(compareDataAsc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM buste_paga WHERE anno = ? ORDER BY mese DESC') {
+        return cloneRecords(WEB_STORE.bustePaga.filter(row => row.anno === params[0]).sort((a, b) => Number(b.mese ?? 0) - Number(a.mese ?? 0))) as T[];
+      }
+      if (normalized === 'SELECT * FROM buste_paga WHERE anno = ? AND mese = ?') {
+        return cloneRecords(WEB_STORE.bustePaga.filter(bp => bp.anno === params[0] && bp.mese === params[1])) as T[];
+      }
+      if (normalized === 'SELECT * FROM buste_paga ORDER BY anno DESC, mese DESC') {
+        return cloneRecords(WEB_STORE.bustePaga.sort((a, b) => Number(b.anno ?? 0) - Number(a.anno ?? 0) || Number(b.mese ?? 0) - Number(a.mese ?? 0))) as T[];
+      }
+      if (normalized === 'SELECT * FROM documenti ORDER BY created_at DESC') {
+        return cloneRecords(WEB_STORE.documenti.sort(compareCreatedAtDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM documenti WHERE tipo = ? ORDER BY created_at DESC') {
+        return cloneRecords(WEB_STORE.documenti.filter(row => row.tipo === params[0]).sort(compareCreatedAtDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM chat_history ORDER BY created_at DESC LIMIT ?') {
+        return cloneRecords(WEB_STORE.chatHistory.sort(compareCreatedAtDesc).slice(0, Number(params[0] ?? 50))) as T[];
+      }
+      if (normalized === 'SELECT * FROM alerts ORDER BY created_at DESC') {
+        return cloneRecords(WEB_STORE.alerts.sort(compareCreatedAtDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM alerts WHERE letto = 0 ORDER BY created_at DESC') {
+        return cloneRecords(WEB_STORE.alerts.filter(row => Number(row.letto ?? 0) === 0).sort(compareCreatedAtDesc)) as T[];
+      }
+      if (normalized === 'SELECT * FROM offline_queue ORDER BY created_at ASC') {
+        return cloneRecords(WEB_STORE.offlineQueue.sort(compareCreatedAtAsc)) as T[];
+      }
+
+      throw new Error(`Unsupported web getAllAsync SQL: ${normalized}`);
+    },
+    async getFirstAsync<T>(sql: string, ...rawParams: unknown[]): Promise<T | null> {
+      const params = normalizeParams(rawParams);
+      const rows = await this.getAllAsync<T>(sql, params);
+      return rows[0] ?? null;
+    },
+  };
+}
 
 // ─── Apertura e inizializzazione ─────────────────────────────────────────────
 
-export async function openDb(): Promise<SQLite.SQLiteDatabase> {
+export async function openDb(): Promise<DatabaseLike> {
   if (_db) return _db;
-  _db = await SQLite.openDatabaseAsync('bustapaga.db');
-  await _db.execAsync('PRAGMA journal_mode=WAL;');
-  await _db.execAsync('PRAGMA foreign_keys=ON;');
-  await initSchema(_db);
-  return _db;
+  if (_dbPromise) return _dbPromise;
+
+  _dbPromise = (async () => {
+    if (isWebRuntime()) {
+      const memoryDb = createMemoryDb();
+      _db = memoryDb;
+      return memoryDb;
+    }
+
+    const SQLite = await getSQLiteModule();
+    const db = await SQLite.openDatabaseAsync('bustapaga.db');
+    await db.execAsync('PRAGMA journal_mode=WAL;');
+    await db.execAsync('PRAGMA foreign_keys=ON;');
+    await initSchema(db);
+    _db = db;
+    return db;
+  })();
+
+  try {
+    return await _dbPromise;
+  } finally {
+    _dbPromise = null;
+  }
 }
 
-async function initSchema(db: SQLite.SQLiteDatabase): Promise<void> {
+async function initSchema(db: DatabaseLike): Promise<void> {
   await db.execAsync(`
     CREATE TABLE IF NOT EXISTS settings (
       id INTEGER PRIMARY KEY DEFAULT 1,
@@ -29,7 +548,7 @@ async function initSchema(db: SQLite.SQLiteDatabase): Promise<void> {
       matricola TEXT,
       numero_badge TEXT,
       qualifica TEXT,
-      livello TEXT,
+      livello INTEGER DEFAULT 0,
       azienda TEXT,
       sede TEXT,
       ccnl TEXT,
@@ -519,14 +1038,5 @@ export async function clearAccount(): Promise<void> {
   const db = await openDb();
   await db.execAsync(`
     DELETE FROM settings;
-    DELETE FROM timbrature;
-    DELETE FROM timbrature_aziendali;
-    DELETE FROM assenze;
-    DELETE FROM reperibilita;
-    DELETE FROM buste_paga;
-    DELETE FROM documenti;
-    DELETE FROM chat_history;
-    DELETE FROM alerts;
-    DELETE FROM offline_queue;
   `);
 }

@@ -12,8 +12,10 @@ import {
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
+import { useFocusEffect } from 'expo-router';
 import { BottomSheet, Button, Card, InputField, LoadingScreen } from '../../src/components';
 import * as api from '../../src/services/api';
+import * as offlineApi from '../../src/services/offlineApi';
 import { BustaPaga, Documento } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { useAppStore } from '../../src/store/appStore';
@@ -250,16 +252,16 @@ export default function BustePagaScreen() {
     try {
       setLoadError(null);
       const [busteRes, archivioRes, cudRes, settingsRes] = await Promise.allSettled([
-        api.getBustePaga(),
-        api.getDocumenti('busta_paga'),
-        api.getDocumenti('cud'),
-        api.getSettings(),
+        offlineApi.getBustePaga(),
+        offlineApi.getDocumenti('busta_paga'),
+        offlineApi.getDocumenti('cud'),
+        offlineApi.getSettings(),
       ]);
 
       let settingsData = null;
 
       if (busteRes.status === 'fulfilled') {
-        const sortedBuste = sortBustePaga(busteRes.value.data);
+        const sortedBuste = sortBustePaga((busteRes.value as BustaPaga[]) ?? []);
         setBustePaga(sortedBuste);
         setExpandedYearsBySection((current) => ({
           ...current,
@@ -267,7 +269,7 @@ export default function BustePagaScreen() {
         }));
       }
       if (archivioRes.status === 'fulfilled') {
-        const sortedArchivio = sortDocumenti(archivioRes.value.data);
+        const sortedArchivio = sortDocumenti((archivioRes.value as unknown as Documento[]) ?? []);
         setArchivioCedolini(sortedArchivio);
         setExpandedYearsBySection((current) => ({
           ...current,
@@ -275,7 +277,7 @@ export default function BustePagaScreen() {
         }));
       }
       if (cudRes.status === 'fulfilled') {
-        const sortedCud = sortDocumenti(cudRes.value.data);
+        const sortedCud = sortDocumenti((cudRes.value as unknown as Documento[]) ?? []);
         setCudDocuments(sortedCud);
         setExpandedYearsBySection((current) => ({
           ...current,
@@ -283,22 +285,24 @@ export default function BustePagaScreen() {
         }));
       }
 
-      if (settingsRes.status === 'fulfilled') {
-        settingsData = settingsRes.value.data;
+      if (settingsRes.status === 'fulfilled' && settingsRes.value != null) {
+        settingsData = settingsRes.value;
         setSettings(settingsData);
       }
 
       try {
-        const dashboardResponse = await api.getDashboard();
+        const dashboardResponse = await offlineApi.getDashboard();
         const mergedDashboard = settingsData
           ? {
-              ...dashboardResponse.data,
+              ...(dashboardResponse ?? {}),
               settings: settingsData,
             }
-          : dashboardResponse.data;
-        setDashboard(mergedDashboard);
-        if (!settingsData) {
-          setSettings(dashboardResponse.data.settings);
+          : dashboardResponse;
+        if (mergedDashboard) {
+          setDashboard(mergedDashboard as any);
+        }
+        if (!settingsData && dashboardResponse?.settings) {
+          setSettings(dashboardResponse.settings as any);
         }
       } catch {
         if (!settingsData) {
@@ -319,6 +323,12 @@ export default function BustePagaScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

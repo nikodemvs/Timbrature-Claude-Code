@@ -12,9 +12,11 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField } from '../../src/components';
 import * as api from '../../src/services/api';
+import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
 import { Assenza } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { useFocusEffect } from 'expo-router';
 
 type TipoOption = {
   value: string;
@@ -54,13 +56,13 @@ export default function AssenzeScreen() {
   const loadData = useCallback(async () => {
     try {
       const [assenzeRes, ferieRes, comportoRes] = await Promise.all([
-        api.getAssenze(),
-        api.getSaldoFerie(),
-        api.getComporto(),
+        offlineApi.getAssenze(),
+        offlineApi.getSaldoFerie(),
+        offlineApi.getComporto(),
       ]);
-      setAssenze(assenzeRes.data);
-      setFerieData(ferieRes.data);
-      setComporto(comportoRes.data);
+      setAssenze(assenzeRes as unknown as Assenza[]);
+      setFerieData(ferieRes);
+      setComporto(comportoRes);
     } catch (error) {
       console.error('Error loading assenze:', error);
     } finally {
@@ -72,6 +74,12 @@ export default function AssenzeScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);
@@ -86,20 +94,20 @@ export default function AssenzeScreen() {
 
     setSaving(true);
     try {
-      await api.createAssenza({
+      await offlineApi.createAssenza({
         tipo: selectedTipo,
         data_inizio: dataInizio,
         data_fine: dataFine,
         ore_totali: oreTotali ? parseFloat(oreTotali) : undefined,
         note: note || undefined,
       });
-      
+
       setShowAddSheet(false);
       resetForm();
       loadData();
       Alert.alert('Successo', 'Assenza registrata');
-    } catch (error: any) {
-      Alert.alert('Errore', error.response?.data?.detail || 'Errore nel salvataggio');
+    } catch {
+      Alert.alert('Errore', 'Errore nel salvataggio');
     } finally {
       setSaving(false);
     }
@@ -116,7 +124,7 @@ export default function AssenzeScreen() {
           style: 'destructive',
           onPress: async () => {
             try {
-              await api.deleteAssenza(id);
+              await offlineApi.deleteAssenza(id);
               loadData();
             } catch {
               Alert.alert('Errore', 'Impossibile eliminare');

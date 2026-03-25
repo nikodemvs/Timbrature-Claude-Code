@@ -5,6 +5,22 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-25 — Fix: migrazione offline-first incompleta — .data access su offlineApi
+
+Cosa: corretto accesso `.data` rimasto dopo la migrazione da `api.*` a `offlineApi.*` in `timbrature.tsx` e `altro.tsx`.
+`offlineApi.*` restituisce dati direttamente (non `AxiosResponse`), il vecchio `.data` era `undefined` → tab Timbrature vuota, alerts/reperibilita/dailyStats/settings non caricate.
+- `timbrature.tsx`: `setTimbrature(timbRes.data)` → `setTimbrature(timbRes as Timbratura[])`
+- `altro.tsx`: migrate a offlineApi le funzioni `loadAlerts`, `loadReperibilita`, `loadDailyStats`, `refreshDashboard`, `saveSettings`, `savePin`
+Perché: quando si cambia da axios a offlineApi si deve anche rimuovere `.data`; i due contratti sono incompatibili
+File: frontend/app/(tabs)/timbrature.tsx, frontend/app/(tabs)/altro.tsx
+
+## 2026-03-25 — Fix: persistenza localStorage web — timbrature perse al reload
+
+Cosa: aggiunto `saveWebStore()`/`loadWebStore()` in `localDb.ts` per persistere `WEB_STORE` su `localStorage` (chiave `bustapaga-webstore-v1`).
+Wrapper `createMemoryDb()` chiama `saveWebStore()` dopo ogni `runAsync`/`execAsync`.
+Perché: su web `WEB_STORE` era in-memory puro: dati persi ad ogni reload → offline-first non funzionante in browser
+File: frontend/src/db/localDb.ts
+
 ## 2026-03-25 — Fix: bottone Entrata card Timbratura Rapida non funzionava su web
 Cosa: aggiunto pattern `SELECT * FROM timbrature WHERE data = ?` nel `memoryDb.getAllAsync` di `localDb.ts`; il pattern mancante causava un'eccezione silenziata in `handleTimbra` che impediva qualsiasi aggiornamento UI e chiamata al backend
 Perché: `getTimbraturaByData` usa questa query per leggere la timbratura del giorno; il memoryDb (fallback web di expo-sqlite) non la gestiva e lanciava `Unsupported web getAllAsync SQL`

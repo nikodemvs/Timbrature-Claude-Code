@@ -184,6 +184,18 @@ async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
     return;
   }
 
+  if (entry.operation === 'createAssenza') {
+    const payload = parseQueuedPayload(entry.payload);
+    await api.createAssenza(payload as Parameters<typeof api.createAssenza>[0]);
+    return;
+  }
+
+  if (entry.operation === 'deleteAssenza') {
+    const payload = parseQueuedPayload(entry.payload);
+    if (payload.id) await api.deleteAssenza(String(payload.id));
+    return;
+  }
+
   throw new Error(`Operazione offline non supportata: ${entry.operation}`);
 }
 
@@ -535,4 +547,68 @@ export async function getAlerts(soloNonLetti?: boolean) {
     } catch { /* fallback */ }
   }
   return db.getAlerts(soloNonLetti);
+}
+
+// ─── Assenze (write) ───────────────────────────────────────────────────────────
+
+export async function createAssenza(data: {
+  tipo: string;
+  data_inizio: string;
+  data_fine: string;
+  ore_totali?: number;
+  note?: string;
+}): Promise<Record<string, unknown>> {
+  // Salva in locale IMMEDIATAMENTE
+  const localRecord = {
+    ...data,
+    created_at: new Date().toISOString(),
+    synced: 0,
+  };
+  const lastInsertRowId = await db.insertAssenza(localRecord);
+  if (canUseCloud()) {
+    try {
+      const res = await api.createAssenza(data);
+      markSynced();
+      void syncOfflineQueue();
+      return res.data as unknown as Record<string, unknown>;
+    } catch {
+      await db.enqueueOperation('createAssenza', '/assenze', 'POST', data);
+    }
+  } else {
+    await db.enqueueOperation('createAssenza', '/assenze', 'POST', data);
+  }
+  return { ...localRecord, id: lastInsertRowId };
+}
+
+export async function deleteAssenza(id: string): Promise<void> {
+  // Elimina in locale IMMEDIATAMENTE
+  await db.deleteAssenza(Number(id));
+  if (canUseCloud()) {
+    try {
+      await api.deleteAssenza(id);
+      markSynced();
+      void syncOfflineQueue();
+      return;
+    } catch {
+      await db.enqueueOperation('deleteAssenza', `/assenze/${id}`, 'DELETE', { id });
+    }
+  } else {
+    await db.enqueueOperation('deleteAssenza', `/assenze/${id}`, 'DELETE', { id });
+  }
+}
+
+// ─── Documenti ─────────────────────────────────────────────────────────────────
+
+export async function getDocumenti(tipo?: string): Promise<Record<string, unknown>[]> {
+  if (canUseCloud()) {
+    try {
+      const res = await api.getDocumenti(tipo);
+      for (const d of res.data) {
+        await db.insertDocumento(d as unknown as Record<string, unknown>).catch(() => {});
+      }
+      markSynced();
+      return res.data as unknown as Record<string, unknown>[];
+    } catch { /* fallback */ }
+  }
+  return db.getDocumenti(tipo);
 }

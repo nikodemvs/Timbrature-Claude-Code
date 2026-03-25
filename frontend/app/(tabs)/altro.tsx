@@ -19,6 +19,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
 import { useAppStore, THEMES, ThemeKey, ColorSchemePreference } from '../../src/store/appStore';
 import * as api from '../../src/services/api';
+import * as offlineApi from '../../src/services/offlineApi';
 import { formatCurrency, formatDate, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import { Alert as AlertType, ChatMessage, Reperibilita, Timbratura } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
@@ -201,8 +202,8 @@ export default function AltroScreen() {
 
   const loadAlerts = useCallback(async () => {
     try {
-      const response = await api.getAlerts();
-      setAlerts(response.data);
+      const response = await offlineApi.getAlerts();
+      setAlerts(response as unknown as AlertType[]);
     } catch (error) {
       console.error('Error loading alerts:', error);
     }
@@ -210,8 +211,8 @@ export default function AltroScreen() {
 
   const loadReperibilita = useCallback(async () => {
     try {
-      const response = await api.getReperibilita();
-      setReperibilita(response.data);
+      const response = await offlineApi.getReperibilita();
+      setReperibilita(response as unknown as Reperibilita[]);
     } catch (error) {
       console.error('Error loading reperibilita:', error);
     }
@@ -228,8 +229,8 @@ export default function AltroScreen() {
 
   const loadDailyStats = useCallback(async () => {
     try {
-      const response = await api.getTimbrature({ mese: selectedMonth, anno: selectedYear });
-      setDailyStats(response.data);
+      const response = await offlineApi.getTimbrature({ mese: selectedMonth, anno: selectedYear });
+      setDailyStats(response as unknown as Timbratura[]);
     } catch (error) {
       console.error('Error loading daily stats:', error);
     }
@@ -261,14 +262,14 @@ export default function AltroScreen() {
 
   const refreshDashboard = useCallback(async () => {
     try {
-      const settingsResponse = await api.getSettings();
-      const dashboardResponse = await api.getDashboard();
+      const settingsData = await offlineApi.getSettings();
+      const dashboardData = await offlineApi.getDashboard();
       const mergedDashboard = {
-        ...dashboardResponse.data,
-        settings: settingsResponse.data,
+        ...(dashboardData ?? {}),
+        settings: settingsData,
       };
-      setSettings(settingsResponse.data);
-      setDashboard(mergedDashboard);
+      if (settingsData) setSettings(settingsData);
+      setDashboard(mergedDashboard as any);
       return mergedDashboard;
     } catch (error) {
       console.error('Error refreshing dashboard:', error);
@@ -522,7 +523,7 @@ export default function AltroScreen() {
           onPress: async () => {
             setSavingSettings(true);
             try {
-              await api.updateSettings({
+              await offlineApi.updateSettings({
                 nome: editNome.trim(),
                 cognome: editCognome.trim(),
                 matricola: editMatricola.trim(),
@@ -550,7 +551,7 @@ export default function AltroScreen() {
     }
 
     try {
-      await api.updateSettings({ pin_hash: normalizedPin });
+      await offlineApi.updateSettings({ pin_hash: normalizedPin });
 
       if (Platform.OS !== 'web') {
         const SecureStore = await import('expo-secure-store');

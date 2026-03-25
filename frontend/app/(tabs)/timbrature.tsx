@@ -1,4 +1,5 @@
 import React, { useEffect, useState, useCallback } from 'react';
+import { useFocusEffect } from 'expo-router';
 import {
   View,
   Text,
@@ -150,10 +151,10 @@ export default function TimbraturaScreen() {
   const loadData = useCallback(async () => {
     try {
       const [timbRes, weekRes] = await Promise.all([
-        api.getTimbrature({ mese: meseSelezionato, anno: annoSelezionato }),
+        offlineApi.getTimbrature({ mese: meseSelezionato, anno: annoSelezionato }),
         api.getWeeklySummary(getTodayString()),
       ]);
-      setTimbrature(timbRes.data);
+      setTimbrature(timbRes as Timbratura[]);
       setWeeklySummary(weekRes.data);
       
       // Load company timbrature
@@ -192,6 +193,12 @@ export default function TimbraturaScreen() {
   useEffect(() => {
     loadData();
   }, [loadData]);
+
+  useFocusEffect(
+    useCallback(() => {
+      loadData();
+    }, [loadData])
+  );
 
   const onRefresh = useCallback(() => {
     setRefreshing(true);

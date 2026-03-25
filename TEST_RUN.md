@@ -10,20 +10,17 @@
 ## Gate eseguito
 
 - `pytest -m "unit or api"` — gate rapido backend
-- Verifica manuale via preview_eval + reload
 
 ## Esito
 
 - [x] PASS — 57 passed, 10 deselected in 0.41s
-- [x] PASS — persistenza localStorage verificata manualmente
 
 ## Test coinvolti
 
-- Click Entrata via React fiber → `localStorage['bustapaga-webstore-v1']` popolato ✓
-- `window.location.reload()` → timbratura ancora visibile (timer attivo, ora entrata) ✓
 - `pytest -m "unit or api"` → 57 passed ✓
 
 ## Note
 
-`tsc --noEmit` ha errori pre-esistenti in `fileStore.ts` (expo-file-system API mismatch) —
-non causati da questa modifica, non in scope.
+Fix `.data` su `offlineApi.*` in timbrature.tsx e altro.tsx.
+`offlineApi.*` restituisce i dati direttamente (non AxiosResponse),
+il vecchio codice accedeva `.data` → `undefined`.

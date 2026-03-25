@@ -9,13 +9,18 @@
 
 ## File modificati
 
-- `frontend/src/db/localDb.ts` — aggiunta persistenza localStorage per WEB_STORE:
-  - `WEB_STORE_KEY` = `'bustapaga-webstore-v1'`
-  - `saveWebStore()` — serializza WEB_STORE in localStorage dopo ogni write
-  - `loadWebStore()` — ripristina WEB_STORE da localStorage all'avvio
-  - `createMemoryDbImpl()` — rinominata da `createMemoryDb()`
-  - `createMemoryDb()` — nuovo wrapper che chiama `saveWebStore()` dopo ogni `runAsync`/`execAsync`
-  - `openDb()` — chiama `loadWebStore()` prima di creare il memoryDb su web
+- `frontend/app/(tabs)/timbrature.tsx` — fix critico: `setTimbrature(timbRes.data)` → `setTimbrature(timbRes as Timbratura[])`
+  - `offlineApi.getTimbrature` ritorna `Timbratura[]` direttamente, non `AxiosResponse`
+  - Il `.data` era `undefined` → la tab mostrava "Nessuna timbratura"
+
+- `frontend/app/(tabs)/altro.tsx` — migrazione a offlineApi:
+  - Aggiunto `import * as offlineApi from '../../src/services/offlineApi'`
+  - `loadAlerts`: `api.getAlerts()` → `offlineApi.getAlerts()`, rimosso `.data`
+  - `loadReperibilita`: `api.getReperibilita()` → `offlineApi.getReperibilita()`, rimosso `.data`
+  - `loadDailyStats`: `api.getTimbrature()` → `offlineApi.getTimbrature()`, rimosso `.data`
+  - `refreshDashboard`: `api.getSettings/getDashboard` → `offlineApi.*`, adattato accesso diretto
+  - `saveSettings`: `api.updateSettings` → `offlineApi.updateSettings`
+  - `savePin`: `api.updateSettings` → `offlineApi.updateSettings`
 
 ## Tipo di modifica
 
@@ -23,11 +28,12 @@
 
 ## Causa root
 
-Su web, `WEB_STORE` era in-memory puro: dati persi ad ogni reload.
-Nessuna persistenza tra sessioni → offline-first non funzionante su browser.
+Migrazione offline-first incompleta: alcune funzioni erano state cambiate da `api.*` a `offlineApi.*`
+ma l'accesso `.data` (specifico di AxiosResponse) non era stato rimosso.
+`offlineApi.*` restituisce i dati direttamente, non dentro `{ data: ... }`.
 
 ## Verifica
 
-- Entrata registrata alle 21:52 → reload pagina → timer attivo, "Oggi sei entrato alle 21:52" ✓
-- `localStorage['bustapaga-webstore-v1']` contiene la timbratura ✓
 - `pytest -m "unit or api"` → 57 passed ✓
+- Tab timbrature: fix `.data` → mostra timbrature locali ✓
+- Tab altro: funzioni offline-first ✓

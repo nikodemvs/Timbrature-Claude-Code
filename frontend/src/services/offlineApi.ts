@@ -14,7 +14,7 @@
 import * as api from './api';
 import * as db from '../db/localDb';
 import { useAppStore } from '../store/appStore';
-import { UserSettings, Timbratura, DashboardData } from '../types';
+import { UserSettings, Timbratura, DashboardData, WeeklySummary } from '../types';
 import {
   stimaNetto,
   calcolaSaldoFerie,
@@ -41,6 +41,41 @@ type TimbraturaSnapshot = {
   ora_uscita?: string | null;
   is_reperibilita_attiva?: boolean;
   note?: string | null;
+};
+
+type TimbraturaAziendaleRecord = {
+  id: string;
+  data: string;
+  ora_entrata: string | null;
+  ora_uscita: string | null;
+  ore_lavorate: number;
+  descrizione: string | null;
+};
+
+type ConfrontoTimbratureItem = {
+  data: string;
+  personale_entrata: string | null;
+  personale_uscita: string | null;
+  personale_ore: number;
+  aziendale_entrata: string | null;
+  aziendale_uscita: string | null;
+  aziendale_ore: number;
+  aziendale_descrizione: string | null;
+  differenza_ore: number;
+  has_discrepancy: boolean;
+};
+
+type ConfrontoTimbratureResponse = {
+  mese: number;
+  anno: number;
+  confronti: ConfrontoTimbratureItem[];
+  riepilogo: {
+    giorni_totali: number;
+    giorni_con_discrepanza: number;
+    differenza_ore_totale: number;
+    ore_personali_totali: number;
+    ore_aziendali_totali: number;
+  };
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -144,6 +179,83 @@ function buildTimbraturaUpdatePayload(snapshot: TimbraturaSnapshot): {
   return payload;
 }
 
+function parseMarcature(value: unknown): Marcatura[] {
+  if (Array.isArray(value)) return value as Marcatura[];
+  if (typeof value !== 'string') return [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as Marcatura[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function readIsoDate(value: string): Date | null {
+  const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(value);
+  if (!match) return null;
+  const year = Number(match[1]);
+  const month = Number(match[2]) - 1;
+  const day = Number(match[3]);
+  const date = new Date(Date.UTC(year, month, day));
+  if (
+    date.getUTCFullYear() !== year ||
+    date.getUTCMonth() !== month ||
+    date.getUTCDate() !== day
+  ) {
+    return null;
+  }
+  return date;
+}
+
+function toIsoDate(date: Date): string {
+  return date.toISOString().split('T')[0];
+}
+
+function getWeekBounds(date: string): { start: string; end: string } {
+  const parsed = readIsoDate(date);
+  if (!parsed) {
+    throw new Error('Formato data non valido. Usa YYYY-MM-DD');
+  }
+  const mondayOffset = (parsed.getUTCDay() + 6) % 7;
+  const monday = new Date(parsed);
+  monday.setUTCDate(parsed.getUTCDate() - mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setUTCDate(monday.getUTCDate() + 6);
+  return {
+    start: toIsoDate(monday),
+    end: toIsoDate(sunday),
+  };
+}
+
+function normalizeTimbraturaRecord(row: Record<string, unknown>): Timbratura {
+  return {
+    ...row,
+    id: String(row.id ?? `local_${String(row.data ?? '')}`),
+    data: String(row.data ?? ''),
+    marcature: parseMarcature(row.marcature),
+    ore_lavorate: Number(row.ore_lavorate ?? 0),
+    ore_arrotondate: Number(row.ore_arrotondate ?? 0),
+    ore_reperibilita: Number(row.ore_reperibilita ?? 0),
+    is_reperibilita_attiva: row.is_reperibilita_attiva === true || row.is_reperibilita_attiva === 1,
+    created_at: typeof row.created_at === 'string' ? row.created_at : new Date().toISOString(),
+  } as unknown as Timbratura;
+}
+
+function normalizeTimbratureAziendali(
+  rows: Record<string, unknown>[],
+): TimbraturaAziendaleRecord[] {
+  return rows.map((row) => ({
+    id: String(row.id ?? row.data ?? ''),
+    data: String(row.data ?? ''),
+    ora_entrata: typeof row.ora_entrata === 'string' ? row.ora_entrata : null,
+    ora_uscita: typeof row.ora_uscita === 'string' ? row.ora_uscita : null,
+    ore_lavorate: Number(row.ore_lavorate ?? 0),
+    descrizione: typeof row.descrizione === 'string'
+      ? row.descrizione
+      : (typeof row.note === 'string' ? row.note : null),
+  }));
+}
+
 async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
   if (entry.operation === 'updateSettings') {
     const payload = parseQueuedPayload(entry.payload);
@@ -193,6 +305,37 @@ async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
   if (entry.operation === 'deleteAssenza') {
     const payload = parseQueuedPayload(entry.payload);
     if (payload.id) await api.deleteAssenza(String(payload.id));
+    return;
+  }
+
+  if (entry.operation === 'createTimbratura') {
+    const payload = parseQueuedPayload(entry.payload);
+    const response = await api.createTimbratura(payload as Parameters<typeof api.createTimbratura>[0]);
+    await db.upsertTimbratura(response.data as unknown as Record<string, unknown>);
+    return;
+  }
+
+  if (entry.operation === 'updateTimbratura') {
+    const payload = parseQueuedPayload(entry.payload);
+    const data = readString(payload.data);
+    const updates = payload.updates && typeof payload.updates === 'object'
+      ? (payload.updates as Parameters<typeof api.updateTimbratura>[1])
+      : {};
+    if (!data) {
+      throw new Error('Payload updateTimbratura non valido');
+    }
+    const response = await api.updateTimbratura(data, updates);
+    await db.upsertTimbratura(response.data as unknown as Record<string, unknown>);
+    return;
+  }
+
+  if (entry.operation === 'deleteTimbratura') {
+    const payload = parseQueuedPayload(entry.payload);
+    const data = readString(payload.data);
+    if (!data) {
+      throw new Error('Payload deleteTimbratura non valido');
+    }
+    await api.deleteTimbratura(data);
     return;
   }
 
@@ -353,7 +496,7 @@ export async function getTimbrature(params?: { mese?: number; anno?: number }): 
       markSynced();
       // Merge: include local records not yet synced to backend (offline queue pending)
       const local = await db.getTimbrature(params?.mese, params?.anno);
-      const cloudDates = new Set(res.data.map((t: Record<string, unknown>) => t.data as string));
+      const cloudDates = new Set(res.data.map((t: Timbratura) => t.data as string));
       const unsyncedLocal = local.filter(t => !cloudDates.has(t.data as string));
       return [
         ...res.data as unknown as Timbratura[],
@@ -365,6 +508,45 @@ export async function getTimbrature(params?: { mese?: number; anno?: number }): 
   }
   const local = await db.getTimbrature(params?.mese, params?.anno);
   return parseLocal(local);
+}
+
+export async function getWeeklySummary(data: string): Promise<WeeklySummary> {
+  if (canUseCloud()) {
+    try {
+      const res = await api.getWeeklySummary(data);
+      for (const timbratura of res.data.timbrature ?? []) {
+        await db.upsertTimbratura(timbratura as unknown as Record<string, unknown>);
+      }
+      markSynced();
+      return res.data;
+    } catch {
+      // fallback locale
+    }
+  }
+
+  const { start, end } = getWeekBounds(data);
+  const localRows = await db.getTimbrature();
+  const timbratureSettimana = localRows
+    .filter((row) => {
+      const value = typeof row.data === 'string' ? row.data : '';
+      return value >= start && value <= end;
+    })
+    .sort((a, b) => String(a.data ?? '').localeCompare(String(b.data ?? '')))
+    .map((row) => normalizeTimbraturaRecord(row));
+
+  const oreTotali = timbratureSettimana.reduce((sum, row) => sum + (row.ore_arrotondate || 0), 0);
+  const oreOrdinarie = Math.min(oreTotali, 40);
+  const oreStraordinarie = Math.max(0, oreTotali - 40);
+
+  return {
+    settimana_inizio: start,
+    settimana_fine: end,
+    timbrature: timbratureSettimana,
+    ore_totali: Number(oreTotali.toFixed(2)),
+    ore_ordinarie: Number(oreOrdinarie.toFixed(2)),
+    ore_straordinarie: Number(oreStraordinarie.toFixed(2)),
+    giorni_lavorati: timbratureSettimana.filter((row) => (row.ore_arrotondate || 0) > 0).length,
+  };
 }
 
 export async function getTimbraturaByDate(data: string): Promise<Timbratura | null> {
@@ -385,6 +567,167 @@ export async function getTimbraturaByDate(data: string): Promise<Timbratura | nu
       ? JSON.parse(local.marcature as string)
       : (local.marcature ?? []),
   } as unknown as Timbratura;
+}
+
+export async function createTimbratura(
+  data: Parameters<typeof api.createTimbratura>[0],
+): Promise<Timbratura> {
+  const existing = await db.getTimbraturaByData(data.data);
+  if (existing) {
+    throw new Error('Timbratura già esistente per questa data');
+  }
+
+  const manualMarcature: Marcatura[] = [];
+  if (data.ora_entrata) {
+    manualMarcature.push({
+      id: `local_entrata_${Date.now()}`,
+      tipo: 'entrata',
+      ora: data.ora_entrata,
+      is_reperibilita: Boolean(data.is_reperibilita_attiva),
+      created_at: new Date().toISOString(),
+    });
+  }
+  if (data.ora_uscita) {
+    manualMarcature.push({
+      id: `local_uscita_${Date.now()}`,
+      tipo: 'uscita',
+      ora: data.ora_uscita,
+      is_reperibilita: Boolean(data.is_reperibilita_attiva),
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  const [oreLavorate, oreArrotondate] = calcolaOreLavorate(data.ora_entrata ?? null, data.ora_uscita ?? null);
+  const localRecord: Record<string, unknown> = {
+    data: data.data,
+    ora_entrata: data.ora_entrata ?? null,
+    ora_uscita: data.ora_uscita ?? null,
+    marcature: JSON.stringify(manualMarcature),
+    ore_lavorate: oreLavorate,
+    ore_arrotondate: oreArrotondate,
+    ore_reperibilita: calcolaOreReperibilita(manualMarcature),
+    is_reperibilita_attiva: Boolean(data.is_reperibilita_attiva),
+    note: data.note ?? null,
+    created_at: new Date().toISOString(),
+  };
+  await db.upsertTimbratura(localRecord);
+
+  if (canUseCloud()) {
+    try {
+      const res = await api.createTimbratura(data);
+      await db.upsertTimbratura(res.data as unknown as Record<string, unknown>);
+      markSynced();
+      void syncOfflineQueue();
+      return res.data;
+    } catch {
+      await db.enqueueOperation('createTimbratura', '/timbrature', 'POST', data);
+    }
+  } else {
+    await db.enqueueOperation('createTimbratura', '/timbrature', 'POST', data);
+  }
+
+  return normalizeTimbraturaRecord(localRecord);
+}
+
+export async function updateTimbratura(
+  data: string,
+  updates: Parameters<typeof api.updateTimbratura>[1],
+): Promise<Timbratura> {
+  const localExisting = await db.getTimbraturaByData(data);
+
+  if (!localExisting && canUseCloud()) {
+    try {
+      const res = await api.updateTimbratura(data, updates);
+      await db.upsertTimbratura(res.data as unknown as Record<string, unknown>);
+      markSynced();
+      return res.data;
+    } catch {
+      throw new Error('Timbratura non trovata');
+    }
+  }
+
+  if (!localExisting) {
+    throw new Error('Timbratura non trovata');
+  }
+
+  const nextOraEntrata = updates.ora_entrata ?? (
+    typeof localExisting.ora_entrata === 'string' ? localExisting.ora_entrata : undefined
+  );
+  const nextOraUscita = updates.ora_uscita ?? (
+    typeof localExisting.ora_uscita === 'string' ? localExisting.ora_uscita : undefined
+  );
+  const nextReperibilita = updates.is_reperibilita_attiva ?? (
+    localExisting.is_reperibilita_attiva === true || localExisting.is_reperibilita_attiva === 1
+  );
+
+  const manualMarcature: Marcatura[] = [];
+  if (nextOraEntrata) {
+    manualMarcature.push({
+      id: `local_entrata_${Date.now()}`,
+      tipo: 'entrata',
+      ora: nextOraEntrata,
+      is_reperibilita: Boolean(nextReperibilita),
+      created_at: new Date().toISOString(),
+    });
+  }
+  if (nextOraUscita) {
+    manualMarcature.push({
+      id: `local_uscita_${Date.now()}`,
+      tipo: 'uscita',
+      ora: nextOraUscita,
+      is_reperibilita: Boolean(nextReperibilita),
+      created_at: new Date().toISOString(),
+    });
+  }
+
+  const [oreLavorate, oreArrotondate] = calcolaOreLavorate(nextOraEntrata ?? null, nextOraUscita ?? null);
+  const localRecord: Record<string, unknown> = {
+    ...localExisting,
+    data,
+    ora_entrata: nextOraEntrata ?? null,
+    ora_uscita: nextOraUscita ?? null,
+    marcature: JSON.stringify(manualMarcature),
+    ore_lavorate: oreLavorate,
+    ore_arrotondate: oreArrotondate,
+    ore_reperibilita: calcolaOreReperibilita(manualMarcature),
+    is_reperibilita_attiva: Boolean(nextReperibilita),
+    note: updates.note ?? localExisting.note ?? null,
+    created_at: localExisting.created_at ?? new Date().toISOString(),
+  };
+  await db.upsertTimbratura(localRecord);
+
+  if (canUseCloud()) {
+    try {
+      const res = await api.updateTimbratura(data, updates);
+      await db.upsertTimbratura(res.data as unknown as Record<string, unknown>);
+      markSynced();
+      void syncOfflineQueue();
+      return res.data;
+    } catch {
+      await db.enqueueOperation('updateTimbratura', `/timbrature/${data}`, 'PUT', { data, updates });
+    }
+  } else {
+    await db.enqueueOperation('updateTimbratura', `/timbrature/${data}`, 'PUT', { data, updates });
+  }
+
+  return normalizeTimbraturaRecord(localRecord);
+}
+
+export async function deleteTimbratura(data: string): Promise<void> {
+  await db.deleteTimbratura(data);
+
+  if (canUseCloud()) {
+    try {
+      await api.deleteTimbratura(data);
+      markSynced();
+      void syncOfflineQueue();
+      return;
+    } catch {
+      await db.enqueueOperation('deleteTimbratura', `/timbrature/${data}`, 'DELETE', { data });
+    }
+  } else {
+    await db.enqueueOperation('deleteTimbratura', `/timbrature/${data}`, 'DELETE', { data });
+  }
 }
 
 /**
@@ -472,6 +815,138 @@ export async function timbra(
     marcature: nuoveMarcature,
     created_at: new Date().toISOString(),
   } as unknown as Timbratura;
+}
+
+export async function getTimbratureAziendali(
+  params?: { mese?: number; anno?: number },
+): Promise<TimbraturaAziendaleRecord[]> {
+  if (canUseCloud()) {
+    try {
+      const res = await api.getTimbratureAziendali(params);
+      const rows = (res.data as Record<string, unknown>[]) ?? [];
+      for (const row of rows) {
+        await db.upsertTimbraturaAziendale({
+          data: row.data,
+          ora_entrata: row.ora_entrata ?? null,
+          ora_uscita: row.ora_uscita ?? null,
+          ore_lavorate: row.ore_lavorate ?? 0,
+          note: row.descrizione ?? row.note ?? null,
+          fonte: row.fonte ?? 'api',
+        });
+      }
+      markSynced();
+      return normalizeTimbratureAziendali(rows);
+    } catch {
+      // fallback locale
+    }
+  }
+
+  const localRows = await db.getTimbratureAziendali(params?.mese, params?.anno);
+  return normalizeTimbratureAziendali(localRows);
+}
+
+export async function uploadTimbratureAziendali(
+  file: FormData,
+): Promise<api.PdfUploadResponse> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per caricare il report timbrature aziendali.');
+  }
+
+  const res = await api.uploadTimbratureAziendali(file);
+  const mese = Number(res.data.mese);
+  const anno = Number(res.data.anno);
+
+  if (Number.isFinite(mese) && Number.isFinite(anno)) {
+    try {
+      const lista = await api.getTimbratureAziendali({ mese, anno });
+      for (const row of (lista.data as Record<string, unknown>[]) ?? []) {
+        await db.upsertTimbraturaAziendale({
+          data: row.data,
+          ora_entrata: row.ora_entrata ?? null,
+          ora_uscita: row.ora_uscita ?? null,
+          ore_lavorate: row.ore_lavorate ?? 0,
+          note: row.descrizione ?? row.note ?? null,
+          fonte: row.fonte ?? 'api',
+        });
+      }
+    } catch {
+      // Non bloccare il successo upload se il refresh cache locale fallisce
+    }
+  }
+
+  markSynced();
+  return res.data;
+}
+
+export async function getConfrontoTimbrature(
+  mese: number,
+  anno: number,
+): Promise<ConfrontoTimbratureResponse> {
+  if (canUseCloud()) {
+    try {
+      const res = await api.getConfrontoTimbrature(mese, anno);
+      markSynced();
+      return res.data as ConfrontoTimbratureResponse;
+    } catch {
+      // fallback locale
+    }
+  }
+
+  const personaliRows = await db.getTimbrature(mese, anno);
+  const aziendaliRows = await db.getTimbratureAziendali(mese, anno);
+  const personali = new Map(
+    personaliRows.map((row) => [String(row.data ?? ''), normalizeTimbraturaRecord(row)]),
+  );
+  const aziendali = new Map(
+    normalizeTimbratureAziendali(aziendaliRows).map((row) => [row.data, row]),
+  );
+
+  const allDates = new Set<string>([
+    ...Array.from(personali.keys()),
+    ...Array.from(aziendali.keys()),
+  ]);
+
+  const confronti = Array.from(allDates)
+    .filter((data) => data)
+    .sort((a, b) => a.localeCompare(b))
+    .map((date) => {
+      const personale = personali.get(date);
+      const aziendale = aziendali.get(date);
+      const personaleOre = personale?.ore_arrotondate ?? 0;
+      const aziendaleOre = aziendale?.ore_lavorate ?? 0;
+      const differenza = Number((personaleOre - aziendaleOre).toFixed(2));
+      return {
+        data: date,
+        personale_entrata: personale?.ora_entrata ?? null,
+        personale_uscita: personale?.ora_uscita ?? null,
+        personale_ore: personaleOre,
+        aziendale_entrata: aziendale?.ora_entrata ?? null,
+        aziendale_uscita: aziendale?.ora_uscita ?? null,
+        aziendale_ore: aziendaleOre,
+        aziendale_descrizione: aziendale?.descrizione ?? null,
+        differenza_ore: differenza,
+        has_discrepancy: Math.abs(differenza) > 0.25,
+      };
+    });
+
+  return {
+    mese,
+    anno,
+    confronti,
+    riepilogo: {
+      giorni_totali: confronti.length,
+      giorni_con_discrepanza: confronti.filter((item) => item.has_discrepancy).length,
+      differenza_ore_totale: Number(
+        confronti.reduce((sum, item) => sum + item.differenza_ore, 0).toFixed(2),
+      ),
+      ore_personali_totali: Number(
+        confronti.reduce((sum, item) => sum + item.personale_ore, 0).toFixed(2),
+      ),
+      ore_aziendali_totali: Number(
+        confronti.reduce((sum, item) => sum + item.aziendale_ore, 0).toFixed(2),
+      ),
+    },
+  };
 }
 
 // ─── Assenze ──────────────────────────────────────────────────────────────────

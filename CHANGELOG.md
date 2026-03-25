@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-26 — Wrapper offlineApi completati per modulo Timbrature
+Cosa: esteso `frontend/src/services/offlineApi.ts` con i wrapper usati dalla schermata Timbrature (`getWeeklySummary`, `createTimbratura`, `updateTimbratura`, `deleteTimbratura`, `getTimbratureAziendali`, `uploadTimbratureAziendali`, `getConfrontoTimbrature`), aggiunti helper di normalizzazione dati locali e supporto replay queue per create/update/delete timbratura.
+Perché: completare la migrazione offline-first del modulo Timbrature riducendo dipendenze dirette da `api.ts` e garantendo fallback locale/sync coerente quando il cloud non è disponibile.
+File: frontend/src/services/offlineApi.ts, CHANGELOG.md, CHANGES.md, TEST_RUN.md
+
 ## 2026-03-25 — Fix: migrazione offline-first incompleta — .data access su offlineApi
 
 Cosa: corretto accesso `.data` rimasto dopo la migrazione da `api.*` a `offlineApi.*` in `timbrature.tsx` e `altro.tsx`.

@@ -3,24 +3,26 @@
 > Questo file traccia solo l'ultimo run di test completato.
 > Viene sovrascritto ad ogni nuovo ciclo. La storia permanente è in `CHANGELOG.md`.
 
-**Timestamp:** 2026-03-25
+**Timestamp:** 2026-03-26
 **Commit/SHA:** —
-**Agente:** Claude Code
+**Agente:** Codex
 
 ## Gate eseguito
 
-- `pytest -m "unit or api"` — gate rapido backend
+`cd frontend && npx tsc --noEmit`
 
 ## Esito
 
-- [x] PASS — 57 passed, 10 deselected in 0.41s
+- [ ] PASS
+- [x] FAIL
 
 ## Test coinvolti
 
-- `pytest -m "unit or api"` → 57 passed ✓
+- `npx tsc --noEmit` → fallito con errori pre-esistenti in `app/(tabs)/altro.tsx` e `src/storage/fileStore.ts`
 
 ## Note
 
-Fix `.data` su `offlineApi.*` in timbrature.tsx e altro.tsx.
-`offlineApi.*` restituisce i dati direttamente (non AxiosResponse),
-il vecchio codice accedeva `.data` → `undefined`.
+- Nessun errore TypeScript in `frontend/src/services/offlineApi.ts` dopo la modifica.
+- Errori residui:
+  - `app/(tabs)/altro.tsx`: proprietà `settingLabel` e `settingValue` mancanti nello style object
+  - `src/storage/fileStore.ts`: incompatibilità tipi `expo-file-system` (`documentDirectory`, `EncodingType`, opzione `size` in `InfoOptions`)

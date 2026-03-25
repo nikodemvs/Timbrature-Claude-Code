@@ -150,12 +150,12 @@ export default function TimbraturaScreen() {
 
   const loadData = useCallback(async () => {
     try {
-      const [timbRes, weekRes] = await Promise.all([
+      const [timbRes, weekRes] = await Promise.allSettled([
         offlineApi.getTimbrature({ mese: meseSelezionato, anno: annoSelezionato }),
         api.getWeeklySummary(getTodayString()),
       ]);
-      setTimbrature(timbRes as Timbratura[]);
-      setWeeklySummary(weekRes.data);
+      if (timbRes.status === 'fulfilled') setTimbrature(timbRes.value as Timbratura[]);
+      if (weekRes.status === 'fulfilled') setWeeklySummary(weekRes.value.data);
       
       // Load company timbrature
       try {

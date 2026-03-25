@@ -339,6 +339,11 @@ async function _buildDashboardLocale(): Promise<DashboardData | null> {
 // ─── Timbrature ───────────────────────────────────────────────────────────────
 
 export async function getTimbrature(params?: { mese?: number; anno?: number }): Promise<Timbratura[]> {
+  const parseLocal = (rows: Record<string, unknown>[]) => rows.map(t => ({
+    ...t,
+    marcature: typeof t.marcature === 'string' ? JSON.parse(t.marcature as string) : (t.marcature ?? []),
+  })) as unknown as Timbratura[];
+
   if (canUseCloud()) {
     try {
       const res = await api.getTimbrature(params);
@@ -346,16 +351,20 @@ export async function getTimbrature(params?: { mese?: number; anno?: number }): 
         await db.upsertTimbratura(t as unknown as Record<string, unknown>);
       }
       markSynced();
-      return res.data;
+      // Merge: include local records not yet synced to backend (offline queue pending)
+      const local = await db.getTimbrature(params?.mese, params?.anno);
+      const cloudDates = new Set(res.data.map((t: Record<string, unknown>) => t.data as string));
+      const unsyncedLocal = local.filter(t => !cloudDates.has(t.data as string));
+      return [
+        ...res.data as unknown as Timbratura[],
+        ...parseLocal(unsyncedLocal),
+      ];
     } catch {
       // fallback al locale
     }
   }
   const local = await db.getTimbrature(params?.mese, params?.anno);
-  return local.map(t => ({
-    ...t,
-    marcature: typeof t.marcature === 'string' ? JSON.parse(t.marcature as string) : (t.marcature ?? []),
-  })) as unknown as Timbratura[];
+  return parseLocal(local);
 }
 
 export async function getTimbraturaByDate(data: string): Promise<Timbratura | null> {

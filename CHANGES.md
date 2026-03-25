@@ -9,7 +9,13 @@
 
 ## File modificati
 
-- `frontend/src/db/localDb.ts` — aggiunto pattern `SELECT * FROM buste_paga WHERE anno = ? AND mese = ?` nel `memoryDb.getAllAsync`; il pattern mancante causava `Unsupported web getAllAsync SQL` su chiamate a `getBustaPaga(anno, mese)`
+- `frontend/src/db/localDb.ts` — aggiunta persistenza localStorage per WEB_STORE:
+  - `WEB_STORE_KEY` = `'bustapaga-webstore-v1'`
+  - `saveWebStore()` — serializza WEB_STORE in localStorage dopo ogni write
+  - `loadWebStore()` — ripristina WEB_STORE da localStorage all'avvio
+  - `createMemoryDbImpl()` — rinominata da `createMemoryDb()`
+  - `createMemoryDb()` — nuovo wrapper che chiama `saveWebStore()` dopo ogni `runAsync`/`execAsync`
+  - `openDb()` — chiama `loadWebStore()` prima di creare il memoryDb su web
 
 ## Tipo di modifica
 
@@ -17,10 +23,11 @@
 
 ## Causa root
 
-`getBustaPaga(anno, mese)` usa `getFirstAsync` → `getAllAsync` con query `SELECT * FROM buste_paga WHERE anno = ? AND mese = ?`.
-Il `memoryDb` (web fallback) non gestiva questa query → `Error: Unsupported web getAllAsync SQL`.
+Su web, `WEB_STORE` era in-memory puro: dati persi ad ogni reload.
+Nessuna persistenza tra sessioni → offline-first non funzionante su browser.
 
 ## Verifica
 
-- Fix identificato dal QA_AGENT tramite analisi copertura pattern SQL memoryDb
-- Fix applicato dall'OFFLINE_DATA_AGENT
+- Entrata registrata alle 21:52 → reload pagina → timer attivo, "Oggi sei entrato alle 21:52" ✓
+- `localStorage['bustapaga-webstore-v1']` contiene la timbratura ✓
+- `pytest -m "unit or api"` → 57 passed ✓

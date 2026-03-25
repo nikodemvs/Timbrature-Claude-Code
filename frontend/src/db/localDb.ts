@@ -69,6 +69,37 @@ const WEB_STORE: WebStore = {
   },
 };
 
+const WEB_STORE_KEY = 'bustapaga-webstore-v1';
+
+function saveWebStore(): void {
+  try {
+    localStorage.setItem(WEB_STORE_KEY, JSON.stringify(WEB_STORE));
+  } catch {
+    // quota exceeded o storage non disponibile
+  }
+}
+
+function loadWebStore(): void {
+  try {
+    const raw = localStorage.getItem(WEB_STORE_KEY);
+    if (!raw) return;
+    const saved = JSON.parse(raw) as Partial<WebStore>;
+    if (saved.settings !== undefined) WEB_STORE.settings = saved.settings;
+    if (Array.isArray(saved.timbrature)) WEB_STORE.timbrature = saved.timbrature;
+    if (Array.isArray(saved.timbratureAziendali)) WEB_STORE.timbratureAziendali = saved.timbratureAziendali;
+    if (Array.isArray(saved.assenze)) WEB_STORE.assenze = saved.assenze;
+    if (Array.isArray(saved.reperibilita)) WEB_STORE.reperibilita = saved.reperibilita;
+    if (Array.isArray(saved.bustePaga)) WEB_STORE.bustePaga = saved.bustePaga;
+    if (Array.isArray(saved.documenti)) WEB_STORE.documenti = saved.documenti;
+    if (Array.isArray(saved.chatHistory)) WEB_STORE.chatHistory = saved.chatHistory;
+    if (Array.isArray(saved.alerts)) WEB_STORE.alerts = saved.alerts;
+    if (Array.isArray(saved.offlineQueue)) WEB_STORE.offlineQueue = saved.offlineQueue;
+    if (saved.seq) WEB_STORE.seq = { ...WEB_STORE.seq, ...saved.seq };
+  } catch {
+    // JSON malformato — ricomincia da vuoto
+  }
+}
+
 function cloneRecord<T extends WebRecord>(record: T): T {
   return { ...record };
 }
@@ -181,7 +212,7 @@ function deleteByKey(
   WEB_STORE[table] = filtered;
 }
 
-function createMemoryDb(): DatabaseLike {
+function createMemoryDbImpl(): DatabaseLike {
   return {
     async execAsync(sql: string): Promise<void> {
       const normalized = normalizeSql(sql);
@@ -510,6 +541,27 @@ function createMemoryDb(): DatabaseLike {
   };
 }
 
+function createMemoryDb(): DatabaseLike {
+  const impl = createMemoryDbImpl();
+  return {
+    async execAsync(sql: string): Promise<void> {
+      await impl.execAsync(sql);
+      saveWebStore();
+    },
+    async runAsync(sql: string, ...params: unknown[]): Promise<{ lastInsertRowId: number }> {
+      const result = await impl.runAsync(sql, ...params);
+      saveWebStore();
+      return result;
+    },
+    async getAllAsync<T>(sql: string, ...params: unknown[]): Promise<T[]> {
+      return impl.getAllAsync<T>(sql, ...params);
+    },
+    async getFirstAsync<T>(sql: string, ...params: unknown[]): Promise<T | null> {
+      return impl.getFirstAsync<T>(sql, ...params);
+    },
+  };
+}
+
 // ─── Apertura e inizializzazione ─────────────────────────────────────────────
 
 export async function openDb(): Promise<DatabaseLike> {
@@ -518,6 +570,7 @@ export async function openDb(): Promise<DatabaseLike> {
 
   _dbPromise = (async () => {
     if (isWebRuntime()) {
+      loadWebStore();
       const memoryDb = createMemoryDb();
       _db = memoryDb;
       return memoryDb;

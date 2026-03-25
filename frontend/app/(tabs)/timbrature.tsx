@@ -14,7 +14,6 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
-import * as api from '../../src/services/api';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
 import { Timbratura, WeeklySummary } from '../../src/types';
@@ -152,30 +151,30 @@ export default function TimbraturaScreen() {
     try {
       const [timbRes, weekRes] = await Promise.allSettled([
         offlineApi.getTimbrature({ mese: meseSelezionato, anno: annoSelezionato }),
-        api.getWeeklySummary(getTodayString()),
+        offlineApi.getWeeklySummary(getTodayString()),
       ]);
       if (timbRes.status === 'fulfilled') setTimbrature(timbRes.value as Timbratura[]);
-      if (weekRes.status === 'fulfilled') setWeeklySummary(weekRes.value.data);
+      if (weekRes.status === 'fulfilled') setWeeklySummary(weekRes.value as WeeklySummary);
       
       // Load company timbrature
       try {
-        const azRes = await api.getTimbratureAziendali({ mese: meseSelezionato, anno: annoSelezionato });
-        setTimbratureAziendali(azRes.data || []);
+        const azRes = await offlineApi.getTimbratureAziendali({ mese: meseSelezionato, anno: annoSelezionato });
+        setTimbratureAziendali(azRes || []);
       } catch {
         console.log('No company timbrature');
       }
       
       // Load confronto
       try {
-        const confRes = await api.getConfrontoTimbrature(meseSelezionato, annoSelezionato);
-        setConfronto(confRes.data.confronti || []);
+        const confRes = await offlineApi.getConfrontoTimbrature(meseSelezionato, annoSelezionato);
+        setConfronto(confRes.confronti || []);
         setConfrontoRiepilogo(
-          confRes.data.riepilogo
+          confRes.riepilogo
             ? {
-                ore_personali_totali: confRes.data.riepilogo.ore_personali_totali ?? 0,
-                ore_aziendali_totali: confRes.data.riepilogo.ore_aziendali_totali ?? 0,
-                differenza_ore_totale: confRes.data.riepilogo.differenza_ore_totale ?? 0,
-                giorni_con_discrepanza: confRes.data.riepilogo.giorni_con_discrepanza ?? 0,
+                ore_personali_totali: confRes.riepilogo.ore_personali_totali ?? 0,
+                ore_aziendali_totali: confRes.riepilogo.ore_aziendali_totali ?? 0,
+                differenza_ore_totale: confRes.riepilogo.differenza_ore_totale ?? 0,
+                giorni_con_discrepanza: confRes.riepilogo.giorni_con_discrepanza ?? 0,
               }
             : null
         );
@@ -214,9 +213,9 @@ export default function TimbraturaScreen() {
         formData.append('force_overwrite', 'true');
       }
 
-      const response = await api.uploadTimbratureAziendali(formData);
-      const meseImportato = response.data.mese;
-      const annoImportato = response.data.anno;
+      const response = await offlineApi.uploadTimbratureAziendali(formData);
+      const meseImportato = response.mese;
+      const annoImportato = response.anno;
       const periodoCambiato = meseImportato !== meseSelezionato || annoImportato !== annoSelezionato;
 
       setPendingOverwrite(null);
@@ -229,7 +228,7 @@ export default function TimbraturaScreen() {
 
       Alert.alert(
         'PDF caricato',
-        `File "${file.name}" importato nel periodo ${MESI[meseImportato - 1]} ${annoImportato}.\n\n${response.data.timbrature_importate || 0} timbrature importate automaticamente.`,
+        `File "${file.name}" importato nel periodo ${MESI[meseImportato - 1]} ${annoImportato}.\n\n${response.timbrature_importate || 0} timbrature importate automaticamente.`,
       );
     } catch (error: unknown) {
       console.error('Upload error:', error);
@@ -285,9 +284,9 @@ export default function TimbraturaScreen() {
       };
       
       if (editingDate) {
-        await api.updateTimbratura(editingDate, payload);
+        await offlineApi.updateTimbratura(editingDate, payload);
       } else {
-        await api.createTimbratura({
+        await offlineApi.createTimbratura({
           data: selectedDate,
           ...payload,
         });
@@ -325,7 +324,7 @@ export default function TimbraturaScreen() {
     const dataDaEliminare = timbraturaDaEliminare.data;
 
     try {
-      await api.deleteTimbratura(dataDaEliminare);
+      await offlineApi.deleteTimbratura(dataDaEliminare);
       setTimbrature((current) => current.filter((item) => item.data !== dataDaEliminare));
       if (dataDaEliminare === getTodayString()) {
         setTodayTimbratura(null);

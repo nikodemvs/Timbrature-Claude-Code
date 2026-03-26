@@ -111,6 +111,11 @@ function parseQueuedPayload(payload: string | null): Record<string, unknown> {
   }
 }
 
+function toRecord(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  return value as Record<string, unknown>;
+}
+
 function readString(value: unknown): string | undefined {
   return typeof value === 'string' && value.trim() ? value : undefined;
 }
@@ -331,6 +336,53 @@ async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
   if (entry.operation === 'deleteAssenza') {
     const payload = parseQueuedPayload(entry.payload);
     if (payload.id) await api.deleteAssenza(String(payload.id));
+    return;
+  }
+
+  if (entry.operation === 'createBustaPaga') {
+    const payload = parseQueuedPayload(entry.payload);
+    const mese = Number(payload.mese);
+    const anno = Number(payload.anno);
+    if (!Number.isInteger(mese) || mese < 1 || mese > 12 || !Number.isInteger(anno)) {
+      throw new Error('Payload createBustaPaga non valido');
+    }
+    const requestPayload: Parameters<typeof api.createBustaPaga>[0] = {
+      mese,
+      anno,
+    };
+    const lordo = Number(payload.lordo);
+    const netto = Number(payload.netto);
+    const straordinariOre = Number(payload.straordinari_ore);
+    const straordinariImporto = Number(payload.straordinari_importo);
+    const trattenuteTotali = Number(payload.trattenute_totali);
+    if (Number.isFinite(lordo)) requestPayload.lordo = lordo;
+    if (Number.isFinite(netto)) requestPayload.netto = netto;
+    if (Number.isFinite(straordinariOre)) requestPayload.straordinari_ore = straordinariOre;
+    if (Number.isFinite(straordinariImporto)) requestPayload.straordinari_importo = straordinariImporto;
+    if (Number.isFinite(trattenuteTotali)) requestPayload.trattenute_totali = trattenuteTotali;
+    const response = await api.createBustaPaga(requestPayload);
+    const record = toRecord(response.data);
+    if (record) {
+      await db.upsertBustaPaga(record).catch(() => {});
+    }
+    return;
+  }
+
+  if (entry.operation === 'updateBustaPaga') {
+    const payload = parseQueuedPayload(entry.payload);
+    const mese = Number(payload.mese);
+    const anno = Number(payload.anno);
+    if (!Number.isInteger(mese) || mese < 1 || mese > 12 || !Number.isInteger(anno)) {
+      throw new Error('Payload updateBustaPaga non valido');
+    }
+    const updates = payload.data && typeof payload.data === 'object'
+      ? (payload.data as Parameters<typeof api.updateBustaPaga>[2])
+      : {};
+    const response = await api.updateBustaPaga(anno, mese, updates);
+    const record = toRecord(response.data);
+    if (record) {
+      await db.upsertBustaPaga(record).catch(() => {});
+    }
     return;
   }
 
@@ -1083,6 +1135,108 @@ export async function getBustePaga(anno?: number) {
     } catch { /* fallback */ }
   }
   return db.getBustePaga(anno);
+}
+
+export async function createBustaPaga(
+  data: Parameters<typeof api.createBustaPaga>[0],
+): Promise<Record<string, unknown>> {
+  const localRecord: Record<string, unknown> = {
+    mese: data.mese,
+    anno: data.anno,
+    lordo: data.lordo ?? 0,
+    netto: data.netto ?? 0,
+    straordinari_ore: data.straordinari_ore ?? 0,
+    straordinari_importo: data.straordinari_importo ?? 0,
+    trattenute_totali: data.trattenute_totali ?? 0,
+    created_at: new Date().toISOString(),
+    synced: 0,
+  };
+  await db.upsertBustaPaga(localRecord);
+
+  if (canUseCloud()) {
+    try {
+      const res = await api.createBustaPaga(data);
+      const remoteRecord = toRecord(res.data);
+      if (remoteRecord) {
+        await db.upsertBustaPaga(remoteRecord).catch(() => {});
+      }
+      markSynced();
+      void syncOfflineQueue();
+      const local = await db.getBustaPaga(data.anno, data.mese);
+      return (remoteRecord ?? local ?? localRecord) as Record<string, unknown>;
+    } catch {
+      await db.enqueueOperation('createBustaPaga', '/buste-paga', 'POST', data);
+    }
+  } else {
+    await db.enqueueOperation('createBustaPaga', '/buste-paga', 'POST', data);
+  }
+
+  const local = await db.getBustaPaga(data.anno, data.mese);
+  return (local ?? localRecord) as Record<string, unknown>;
+}
+
+export async function updateBustaPaga(
+  anno: number,
+  mese: number,
+  data: Parameters<typeof api.updateBustaPaga>[2],
+): Promise<Record<string, unknown>> {
+  const existing = await db.getBustaPaga(anno, mese);
+  const localRecord: Record<string, unknown> = {
+    ...(existing ?? {}),
+    ...(data && typeof data === 'object' ? (data as Record<string, unknown>) : {}),
+    anno,
+    mese,
+    created_at: typeof existing?.created_at === 'string'
+      ? existing.created_at
+      : new Date().toISOString(),
+    synced: 0,
+  };
+  await db.upsertBustaPaga(localRecord);
+
+  if (canUseCloud()) {
+    try {
+      const res = await api.updateBustaPaga(anno, mese, data);
+      const remoteRecord = toRecord(res.data);
+      if (remoteRecord) {
+        await db.upsertBustaPaga(remoteRecord).catch(() => {});
+      }
+      markSynced();
+      void syncOfflineQueue();
+      const local = await db.getBustaPaga(anno, mese);
+      return (remoteRecord ?? local ?? localRecord) as Record<string, unknown>;
+    } catch {
+      await db.enqueueOperation('updateBustaPaga', `/buste-paga/${anno}/${mese}`, 'PUT', {
+        anno,
+        mese,
+        data,
+      });
+    }
+  } else {
+    await db.enqueueOperation('updateBustaPaga', `/buste-paga/${anno}/${mese}`, 'PUT', {
+      anno,
+      mese,
+      data,
+    });
+  }
+
+  const local = await db.getBustaPaga(anno, mese);
+  return (local ?? localRecord) as Record<string, unknown>;
+}
+
+export async function uploadCud(
+  file: FormData,
+): Promise<{ documento: Record<string, unknown>; anno: number }> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per caricare il CUD.');
+  }
+
+  const res = await api.uploadCud(file);
+  const documento = toRecord(res.data.documento);
+  if (documento) {
+    await db.insertDocumento(documento).catch(() => {});
+  }
+  markSynced();
+  return res.data as unknown as { documento: Record<string, unknown>; anno: number };
 }
 
 export async function uploadBustaPagaAuto(file: FormData): Promise<api.PdfUploadResponse> {

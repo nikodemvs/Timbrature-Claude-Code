@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from 'expo-router';
 import { BottomSheet, Button, Card, InputField, LoadingScreen } from '../../src/components';
-import * as api from '../../src/services/api';
 import * as offlineApi from '../../src/services/offlineApi';
 import { BustaPaga, Documento } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
@@ -447,13 +446,13 @@ export default function BustePagaScreen() {
         formData.append('force_overwrite', 'true');
       }
 
-      const response = await api.uploadBustaPagaAuto(formData);
-      const meseImportato = response.data.mese;
-      const annoImportato = response.data.anno;
+      const response = await offlineApi.uploadBustaPagaAuto(formData);
+      const meseImportato = response.mese;
+      const annoImportato = response.anno;
       setMese(meseImportato.toString());
       setAnno(annoImportato.toString());
 
-      if (response.data.sottotipo === 'tredicesima') {
+      if (response.sottotipo === 'tredicesima') {
         return {
           status: 'success',
           title: 'Tredicesima archiviata',
@@ -494,11 +493,11 @@ export default function BustePagaScreen() {
         formData.append('force_overwrite', 'true');
       }
 
-      const response = await api.uploadCud(formData);
+      const response = await offlineApi.uploadCud(formData);
       return {
         status: 'success',
         title: 'CUD archiviato',
-        message: `Il file "${asset.name}" è stato archiviato come CUD ${response.data.anno}.`,
+        message: `Il file "${asset.name}" è stato archiviato come CUD ${response.anno}.`,
       };
     } catch (error: unknown) {
       const detail = getConflictDetail(error);
@@ -689,9 +688,9 @@ export default function BustePagaScreen() {
 
       const existing = bustePaga.find((item) => item.mese === parsedMese && item.anno === parsedAnno);
       if (existing) {
-        await api.updateBustaPaga(parsedAnno, parsedMese, payload);
+        await offlineApi.updateBustaPaga(parsedAnno, parsedMese, payload);
       } else {
-        await api.createBustaPaga(payload);
+        await offlineApi.createBustaPaga(payload);
       }
       setShowAddSheet(false);
       resetForm();

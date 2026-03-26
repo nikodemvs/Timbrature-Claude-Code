@@ -14,7 +14,6 @@ import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
 import { Card, StatCard, LoadingScreen } from '../../src/components';
 import { useAppStore } from '../../src/store/appStore';
-import * as api from '../../src/services/api';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import AsyncStorage from '@react-native-async-storage/async-storage';

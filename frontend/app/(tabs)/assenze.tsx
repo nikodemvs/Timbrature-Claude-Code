@@ -11,7 +11,6 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField } from '../../src/components';
-import * as api from '../../src/services/api';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
 import { Assenza } from '../../src/types';

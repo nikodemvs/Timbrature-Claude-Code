@@ -18,7 +18,6 @@ import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
 import { useAppStore, THEMES, ThemeKey, ColorSchemePreference } from '../../src/store/appStore';
-import * as api from '../../src/services/api';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatCurrency, formatDate, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import { Alert as AlertType, ChatMessage, Reperibilita, Timbratura } from '../../src/types';
@@ -193,8 +192,8 @@ export default function AltroScreen() {
 
   const loadChatHistory = useCallback(async () => {
     try {
-      const response = await api.getChatHistory(50);
-      setMessages(response.data);
+      const response = await offlineApi.getChatHistory(50);
+      setMessages(response);
     } catch (error) {
       console.error('Error loading chat history:', error);
     }
@@ -220,8 +219,8 @@ export default function AltroScreen() {
 
   const loadStats = useCallback(async () => {
     try {
-      const response = await api.getStatisticheMensili(selectedYear);
-      setStatsData(response.data);
+      const response = await offlineApi.getStatisticheMensili(selectedYear);
+      setStatsData(response);
     } catch (error) {
       console.error('Error loading stats:', error);
     }
@@ -242,10 +241,10 @@ export default function AltroScreen() {
       const yearsData = [];
       for (let year = currentYear; year >= currentYear - 4; year--) {
         try {
-          const response = await api.getStatisticheMensili(year);
-          const yearTotal = response.data.reduce((sum: number, m: any) => sum + m.ore_lavorate, 0);
-          const yearOvertime = response.data.reduce((sum: number, m: any) => sum + m.ore_straordinarie, 0);
-          const yearNetto = response.data.reduce((sum: number, m: any) => sum + (m.netto || 0), 0);
+          const response = await offlineApi.getStatisticheMensili(year);
+          const yearTotal = response.reduce((sum: number, m: any) => sum + m.ore_lavorate, 0);
+          const yearOvertime = response.reduce((sum: number, m: any) => sum + m.ore_straordinarie, 0);
+          const yearNetto = response.reduce((sum: number, m: any) => sum + (m.netto || 0), 0);
           yearsData.push({
             anno: year,
             ore_totali: yearTotal,
@@ -316,13 +315,13 @@ export default function AltroScreen() {
     setChatLoading(true);
     
     try {
-      const response = await api.sendChatMessage(inputText, chatSessionId || undefined);
-      if (response.data.session_id) setChatSessionId(response.data.session_id);
+      const response = await offlineApi.sendChatMessage(inputText, chatSessionId || undefined);
+      if (response.session_id) setChatSessionId(response.session_id);
       
       const assistantMessage: ChatMessage = {
         id: (Date.now() + 1).toString(),
         role: 'assistant',
-        content: response.data.response,
+        content: response.response,
         timestamp: new Date().toISOString(),
       };
       
@@ -343,7 +342,7 @@ export default function AltroScreen() {
         style: 'destructive',
         onPress: async () => {
           try {
-            await api.clearChatHistory();
+            await offlineApi.clearChatHistory();
             setMessages([]);
             setChatSessionId(null);
           } catch {
@@ -362,7 +361,7 @@ export default function AltroScreen() {
     
     setSavingRep(true);
     try {
-      await api.createReperibilita({
+      await offlineApi.createReperibilita({
         data: repData,
         ora_inizio: repOraInizio,
         ora_fine: repOraFine,
@@ -442,7 +441,7 @@ export default function AltroScreen() {
     try {
       const formData = new FormData();
       appendPdfToFormData(formData, asset);
-      await api.uploadBustaPagaAuto(formData);
+      await offlineApi.uploadBustaPagaAuto(formData);
       const refreshedDashboard = await refreshDashboard();
       const refreshedName = refreshedDashboard?.settings?.nome?.trim() || '';
       const refreshedSurname = refreshedDashboard?.settings?.cognome?.trim() || '';
@@ -472,14 +471,14 @@ export default function AltroScreen() {
   const clearOperationalData = async () => {
     setDeletingOperationalData(true);
     try {
-      const response = await api.deletePersonalData(true);
+      const response = await offlineApi.deletePersonalData(true);
       await refreshDashboard();
       setStatsData([]);
       setDailyStats([]);
       setAllYearsStats([]);
       setTodayTimbratura(null);
       setShowDeleteOperationalSheet(false);
-      Alert.alert('Dati operativi cancellati', response.data.message || 'Dati operativi cancellati.');
+      Alert.alert('Dati operativi cancellati', response.message || 'Dati operativi cancellati.');
     } catch (error) {
       console.error('Error deleting operational data:', error);
       Alert.alert('Errore', 'Impossibile cancellare i dati operativi');
@@ -491,7 +490,7 @@ export default function AltroScreen() {
   const deleteAccount = async () => {
     setDeletingAccount(true);
     try {
-      const response = await api.deleteAccount(true);
+      const response = await offlineApi.deleteAccount(true);
       if (Platform.OS !== 'web') {
         const SecureStore = await import('expo-secure-store');
         await SecureStore.deleteItemAsync('bustapaga_pin');
@@ -499,7 +498,7 @@ export default function AltroScreen() {
       resetUserData();
       setNewPin('');
       setShowDeleteAccountSheet(false);
-      Alert.alert('Account eliminato', response.data.message || 'Account eliminato correttamente.');
+      Alert.alert('Account eliminato', response.message || 'Account eliminato correttamente.');
     } catch (error) {
       console.error('Error deleting account:', error);
       Alert.alert('Errore', 'Impossibile eliminare l’account');
@@ -1254,7 +1253,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     settingItem: { flexDirection: 'row', alignItems: 'center', paddingVertical: 16, borderBottomWidth: 1, borderBottomColor: colors.border },
     settingCopy: { flex: 1, marginLeft: 12 },
     settingText: { fontSize: 16, color: colors.text },
+    settingLabel: { fontSize: 16, color: colors.text },
     settingHint: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
+    settingValue: { fontSize: 12, color: colors.textSecondary, marginTop: 3 },
     themePreview: { width: 24, height: 24, borderRadius: 12, marginRight: 8 },
     dangerCard: {
       marginTop: 16,

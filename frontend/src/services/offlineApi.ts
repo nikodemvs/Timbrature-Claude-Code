@@ -14,7 +14,7 @@
 import * as api from './api';
 import * as db from '../db/localDb';
 import { useAppStore } from '../store/appStore';
-import { UserSettings, Timbratura, DashboardData, WeeklySummary } from '../types';
+import { UserSettings, Timbratura, DashboardData, WeeklySummary, ChatMessage, Reperibilita } from '../types';
 import {
   stimaNetto,
   calcolaSaldoFerie,
@@ -76,6 +76,15 @@ type ConfrontoTimbratureResponse = {
     ore_personali_totali: number;
     ore_aziendali_totali: number;
   };
+};
+
+type StatisticheMensiliItem = {
+  mese: number;
+  anno: number;
+  ore_lavorate: number;
+  ore_straordinarie: number;
+  netto: number;
+  giorni_lavorati: number;
 };
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
@@ -256,6 +265,23 @@ function normalizeTimbratureAziendali(
   }));
 }
 
+function normalizeChatMessageRecord(row: Record<string, unknown>): ChatMessage {
+  const id = String(row.id ?? `${Date.now()}`);
+  const roleValue = String(row.role ?? row.ruolo ?? 'assistant').toLowerCase();
+  const role: ChatMessage['role'] = roleValue === 'user' ? 'user' : 'assistant';
+  const content = String(row.content ?? row.contenuto ?? '');
+  const timestamp = String(row.timestamp ?? row.created_at ?? new Date().toISOString());
+  return { id, role, content, timestamp };
+}
+
+function calcolaOreReperibilitaDaOrari(oraInizio: string, oraFine: string): number {
+  const [h1, m1] = oraInizio.split(':').map(Number);
+  const [h2, m2] = oraFine.split(':').map(Number);
+  let minuti = (h2 * 60 + m2) - (h1 * 60 + m1);
+  if (minuti < 0) minuti += 24 * 60;
+  return Number((minuti / 60).toFixed(2));
+}
+
 async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
   if (entry.operation === 'updateSettings') {
     const payload = parseQueuedPayload(entry.payload);
@@ -305,6 +331,25 @@ async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
   if (entry.operation === 'deleteAssenza') {
     const payload = parseQueuedPayload(entry.payload);
     if (payload.id) await api.deleteAssenza(String(payload.id));
+    return;
+  }
+
+  if (entry.operation === 'createReperibilita') {
+    const payload = parseQueuedPayload(entry.payload);
+    const localId = Number(payload.local_id);
+    const requestPayload: Parameters<typeof api.createReperibilita>[0] = {
+      data: String(payload.data ?? ''),
+      ora_inizio: String(payload.ora_inizio ?? ''),
+      ora_fine: String(payload.ora_fine ?? ''),
+      tipo: payload.tipo === 'attiva' ? 'attiva' : 'passiva',
+      interventi: Number(payload.interventi ?? 0),
+      note: typeof payload.note === 'string' ? payload.note : undefined,
+    };
+    const response = await api.createReperibilita(requestPayload);
+    if (Number.isFinite(localId) && localId > 0) {
+      await db.deleteReperibilita(localId);
+    }
+    await db.insertReperibilita(response.data as unknown as Record<string, unknown>);
     return;
   }
 
@@ -477,6 +522,38 @@ async function _buildDashboardLocale(): Promise<DashboardData | null> {
     alerts_non_letti: alerts.length,
     settings: settings as unknown as UserSettings,
   };
+}
+
+export async function getStatisticheMensili(anno?: number): Promise<StatisticheMensiliItem[]> {
+  if (canUseCloud()) {
+    try {
+      const res = await api.getStatisticheMensili(anno);
+      markSynced();
+      return res.data as StatisticheMensiliItem[];
+    } catch {
+      // fallback locale
+    }
+  }
+
+  const year = anno ?? new Date().getFullYear();
+  const timbratureRows = await db.getTimbrature();
+  const busteRows = await db.getBustePaga(year);
+
+  return Array.from({ length: 12 }, (_, index) => {
+    const mese = index + 1;
+    const prefix = `${year}-${String(mese).padStart(2, '0')}`;
+    const timbratureMese = timbratureRows.filter((row) => String(row.data ?? '').startsWith(prefix));
+    const oreTotali = timbratureMese.reduce((sum, row) => sum + Number(row.ore_arrotondate ?? 0), 0);
+    const busta = busteRows.find((row) => Number(row.mese ?? 0) === mese);
+    return {
+      mese,
+      anno: year,
+      ore_lavorate: Number(oreTotali.toFixed(2)),
+      ore_straordinarie: Number(Math.max(0, oreTotali - 169).toFixed(2)),
+      netto: Number(busta?.netto ?? 0),
+      giorni_lavorati: timbratureMese.filter((row) => Number(row.ore_arrotondate ?? 0) > 0).length,
+    };
+  });
 }
 
 // ─── Timbrature ───────────────────────────────────────────────────────────────
@@ -1008,6 +1085,22 @@ export async function getBustePaga(anno?: number) {
   return db.getBustePaga(anno);
 }
 
+export async function uploadBustaPagaAuto(file: FormData): Promise<api.PdfUploadResponse> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per caricare la busta paga.');
+  }
+
+  const res = await api.uploadBustaPagaAuto(file);
+  if (res.data.busta) {
+    await db.upsertBustaPaga(res.data.busta as unknown as Record<string, unknown>);
+  }
+  if (res.data.documento) {
+    await db.insertDocumento(res.data.documento as unknown as Record<string, unknown>).catch(() => {});
+  }
+  markSynced();
+  return res.data;
+}
+
 // ─── Reperibilità ─────────────────────────────────────────────────────────────
 
 export async function getReperibilita(params?: { mese?: number; anno?: number }) {
@@ -1021,6 +1114,59 @@ export async function getReperibilita(params?: { mese?: number; anno?: number })
   return db.getReperibilita(params?.mese, params?.anno);
 }
 
+export async function createReperibilita(
+  data: Parameters<typeof api.createReperibilita>[0],
+): Promise<Reperibilita> {
+  const oreTotali = calcolaOreReperibilitaDaOrari(data.ora_inizio, data.ora_fine);
+  const interventi = Number(data.interventi ?? 0);
+  const tipo = data.tipo === 'attiva' ? 'attiva' : 'passiva';
+  const compenso = tipo === 'attiva'
+    ? Number((interventi * 100).toFixed(2))
+    : Number((oreTotali * 4).toFixed(2));
+
+  if (canUseCloud()) {
+    try {
+      const res = await api.createReperibilita(data);
+      await db.insertReperibilita(res.data as unknown as Record<string, unknown>);
+      markSynced();
+      void syncOfflineQueue();
+      return res.data;
+    } catch {
+      // fallback su coda locale
+    }
+  }
+
+  const localRecord: Record<string, unknown> = {
+    data: data.data,
+    ora_inizio: data.ora_inizio,
+    ora_fine: data.ora_fine,
+    ore_totali: oreTotali,
+    interventi,
+    compenso_calcolato: compenso,
+    tipo,
+    note: data.note ?? null,
+    created_at: new Date().toISOString(),
+  };
+  const localId = await db.insertReperibilita(localRecord);
+  await db.enqueueOperation('createReperibilita', '/reperibilita', 'POST', {
+    ...data,
+    local_id: localId,
+  });
+
+  return {
+    id: String(localId),
+    data: data.data,
+    ora_inizio: data.ora_inizio,
+    ora_fine: data.ora_fine,
+    tipo,
+    ore_totali: oreTotali,
+    interventi,
+    compenso_calcolato: compenso,
+    note: data.note,
+    created_at: new Date().toISOString(),
+  };
+}
+
 // ─── Alerts ───────────────────────────────────────────────────────────────────
 
 export async function getAlerts(soloNonLetti?: boolean) {
@@ -1031,6 +1177,71 @@ export async function getAlerts(soloNonLetti?: boolean) {
     } catch { /* fallback */ }
   }
   return db.getAlerts(soloNonLetti);
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+export async function getChatHistory(limit = 50): Promise<ChatMessage[]> {
+  if (canUseCloud()) {
+    try {
+      const res = await api.getChatHistory(limit);
+      await db.deleteChatHistory();
+      for (const message of res.data as unknown as Record<string, unknown>[]) {
+        const normalized = normalizeChatMessageRecord(message);
+        await db.insertChatMessage({
+          session_id: null,
+          ruolo: normalized.role,
+          contenuto: normalized.content,
+          created_at: normalized.timestamp,
+        });
+      }
+      markSynced();
+      return res.data as ChatMessage[];
+    } catch {
+      // fallback locale
+    }
+  }
+
+  const localRows = await db.getChatHistory(limit);
+  return [...localRows]
+    .reverse()
+    .map((row) => normalizeChatMessageRecord(row));
+}
+
+export async function sendChatMessage(
+  message: string,
+  sessionId?: string,
+): Promise<{ response: string; session_id: string }> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per utilizzare la chat AI.');
+  }
+
+  const res = await api.sendChatMessage(message, sessionId);
+  await db.insertChatMessage({
+    session_id: res.data.session_id,
+    ruolo: 'user',
+    contenuto: message,
+    created_at: new Date().toISOString(),
+  });
+  await db.insertChatMessage({
+    session_id: res.data.session_id,
+    ruolo: 'assistant',
+    contenuto: res.data.response,
+    created_at: new Date().toISOString(),
+  });
+  markSynced();
+  return res.data;
+}
+
+export async function clearChatHistory(): Promise<{ message: string }> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per cancellare la cronologia chat.');
+  }
+
+  const res = await api.clearChatHistory();
+  await db.deleteChatHistory();
+  markSynced();
+  return res.data as { message: string };
 }
 
 // ─── Assenze (write) ───────────────────────────────────────────────────────────
@@ -1095,4 +1306,27 @@ export async function getDocumenti(tipo?: string): Promise<Record<string, unknow
     } catch { /* fallback */ }
   }
   return db.getDocumenti(tipo);
+}
+
+export async function deletePersonalData(
+  conferma = true,
+): Promise<api.CancellaDatiPersonaliResponse> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per cancellare i dati operativi.');
+  }
+  const res = await api.deletePersonalData(conferma);
+  markSynced();
+  return res.data;
+}
+
+export async function deleteAccount(
+  conferma = true,
+): Promise<api.EliminaAccountResponse> {
+  if (!canUseCloud()) {
+    throw new Error('Connessione necessaria per eliminare l’account.');
+  }
+  const res = await api.deleteAccount(conferma);
+  await db.clearAccount();
+  markSynced();
+  return res.data;
 }

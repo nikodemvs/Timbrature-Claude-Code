@@ -5,7 +5,7 @@
  * Sostituisce lo storage base64 nel database con path locali.
  */
 
-import * as FileSystem from 'expo-file-system';
+import * as FileSystem from 'expo-file-system/legacy';
 
 const BASE_DIR = `${FileSystem.documentDirectory}bustapaga/`;
 
@@ -87,7 +87,7 @@ export async function fileExists(filePath: string): Promise<boolean> {
  * Ottieni informazioni su un file (size, modificationTime, ecc.).
  */
 export async function getFileInfo(filePath: string): Promise<FileSystem.FileInfo> {
-  return FileSystem.getInfoAsync(filePath, { size: true });
+  return FileSystem.getInfoAsync(filePath);
 }
 
 // ─── Cancellazione ────────────────────────────────────────────────────────────
@@ -169,7 +169,7 @@ export function makeFileName(baseName: string): string {
 export async function getStorageSize(): Promise<number> {
   let total = 0;
   for (const dir of Object.values(DIRS)) {
-    const info = await FileSystem.getInfoAsync(dir, { size: true });
+    const info = await FileSystem.getInfoAsync(dir);
     if (info.exists && 'size' in info) {
       total += info.size ?? 0;
     }

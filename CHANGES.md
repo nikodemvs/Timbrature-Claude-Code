@@ -4,15 +4,17 @@
 > Viene sovrascritto ad ogni nuovo ciclo. La storia permanente è in `CHANGELOG.md`.
 
 **Timestamp:** 2026-03-26
-**Commit/SHA:** pending
+**Commit/SHA:** b71c771
 **Agente:** Codex
 
 ## File modificati
 
-- `frontend/src/services/offlineApi.ts` — aggiunta purge locale post-delete per `deletePersonalData` e `deleteAccount` (DB + file storage, best-effort).
-- `CHANGELOG.md` — aggiunta entry datata sul fix di cancellazione locale.
+- `frontend/app/(tabs)/altro.tsx` — reset UI locale dopo cancellazione dati/account.
+- `frontend/app/_layout.tsx` — refresh dello stato PIN e gating del modal di unlock.
+- `frontend/src/store/appStore.ts` — reset completo dei dati account e stato app.
+- `CHANGELOG.md` — nuova entry datata per il commit `b71c771`.
 - `CHANGES.md` — sovrascritto con il ciclo corrente.
-- `TEST_RUN.md` — sovrascritto con i test del ciclo corrente.
+- `TEST_RUN.md` — sovrascritto con il ciclo corrente.
 
 ## Tipo di modifica
 

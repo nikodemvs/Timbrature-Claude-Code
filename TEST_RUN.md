@@ -4,13 +4,13 @@
 > Viene sovrascritto ad ogni nuovo ciclo. La storia permanente è in `CHANGELOG.md`.
 
 **Timestamp:** 2026-03-26
-**Commit/SHA:** pending
+**Commit/SHA:** b71c771
 **Agente:** Codex
 
 ## Gate eseguiti
 
-- `pytest -q -m "unit or api"`
-- `cd frontend && npx tsc --noEmit`
+- `pytest -q -m "unit or api"` → PASS
+- `cd frontend && npx tsc --noEmit` → PASS
 
 ## Esito
 
@@ -19,9 +19,9 @@
 
 ## Risultati
 
-- `pytest -q -m "unit or api"` → `57 passed, 10 deselected in 0.49s`
+- `pytest -q -m "unit or api"` → `57 passed, 10 deselected`
 - `cd frontend && npx tsc --noEmit` → pass (nessun errore TypeScript)
 
 ## Note
 
-- Fix verificata su `offlineApi`: purge locale post-cancellazione per azioni distruttive account/dati operativi.
+- Commit verificato: `b71c771` (`fix(account-reset): clear local UI state and refresh pin state after data/account deletion`).

@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-26 — Fix reset account: pulizia UI locale e sync PIN
+Cosa: aggiornati `frontend/app/(tabs)/altro.tsx`, `frontend/app/_layout.tsx` e `frontend/src/store/appStore.ts` per azzerare lo stato UI locale dopo cancellazione dati/account, riallineare il PIN salvato con lo stato reale e rimuovere i residui di dashboard/account dalla store.
+Perché: evitare che dopo `Elimina dati` o `Elimina account` restassero visibili stato UI, sessione chat, sheet aperti o PIN obsoleto, mantenendo coerente il reset locale con la cancellazione dei dati.
+File: frontend/app/(tabs)/altro.tsx, frontend/app/_layout.tsx, frontend/src/store/appStore.ts, CHANGELOG.md, CHANGES.md, TEST_RUN.md
+
 ## 2026-03-26 — Fix cancellazione locale su “Elimina dati” e “Elimina account”
 Cosa: aggiornato `offlineApi` per eseguire la pulizia locale dopo successo backend nei flussi di cancellazione; `deletePersonalData` ora esegue purge dati operativi locali (DB + file storage) e `deleteAccount` esegue purge completo locale (dati operativi + settings + file storage) con cleanup best-effort per evitare crash se il filesystem fallisce.
 Perché: risolvere il problema dei residui locali dopo le azioni distruttive nel tab Altro, mantenendo il comportamento remoto invariato e rendendo prevedibile lo stato offline-first sul device.

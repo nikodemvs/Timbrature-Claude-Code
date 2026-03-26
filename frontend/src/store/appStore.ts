@@ -170,36 +170,16 @@ export const useAppStore = create<AppState>()(
       unreadAlerts: 0,
       setUnreadAlerts: (count) => set({ unreadAlerts: count }),
       resetUserData: () =>
-        set((state) => ({
-          dashboard: state.dashboard
-            ? {
-                ...state.dashboard,
-                settings: {
-                  ...state.dashboard.settings,
-                  nome: '',
-                  cognome: '',
-                  matricola: '',
-                  numero_badge: '',
-                  pin_hash: undefined,
-                  use_biometric: false,
-                },
-              }
-            : null,
-          settings: state.settings
-            ? {
-                ...state.settings,
-                nome: '',
-                cognome: '',
-                matricola: '',
-                numero_badge: '',
-                pin_hash: undefined,
-                use_biometric: false,
-              }
-            : null,
+        set({
+          dashboard: null,
+          todayTimbratura: null,
+          settings: null,
           isAuthenticated: false,
           chatSessionId: null,
           unreadAlerts: 0,
-        })),
+          isLoading: false,
+          lastSyncAt: null,
+        }),
       
       // Connettività
       isOnline: true,

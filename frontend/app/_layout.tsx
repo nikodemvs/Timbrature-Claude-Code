@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { Stack } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import {
@@ -22,9 +22,20 @@ export default function RootLayout() {
   const [pinInput, setPinInput] = useState('');
   const [pinError, setPinError] = useState('');
   const [canUseBiometric, setCanUseBiometric] = useState(false);
+  const [isPinSyncing, setIsPinSyncing] = useState(false);
   const { isAuthenticated, setAuthenticated } = useAppStore();
   const { colors, isDark } = useAppTheme();
   const styles = createStyles(colors);
+  const skipNextPinSyncRef = useRef(true);
+
+  const readStoredPin = useCallback(async () => {
+    if (Platform.OS === 'web') {
+      return null;
+    }
+
+    const SecureStore = await import('expo-secure-store');
+    return SecureStore.getItemAsync('bustapaga_pin');
+  }, []);
 
   const checkAuth = useCallback(async () => {
     try {
@@ -37,12 +48,11 @@ export default function RootLayout() {
 
       // Native platforms - dynamic import for expo modules
       const LocalAuthentication = await import('expo-local-authentication');
-      const SecureStore = await import('expo-secure-store');
 
       // Check if biometric is available and enabled
       const hasHardware = await LocalAuthentication.hasHardwareAsync();
       const isEnrolled = await LocalAuthentication.isEnrolledAsync();
-      const savedPin = await SecureStore.getItemAsync('bustapaga_pin');
+      const savedPin = await readStoredPin();
       setCanUseBiometric(hasHardware && isEnrolled);
       setStoredPin(savedPin);
 
@@ -74,7 +84,7 @@ export default function RootLayout() {
     } finally {
       setIsReady(true);
     }
-  }, [setAuthenticated]);
+  }, [readStoredPin, setAuthenticated]);
 
   const unlockWithBiometrics = useCallback(async () => {
     if (Platform.OS === 'web') {
@@ -118,7 +128,61 @@ export default function RootLayout() {
     checkAuth();
   }, [checkAuth]);
 
-  const showPinUnlock = isReady && Platform.OS !== 'web' && !!storedPin && !isAuthenticated;
+  useEffect(() => {
+    if (Platform.OS === 'web' || !isReady) {
+      return;
+    }
+
+    if (skipNextPinSyncRef.current) {
+      skipNextPinSyncRef.current = false;
+      return;
+    }
+
+    if (isPinSyncing) {
+      return;
+    }
+
+    let isCancelled = false;
+    setIsPinSyncing(true);
+
+    const refreshStoredPin = async () => {
+      try {
+        const savedPin = await readStoredPin();
+
+        if (isCancelled) {
+          return;
+        }
+
+        setStoredPin(savedPin);
+        setPinInput('');
+        setPinError('');
+
+        if (!savedPin) {
+          setAuthenticated(true);
+        }
+      } catch (error) {
+        console.error('PIN refresh error:', error);
+        if (!isCancelled) {
+          setStoredPin(null);
+          setPinInput('');
+          setPinError('');
+          setAuthenticated(true);
+        }
+      } finally {
+        if (!isCancelled) {
+          setIsPinSyncing(false);
+        }
+      }
+    };
+
+    refreshStoredPin();
+
+    return () => {
+      isCancelled = true;
+    };
+  }, [isAuthenticated, isReady, readStoredPin, setAuthenticated]);
+
+  const showPinUnlock = isReady && !isPinSyncing && Platform.OS !== 'web' && !!storedPin && !isAuthenticated;
 
   return (
     <SafeAreaProvider>

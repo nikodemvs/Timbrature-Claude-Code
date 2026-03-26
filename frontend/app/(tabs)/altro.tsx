@@ -468,15 +468,50 @@ export default function AltroScreen() {
     }
   };
 
+  const resetOperationalUiState = () => {
+    setMessages([]);
+    setInputText('');
+    setChatLoading(false);
+    setAlerts([]);
+    setReperibilita([]);
+    setStatsData([]);
+    setDailyStats([]);
+    setAllYearsStats([]);
+    setTodayTimbratura(null);
+    setChatSessionId(null);
+  };
+
+  const resetAccountUiState = () => {
+    resetOperationalUiState();
+    setActiveTab('menu');
+    setStatsZoom('mese');
+    setSelectedYear(new Date().getFullYear());
+    setSelectedMonth(new Date().getMonth() + 1);
+    setRepData(getTodayString());
+    setRepOraInizio('');
+    setRepOraFine('');
+    setRepTipo('passiva');
+    setRepInterventi('0');
+    setNewPin('');
+    setEditNome('');
+    setEditCognome('');
+    setEditMatricola('');
+    setEditNumeroBadge('');
+    setShowPinSheet(false);
+    setShowAppearanceSheet(false);
+    setShowThemeSheet(false);
+    setShowEditSheet(false);
+    setShowDeleteOperationalSheet(false);
+    setShowDeleteAccountSheet(false);
+    setShowRepSheet(false);
+  };
+
   const clearOperationalData = async () => {
     setDeletingOperationalData(true);
     try {
       const response = await offlineApi.deletePersonalData(true);
       await refreshDashboard();
-      setStatsData([]);
-      setDailyStats([]);
-      setAllYearsStats([]);
-      setTodayTimbratura(null);
+      resetOperationalUiState();
       setShowDeleteOperationalSheet(false);
       Alert.alert('Dati operativi cancellati', response.message || 'Dati operativi cancellati.');
     } catch (error) {
@@ -496,8 +531,7 @@ export default function AltroScreen() {
         await SecureStore.deleteItemAsync('bustapaga_pin');
       }
       resetUserData();
-      setNewPin('');
-      setShowDeleteAccountSheet(false);
+      resetAccountUiState();
       Alert.alert('Account eliminato', response.message || 'Account eliminato correttamente.');
     } catch (error) {
       console.error('Error deleting account:', error);

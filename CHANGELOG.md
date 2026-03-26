@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-26 — Fix cancellazione locale su “Elimina dati” e “Elimina account”
+Cosa: aggiornato `offlineApi` per eseguire la pulizia locale dopo successo backend nei flussi di cancellazione; `deletePersonalData` ora esegue purge dati operativi locali (DB + file storage) e `deleteAccount` esegue purge completo locale (dati operativi + settings + file storage) con cleanup best-effort per evitare crash se il filesystem fallisce.
+Perché: risolvere il problema dei residui locali dopo le azioni distruttive nel tab Altro, mantenendo il comportamento remoto invariato e rendendo prevedibile lo stato offline-first sul device.
+File: frontend/src/services/offlineApi.ts, CHANGELOG.md, CHANGES.md, TEST_RUN.md
+
 ## 2026-03-26 — Chiusa migrazione offlineApi nei tab frontend
 Cosa: completata la migrazione offline-first delle schermate/tab frontend eliminando i bypass diretti a `services/api.ts`; in particolare aggiunti in `offlineApi.ts` i wrapper mancanti per Buste Paga (`uploadCud`, `createBustaPaga`, `updateBustaPaga`), migrata la UI `buste-paga.tsx` a `offlineApi.*`, rimossi import residuali non usati in `index.tsx` e `assenze.tsx`, corretto `fileStore.ts` per compatibilità TypeScript con `expo-file-system/legacy`, completato audit finale con `tsc --noEmit` pulito.
 Perché: chiudere in modo coerente la strategia offline-first del frontend mantenendo un unico punto di accesso dati (`offlineApi`) e riducendo regressioni dovute a contratti axios (`.data`) o API non offline-aware nelle schermate.

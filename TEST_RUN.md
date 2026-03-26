@@ -4,13 +4,12 @@
 > Viene sovrascritto ad ogni nuovo ciclo. La storia permanente è in `CHANGELOG.md`.
 
 **Timestamp:** 2026-03-26
-**Commit/SHA:** b5624df
+**Commit/SHA:** pending
 **Agente:** Codex
 
-## Gate eseguito
+## Gate eseguiti
 
-- `python -m pytest -q -m "unit or api"` (hook `pre-commit`)
-- `python -m pytest -q -m "unit or api"` (hook `pre-push`)
+- `pytest -q -m "unit or api"`
 - `cd frontend && npx tsc --noEmit`
 
 ## Esito
@@ -18,11 +17,11 @@
 - [x] PASS
 - [ ] FAIL
 
-## Test coinvolti
+## Risultati
 
-- `pytest -q -m "unit or api"` → `57 passed, 10 deselected`
-- `npx tsc --noEmit` → pass (nessun errore TypeScript)
+- `pytest -q -m "unit or api"` → `57 passed, 10 deselected in 0.49s`
+- `cd frontend && npx tsc --noEmit` → pass (nessun errore TypeScript)
 
 ## Note
 
-- Verificato audit finale frontend: nessun bypass diretto residuo a `services/api.ts` nelle schermate/tab principali (`index`, `assenze`, `timbrature`, `altro`, `buste-paga`).
+- Fix verificata su `offlineApi`: purge locale post-cancellazione per azioni distruttive account/dati operativi.

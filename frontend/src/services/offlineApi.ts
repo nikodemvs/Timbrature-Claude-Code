@@ -13,6 +13,7 @@
 
 import * as api from './api';
 import * as db from '../db/localDb';
+import * as fileStore from '../storage/fileStore';
 import { useAppStore } from '../store/appStore';
 import { UserSettings, Timbratura, DashboardData, WeeklySummary, ChatMessage, Reperibilita } from '../types';
 import {
@@ -285,6 +286,27 @@ function calcolaOreReperibilitaDaOrari(oraInizio: string, oraFine: string): numb
   let minuti = (h2 * 60 + m2) - (h1 * 60 + m1);
   if (minuti < 0) minuti += 24 * 60;
   return Number((minuti / 60).toFixed(2));
+}
+
+async function purgeLocalOperationalData(): Promise<void> {
+  await db.clearAllData();
+
+  try {
+    await fileStore.deleteAllFiles();
+  } catch {
+    // purge file best-effort
+  }
+}
+
+async function purgeLocalAccountData(): Promise<void> {
+  await db.clearAllData();
+  await db.clearAccount();
+
+  try {
+    await fileStore.deleteAllFiles();
+  } catch {
+    // purge file best-effort
+  }
 }
 
 async function replayQueuedOperation(entry: QueuedOperation): Promise<void> {
@@ -1469,6 +1491,7 @@ export async function deletePersonalData(
     throw new Error('Connessione necessaria per cancellare i dati operativi.');
   }
   const res = await api.deletePersonalData(conferma);
+  await purgeLocalOperationalData();
   markSynced();
   return res.data;
 }
@@ -1480,7 +1503,7 @@ export async function deleteAccount(
     throw new Error('Connessione necessaria per eliminare l’account.');
   }
   const res = await api.deleteAccount(conferma);
-  await db.clearAccount();
+  await purgeLocalAccountData();
   markSynced();
   return res.data;
 }

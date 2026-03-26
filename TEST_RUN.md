@@ -4,25 +4,25 @@
 > Viene sovrascritto ad ogni nuovo ciclo. La storia permanente è in `CHANGELOG.md`.
 
 **Timestamp:** 2026-03-26
-**Commit/SHA:** —
+**Commit/SHA:** b5624df
 **Agente:** Codex
 
 ## Gate eseguito
 
-`cd frontend && npx tsc --noEmit`
+- `python -m pytest -q -m "unit or api"` (hook `pre-commit`)
+- `python -m pytest -q -m "unit or api"` (hook `pre-push`)
+- `cd frontend && npx tsc --noEmit`
 
 ## Esito
 
-- [ ] PASS
-- [x] FAIL
+- [x] PASS
+- [ ] FAIL
 
 ## Test coinvolti
 
-- `npx tsc --noEmit` → fallito con errori pre-esistenti in `app/(tabs)/altro.tsx` e `src/storage/fileStore.ts`
+- `pytest -q -m "unit or api"` → `57 passed, 10 deselected`
+- `npx tsc --noEmit` → pass (nessun errore TypeScript)
 
 ## Note
 
-- Nessun errore TypeScript in `frontend/src/services/offlineApi.ts` dopo la modifica.
-- Errori residui:
-  - `app/(tabs)/altro.tsx`: proprietà `settingLabel` e `settingValue` mancanti nello style object
-  - `src/storage/fileStore.ts`: incompatibilità tipi `expo-file-system` (`documentDirectory`, `EncodingType`, opzione `size` in `InfoOptions`)
+- Verificato audit finale frontend: nessun bypass diretto residuo a `services/api.ts` nelle schermate/tab principali (`index`, `assenze`, `timbrature`, `altro`, `buste-paga`).

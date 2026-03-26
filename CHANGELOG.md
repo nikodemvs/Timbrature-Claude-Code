@@ -5,6 +5,11 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-26 — Chiusa migrazione offlineApi nei tab frontend
+Cosa: completata la migrazione offline-first delle schermate/tab frontend eliminando i bypass diretti a `services/api.ts`; in particolare aggiunti in `offlineApi.ts` i wrapper mancanti per Buste Paga (`uploadCud`, `createBustaPaga`, `updateBustaPaga`), migrata la UI `buste-paga.tsx` a `offlineApi.*`, rimossi import residuali non usati in `index.tsx` e `assenze.tsx`, corretto `fileStore.ts` per compatibilità TypeScript con `expo-file-system/legacy`, completato audit finale con `tsc --noEmit` pulito.
+Perché: chiudere in modo coerente la strategia offline-first del frontend mantenendo un unico punto di accesso dati (`offlineApi`) e riducendo regressioni dovute a contratti axios (`.data`) o API non offline-aware nelle schermate.
+File: frontend/src/services/offlineApi.ts, frontend/app/(tabs)/buste-paga.tsx, frontend/app/(tabs)/index.tsx, frontend/app/(tabs)/assenze.tsx, frontend/src/storage/fileStore.ts, CHANGELOG.md
+
 ## 2026-03-26 — Wrapper offlineApi completati per modulo Timbrature
 Cosa: esteso `frontend/src/services/offlineApi.ts` con i wrapper usati dalla schermata Timbrature (`getWeeklySummary`, `createTimbratura`, `updateTimbratura`, `deleteTimbratura`, `getTimbratureAziendali`, `uploadTimbratureAziendali`, `getConfrontoTimbrature`), aggiunti helper di normalizzazione dati locali e supporto replay queue per create/update/delete timbratura.
 Perché: completare la migrazione offline-first del modulo Timbrature riducendo dipendenze dirette da `api.ts` e garantendo fallback locale/sync coerente quando il cloud non è disponibile.

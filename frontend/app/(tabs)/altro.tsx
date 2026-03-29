@@ -127,6 +127,7 @@ export default function AltroScreen() {
       resetUserData,
       cloudEnabled,
       setCloudEnabled,
+      isOnline,
       privacyMode,
   } = useAppStore();
   const fmt = (v: number) => privacyMode ? '€ ••••' : formatCurrency(v);
@@ -607,12 +608,26 @@ export default function AltroScreen() {
   const renderMenu = () => (
     <ScrollView style={styles.menuContainer} showsVerticalScrollIndicator={false}>
       <View style={styles.menuGrid}>
-        <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('chat')} testID="altro-menu-chat">
-          <View style={[styles.menuIcon, { backgroundColor: `${themeColors.primary}15` }]}>
-            <Ionicons name="chatbubble-ellipses" size={28} color={themeColors.primary} />
+        {cloudEnabled ? (
+          <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('chat')} testID="altro-menu-chat">
+            <View style={[styles.menuIcon, { backgroundColor: `${themeColors.primary}15` }]}>
+              <Ionicons name="chatbubble-ellipses" size={28} color={isOnline ? themeColors.primary : colors.textSecondary} />
+              {!isOnline && (
+                <View style={styles.menuIconBadge}>
+                  <Ionicons name="cloud-offline-outline" size={12} color={colors.textSecondary} />
+                </View>
+              )}
+            </View>
+            <Text style={[styles.menuLabel, !isOnline && { color: colors.textSecondary }]}>Assistente AI</Text>
+          </TouchableOpacity>
+        ) : (
+          <View style={[styles.menuItem, styles.menuItemDisabled]} testID="altro-menu-chat-disabled">
+            <View style={[styles.menuIcon, { backgroundColor: `${colors.textSecondary}10` }]}>
+              <Ionicons name="chatbubble-ellipses" size={28} color={colors.border} />
+            </View>
+            <Text style={[styles.menuLabel, { color: colors.border }]}>Assistente AI</Text>
           </View>
-          <Text style={styles.menuLabel}>Assistente AI</Text>
-        </TouchableOpacity>
+        )}
         
         <TouchableOpacity style={styles.menuItem} onPress={() => setActiveTab('alerts')} testID="altro-menu-alerts">
           <View style={[styles.menuIcon, { backgroundColor: `${colors.warning}15` }]}>
@@ -1197,9 +1212,17 @@ export default function AltroScreen() {
         <Text style={styles.title}>
           {activeTab === 'menu' ? 'Altro' : activeTab === 'chat' ? 'Assistente AI' : activeTab === 'alerts' ? 'Avvisi' : activeTab === 'stats' ? 'Statistiche' : activeTab === 'reperibilita' ? 'Reperibilità' : 'Impostazioni'}
         </Text>
-        {activeTab === 'chat' && messages.length > 0 && (
-          <TouchableOpacity onPress={clearChat}><Ionicons name="trash-outline" size={22} color={colors.error} /></TouchableOpacity>
-        )}
+        <View style={styles.headerRight}>
+          {cloudEnabled && !isOnline && (
+            <View style={styles.offlineBadge}>
+              <Ionicons name="cloud-offline-outline" size={14} color={colors.textSecondary} />
+              <Text style={styles.offlineBadgeText}>offline</Text>
+            </View>
+          )}
+          {activeTab === 'chat' && messages.length > 0 && (
+            <TouchableOpacity onPress={clearChat}><Ionicons name="trash-outline" size={22} color={colors.error} /></TouchableOpacity>
+          )}
+        </View>
       </View>
       {renderContent()}
     </SafeAreaView>
@@ -1212,6 +1235,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     header: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 16, paddingVertical: 16 },
     backButton: { width: 40, height: 40, borderRadius: 20, backgroundColor: colors.card, justifyContent: 'center', alignItems: 'center', marginRight: 12 },
     title: { flex: 1, fontSize: 28, fontWeight: '700', color: colors.text },
+    headerRight: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+    offlineBadge: { flexDirection: 'row', alignItems: 'center', gap: 4, backgroundColor: colors.card, paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
+    offlineBadgeText: { fontSize: 12, color: colors.textSecondary },
+    menuItemDisabled: { opacity: 0.4 },
+    menuIconBadge: { position: 'absolute', bottom: 0, right: 0, backgroundColor: colors.card, borderRadius: 8, padding: 1 },
     menuContainer: { flex: 1, paddingHorizontal: 16 },
     menuGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, marginBottom: 24 },
     menuItem: { width: '28%', alignItems: 'center' },

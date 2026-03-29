@@ -5,6 +5,16 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: funzionalità cloud condizionali (online/offline)
+
+Cosa:
+- `altro.tsx`: voce "Assistente AI" nella griglia si nasconde (placeholder grigio) quando `cloudEnabled=false`. Quando `cloudEnabled=true` ma `isOnline=false`, icona AI diventa grigia con badge cloud-offline. Badge `[offline]` nell'header visibile in tutta la schermata Altro. Aggiunto `isOnline` dallo store.
+- `buste-paga.tsx`: bottoni "Carica PDF", "Importa storico", "Importa cartella" (cedolini e CUD) nascosti quando `cloudEnabled=false`. Hint testuale guida l'utente alle impostazioni.
+Perché: modalità offline scelta deliberatamente = funzioni cloud scompaiono, non restano disabilitate con messaggio ripetuto.
+File: frontend/app/(tabs)/altro.tsx, frontend/app/(tabs)/buste-paga.tsx
+
+---
+
 ## 2026-03-29 — Feature: privacy mode (occhietto nascondere importi €)
 
 Cosa:

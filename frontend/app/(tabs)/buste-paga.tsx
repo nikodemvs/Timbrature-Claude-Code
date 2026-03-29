@@ -902,11 +902,25 @@ export default function BustePagaScreen() {
         <Text style={styles.sectionTitle}>Azioni rapide</Text>
         <Text style={styles.sectionHint}>Le operazioni più usate sono qui, già pronte senza aprire altri passaggi.</Text>
         <View style={styles.actionGrid}>
-          <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" style={styles.actionButton} />
-          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" style={styles.actionButton} />
-          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" style={styles.actionButton} />
+          {cloudEnabled ? (
+            <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" style={styles.actionButton} />
+          ) : null}
+          {cloudEnabled ? (
+            <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" style={styles.actionButton} />
+          ) : null}
+          {cloudEnabled ? (
+            <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" style={styles.actionButton} />
+          ) : null}
           <Button title="Inserimento manuale" icon="add" variant="outline" onPress={() => { resetForm(); setShowAddSheet(true); }} testID="buste-add-manual-button" style={styles.actionButton} />
         </View>
+        {!cloudEnabled && (
+          <View style={styles.cloudOfflineHint}>
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.cloudOfflineHintText}>
+              Carica PDF e import storico richiedono il cloud. Attivali in Altro → Impostazioni.
+            </Text>
+          </View>
+        )}
         {Platform.OS !== 'web' && <Text style={styles.helperText}>La selezione di cartelle e più file è disponibile nella versione web.</Text>}
       </Card>
       <Card style={styles.cardMuted}>
@@ -973,11 +987,25 @@ export default function BustePagaScreen() {
         <Text style={styles.sectionTitle}>Azioni rapide</Text>
         <Text style={styles.sectionHint}>Qui carichi solo CUD, con import singolo o storico.</Text>
         <View style={styles.actionGrid}>
-          <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" style={styles.actionButton} />
-          <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" style={styles.actionButton} />
-          <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" style={styles.actionButton} />
+          {cloudEnabled ? (
+            <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" style={styles.actionButton} />
+          ) : null}
+          {cloudEnabled ? (
+            <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" style={styles.actionButton} />
+          ) : null}
+          {cloudEnabled ? (
+            <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" style={styles.actionButton} />
+          ) : null}
           <View style={styles.actionPlaceholder} />
         </View>
+        {!cloudEnabled && (
+          <View style={styles.cloudOfflineHint}>
+            <Ionicons name="cloud-offline-outline" size={16} color={colors.textSecondary} />
+            <Text style={styles.cloudOfflineHintText}>
+              Carica CUD e import storico richiedono il cloud. Attivali in Altro → Impostazioni.
+            </Text>
+          </View>
+        )}
         {Platform.OS !== 'web' && <Text style={styles.helperText}>La selezione di cartelle e più file è disponibile nella versione web.</Text>}
       </Card>
       <Text style={styles.listTitle}>Storico CUD per anno</Text>
@@ -1274,6 +1302,21 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       lineHeight: 18,
       color: colors.textSecondary,
       marginTop: 12,
+    },
+    cloudOfflineHint: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 6,
+      marginTop: 12,
+      paddingTop: 12,
+      borderTopWidth: 1,
+      borderTopColor: colors.border,
+    },
+    cloudOfflineHintText: {
+      flex: 1,
+      fontSize: 12,
+      color: colors.textSecondary,
+      lineHeight: 18,
     },
     stack: {
       gap: 10,

@@ -137,6 +137,10 @@ interface AppState {
   setTheme: (theme: ThemeKey) => void;
   colorSchemePreference: ColorSchemePreference;
   setColorSchemePreference: (preference: ColorSchemePreference) => void;
+
+  // Privacy mode — nasconde tutti gli importi in euro
+  privacyMode: boolean;
+  setPrivacyMode: (value: boolean) => void;
 }
 
 export const useAppStore = create<AppState>()(
@@ -196,6 +200,10 @@ export const useAppStore = create<AppState>()(
       setTheme: (theme) => set({ theme }),
       colorSchemePreference: 'system',
       setColorSchemePreference: (preference) => set({ colorSchemePreference: preference }),
+
+      // Privacy mode
+      privacyMode: false,
+      setPrivacyMode: (value) => set({ privacyMode: value }),
     }),
     {
       name: 'bustapaga-storage',
@@ -204,6 +212,7 @@ export const useAppStore = create<AppState>()(
         theme: state.theme,
         colorSchemePreference: state.colorSchemePreference,
         cloudEnabled: state.cloudEnabled,
+        privacyMode: state.privacyMode,
       }),
     }
   )

@@ -158,10 +158,11 @@ function formatStimaFonte(mese: number, anno: number, stime?: DashboardStimaFiel
 }
 
 export default function DashboardScreen() {
-  const { dashboard, setDashboard, todayTimbratura, setTodayTimbratura, setUnreadAlerts } =
+  const { dashboard, setDashboard, todayTimbratura, setTodayTimbratura, setUnreadAlerts, privacyMode, setPrivacyMode } =
     useAppStore();
   const { colors, themeColors } = useAppTheme();
   const styles = createStyles(colors);
+  const fmt = (v: number) => privacyMode ? '€ ••••' : formatCurrency(v);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timbraturaLoading, setTimbraturaLoading] = useState(false);
@@ -554,7 +555,7 @@ export default function DashboardScreen() {
             {!editMode && expanded.stima && (
               <>
                 <View style={styles.estimateContainer}>
-                  <Text style={styles.estimateValue}>{formatCurrency(data?.stime?.netto_stimato || 0)}</Text>
+                  <Text style={styles.estimateValue}>{fmt(data?.stime?.netto_stimato || 0)}</Text>
                   <Text style={styles.estimateLabel}>netto stimato di {stimaCompetenza}</Text>
                 </View>
                 <View style={styles.estimateDetails}>
@@ -578,15 +579,15 @@ export default function DashboardScreen() {
                   </View>
                   <View style={styles.estimateRow}>
                     <Text style={styles.estimateDetailLabel}>Lordo stimato</Text>
-                    <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.lordo_stimato || 0)}</Text>
+                    <Text style={styles.estimateDetailValue}>{fmt(data?.stime?.lordo_stimato || 0)}</Text>
                   </View>
                   <View style={styles.estimateRow}>
                     <Text style={styles.estimateDetailLabel}>Straordinari</Text>
-                    <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.straordinario_stimato || 0)}</Text>
+                    <Text style={styles.estimateDetailValue}>{fmt(data?.stime?.straordinario_stimato || 0)}</Text>
                   </View>
                   <View style={styles.estimateRow}>
                     <Text style={styles.estimateDetailLabel}>Ticket ({data?.mese_corrente?.ticket_maturati || 0} gg)</Text>
-                    <Text style={styles.estimateDetailValue}>{formatCurrency(data?.stime?.ticket_totale || 0)}</Text>
+                    <Text style={styles.estimateDetailValue}>{fmt(data?.stime?.ticket_totale || 0)}</Text>
                   </View>
                 </View>
               </>
@@ -679,7 +680,7 @@ export default function DashboardScreen() {
             {!editMode && expanded.busta && (
               <View style={styles.payslipRow}>
                 <Text style={styles.payslipLabel}>Netto</Text>
-                <Text style={styles.payslipValue}>{formatCurrency(data.ultima_busta.netto)}</Text>
+                <Text style={styles.payslipValue}>{fmt(data.ultima_busta.netto)}</Text>
               </View>
             )}
           </Card>
@@ -698,19 +699,32 @@ export default function DashboardScreen() {
           <Text style={styles.greeting}>{data?.settings?.nome ? `Ciao, ${data.settings.nome.split(' ')[0]}` : 'Benvenuto'}</Text>
           <Text style={styles.subtitle}>{meseCorrente} {today.getFullYear()}</Text>
         </View>
-        <TouchableOpacity
-          style={[styles.editButton, editMode && styles.editButtonActive]}
-          onPress={() => setEditMode(prev => !prev)}
-        >
-          <Ionicons
-            name={editMode ? 'checkmark' : 'pencil'}
-            size={18}
-            color={editMode ? colors.textWhite : themeColors.primary}
-          />
-          <Text style={[styles.editButtonText, editMode && styles.editButtonTextActive]}>
-            {editMode ? 'Fatto' : 'Ordina'}
-          </Text>
-        </TouchableOpacity>
+        <View style={styles.headerActions}>
+          <TouchableOpacity
+            style={styles.privacyButton}
+            onPress={() => setPrivacyMode(!privacyMode)}
+            accessibilityLabel={privacyMode ? 'Mostra importi' : 'Nascondi importi'}
+          >
+            <Ionicons
+              name={privacyMode ? 'eye-off' : 'eye'}
+              size={22}
+              color={privacyMode ? colors.textSecondary : themeColors.primary}
+            />
+          </TouchableOpacity>
+          <TouchableOpacity
+            style={[styles.editButton, editMode && styles.editButtonActive]}
+            onPress={() => setEditMode(prev => !prev)}
+          >
+            <Ionicons
+              name={editMode ? 'checkmark' : 'pencil'}
+              size={18}
+              color={editMode ? colors.textWhite : themeColors.primary}
+            />
+            <Text style={[styles.editButtonText, editMode && styles.editButtonTextActive]}>
+              {editMode ? 'Fatto' : 'Ordina'}
+            </Text>
+          </TouchableOpacity>
+        </View>
       </View>
 
       {editMode && (
@@ -753,6 +767,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     greeting: { fontSize: 28, fontWeight: '700', color: colors.text },
     subtitle: { fontSize: 16, color: colors.textSecondary, marginTop: 4 },
+    headerActions: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+    },
+    privacyButton: {
+      padding: 8,
+    },
     editButton: {
       flexDirection: 'row',
       alignItems: 'center',

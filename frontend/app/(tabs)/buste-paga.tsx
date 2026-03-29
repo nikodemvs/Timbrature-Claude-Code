@@ -245,7 +245,8 @@ export default function BustePagaScreen() {
   const [straordinariOre, setStraordinariOre] = useState('');
   const [straordinariImporto, setStraordinariImporto] = useState('');
   const [trattenuteTotali, setTrattenuteTotali] = useState('');
-  const { setDashboard, setSettings, cloudEnabled } = useAppStore();
+  const { setDashboard, setSettings, cloudEnabled, privacyMode } = useAppStore();
+  const fmt = (v: number) => privacyMode ? '€ ••••' : formatCurrency(v);
 
   const loadData = useCallback(async () => {
     try {
@@ -769,8 +770,8 @@ export default function BustePagaScreen() {
           </Text>
         </View>
         <View style={styles.amountBox}>
-          <Text style={styles.nettoValue}>{formatCurrency(item.netto || 0)}</Text>
-          <Text style={styles.lordoValue}>Lordo {formatCurrency(item.lordo || 0)}</Text>
+          <Text style={styles.nettoValue}>{fmt(item.netto || 0)}</Text>
+          <Text style={styles.lordoValue}>Lordo {fmt(item.lordo || 0)}</Text>
         </View>
       </View>
       <View style={styles.itemFooter}>
@@ -781,7 +782,7 @@ export default function BustePagaScreen() {
         <View style={[styles.pill, item.has_discrepancy ? styles.pillDanger : styles.pillNeutral]}>
           <Ionicons name={item.has_discrepancy ? 'alert-circle-outline' : 'checkmark-circle-outline'} size={12} color={item.has_discrepancy ? colors.error : colors.success} />
           <Text style={[styles.pillText, item.has_discrepancy ? styles.pillTextDanger : styles.pillTextNeutral]}>
-            {item.has_discrepancy ? `Scarto ${formatCurrency(item.differenza)}` : 'Allineata'}
+            {item.has_discrepancy ? `Scarto ${fmt(item.differenza)}` : 'Allineata'}
           </Text>
         </View>
       </View>
@@ -1065,19 +1066,19 @@ export default function BustePagaScreen() {
           <View>
             <View style={styles.detailHero}>
               <Text style={styles.detailLabel}>Importo Netto</Text>
-              <Text style={styles.detailValueLarge}>{formatCurrency(selectedBusta.netto || 0)}</Text>
+              <Text style={styles.detailValueLarge}>{fmt(selectedBusta.netto || 0)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Lordo</Text>
-              <Text style={styles.detailValue}>{formatCurrency(selectedBusta.lordo || 0)}</Text>
+              <Text style={styles.detailValue}>{fmt(selectedBusta.lordo || 0)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Straordinari ({selectedBusta.straordinari_ore || 0}h)</Text>
-              <Text style={styles.detailValue}>{formatCurrency(selectedBusta.straordinari_importo || 0)}</Text>
+              <Text style={styles.detailValue}>{fmt(selectedBusta.straordinari_importo || 0)}</Text>
             </View>
             <View style={styles.detailRow}>
               <Text style={styles.detailLabel}>Trattenute</Text>
-              <Text style={[styles.detailValue, { color: colors.error }]}>-{formatCurrency(selectedBusta.trattenute_totali || 0)}</Text>
+              <Text style={[styles.detailValue, { color: colors.error }]}>-{fmt(selectedBusta.trattenute_totali || 0)}</Text>
             </View>
             {selectedBusta.pdf_nome && (
               <View style={styles.fileInfo}>

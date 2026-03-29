@@ -5,6 +5,18 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: privacy mode (occhietto nascondere importi €)
+
+Cosa:
+- `appStore.ts`: aggiunto `privacyMode: boolean` persistito in storage con `setPrivacyMode`.
+- `index.tsx`: icona occhio (`eye`/`eye-off`) nell'header della Home — toggle rapido privacy mode. Helper `fmt()` sostituisce `formatCurrency()` su tutti gli importi della Home (Stima Netto, Lordo, Straordinari, Ticket, Ultima Busta). Aggiunto stile `headerActions` e `privacyButton`.
+- `buste-paga.tsx`: helper `fmt()` su tutti gli importi (netto, lordo, scarto, dettaglio cedolino).
+- `altro.tsx`: helper `fmt()` sul compenso reperibilità.
+Perché: un dipendente che timbra in presenza di altri può nascondere tutti gli importi con un solo tap.
+File: frontend/src/store/appStore.ts, frontend/app/(tabs)/index.tsx, frontend/app/(tabs)/buste-paga.tsx, frontend/app/(tabs)/altro.tsx
+
+---
+
 ## 2026-03-29 — Feature: timbrature multiple per giorno + overnight + day rollover
 
 Cosa:

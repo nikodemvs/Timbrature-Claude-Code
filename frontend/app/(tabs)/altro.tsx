@@ -127,7 +127,9 @@ export default function AltroScreen() {
       resetUserData,
       cloudEnabled,
       setCloudEnabled,
+      privacyMode,
   } = useAppStore();
+  const fmt = (v: number) => privacyMode ? '€ ••••' : formatCurrency(v);
   const chatScrollRef = useRef<FlatList>(null);
   
   // Alerts state
@@ -861,7 +863,7 @@ export default function AltroScreen() {
                   {item.tipo === 'attiva' ? 'ATTIVA' : 'PASSIVA'}
                 </Text>
               </View>
-              <Text style={styles.repCompenso}>{formatCurrency(item.compenso_calcolato)}</Text>
+              <Text style={styles.repCompenso}>{fmt(item.compenso_calcolato)}</Text>
             </View>
             <Text style={styles.repDate}>{formatDate(item.data)}</Text>
             <Text style={styles.repTime}>{item.ora_inizio} - {item.ora_fine}</Text>

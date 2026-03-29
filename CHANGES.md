@@ -4,31 +4,22 @@
 > Viene sovrascritto ad ogni nuovo ciclo. La storia permanente è in `CHANGELOG.md`.
 
 **Timestamp:** 2026-03-29
-**Commit/SHA:** pending (allineamento in corso)
+**Commit/SHA:** pending (responsive portability in corso)
 **Agente:** Codex
 
 ## File modificati
 
-- `AGENTS.md` — regole di chiusura task aggiornate con sync obbligatorio `CHANGES.md` + `TEST_RUN.md`; chiarita eccezione documentale su `.claude/`.
-- `CLAUDE.md` — procedura di allineamento estesa a `CHANGES.md`/`TEST_RUN.md` e varianti backend/frontend; chiusura task allineata.
-- `frontend/AGENTS.md` — policy test frontend allineata a pre-commit/pre-push solo `unit/api`; e2e/visual solo CI; nota di allineamento documentale.
-- `frontend/CLAUDE.md` — policy test frontend allineata al root; nota di allineamento documentale.
-- `backend/AGENTS.md` + `backend/CLAUDE.md` — aggiunte regole di sync documentale tra coppia backend e file ciclo root.
-- `agents/ARCHITECTURE_AGENT.md`
-- `agents/BACKEND_API_AGENT.md`
-- `agents/FRONTEND_UI_AGENT.md`
-- `agents/OFFLINE_DATA_AGENT.md`
-- `agents/PAYROLL_LOGIC_AGENT.md`
-- `agents/PRODUCT_REQUIREMENTS_AGENT.md`
-- `agents/QA_AGENT.md`
-  - sezione "Parallelizzazione" uniformata: default sequenziale; parallelismo solo con agenti gia impegnati su task indipendenti.
-- `CHANGELOG.md` — nuova entry datata di allineamento governance.
+- `frontend/app/(tabs)/index.tsx` — KPI Home responsive su mobile (2 righe) + padding finale contenuto aumentato.
+- `frontend/app/(tabs)/assenze.tsx` — summary Ferie/Comporto in stack verticale su mobile.
+- `frontend/app/(tabs)/timbrature.tsx` — touch area minima aumentata per frecce mese e segmenti tab.
+- `frontend/app/(tabs)/buste-paga.tsx` — bottoni azioni rapide con altezza minima maggiore su mobile.
+- `CHANGELOG.md` — nuova entry datata per fix di portabilità grafica.
 - `CHANGES.md` — sovrascritto con il ciclo corrente.
 - `TEST_RUN.md` — sovrascritto con il ciclo corrente.
 
 ## Tipo di modifica
 
 - [ ] feature
-- [ ] fix
+- [x] fix
 - [x] docs
-- [x] chore
+- [ ] chore

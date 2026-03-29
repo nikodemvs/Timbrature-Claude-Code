@@ -8,6 +8,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -283,6 +284,8 @@ export default function DashboardScreen() {
     useAppStore();
   const { colors, themeColors } = useAppTheme();
   const styles = createStyles(colors);
+  const { width } = useWindowDimensions();
+  const isCompactLayout = width < 480;
   const fmt = (v: number) => privacyMode ? '€ ••••' : formatCurrency(v);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -883,39 +886,79 @@ export default function DashboardScreen() {
 
       {!editMode && (
         <View style={styles.kpiRowWrapper}>
-        <ScrollView
-          horizontal
-          showsHorizontalScrollIndicator={false}
-          style={styles.kpiRow}
-          contentContainerStyle={styles.kpiRowContent}
-        >
-          <View style={styles.kpiChip}>
-            <Text style={styles.kpiChipLabel}>Ore mese</Text>
-            <Text style={styles.kpiChipValue}>{data?.mese_corrente?.ore_lavorate?.toFixed(1) ?? '–'}h</Text>
-          </View>
-          <View style={styles.kpiChip}>
-            <Text style={styles.kpiChipLabel}>Straordinari</Text>
-            <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{data?.mese_corrente?.ore_straordinarie?.toFixed(1) ?? '–'}h</Text>
-          </View>
-          <View style={styles.kpiChip}>
-            <Text style={styles.kpiChipLabel}>Ferie disp.</Text>
-            <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) ?? '–'}h</Text>
-          </View>
-          <View style={[styles.kpiChip,
-            data?.comporto?.alert_critico ? styles.kpiChipDanger :
-            data?.comporto?.alert_attenzione ? styles.kpiChipWarning : undefined]}>
-            <Text style={styles.kpiChipLabel}>Comporto</Text>
-            <Text style={[styles.kpiChipValue,
-              data?.comporto?.alert_critico ? { color: colors.error } :
-              data?.comporto?.alert_attenzione ? { color: colors.warning } : undefined]}>
-              {data?.comporto?.giorni_malattia_3_anni ?? '–'}/{data?.comporto?.soglia_critica ?? 180}gg
-            </Text>
-          </View>
-          <View style={styles.kpiChip}>
-            <Text style={styles.kpiChipLabel}>Ticket</Text>
-            <Text style={[styles.kpiChipValue, { color: colors.ticket }]}>{data?.mese_corrente?.ticket_maturati ?? '–'}</Text>
-          </View>
-        </ScrollView>
+          {isCompactLayout ? (
+            <View style={styles.kpiGrid}>
+              <View style={[styles.kpiChip, styles.kpiChipCompact]}>
+                <Text style={styles.kpiChipLabel}>Ore mese</Text>
+                <Text style={styles.kpiChipValue}>{data?.mese_corrente?.ore_lavorate?.toFixed(1) ?? '–'}h</Text>
+              </View>
+              <View style={[styles.kpiChip, styles.kpiChipCompact]}>
+                <Text style={styles.kpiChipLabel}>Straordinari</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{data?.mese_corrente?.ore_straordinarie?.toFixed(1) ?? '–'}h</Text>
+              </View>
+              <View style={[styles.kpiChip, styles.kpiChipCompact]}>
+                <Text style={styles.kpiChipLabel}>Ferie disp.</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) ?? '–'}h</Text>
+              </View>
+              <View
+                style={[
+                  styles.kpiChip,
+                  styles.kpiChipCompact,
+                  data?.comporto?.alert_critico ? styles.kpiChipDanger :
+                  data?.comporto?.alert_attenzione ? styles.kpiChipWarning : undefined,
+                ]}
+              >
+                <Text style={styles.kpiChipLabel}>Comporto</Text>
+                <Text
+                  style={[
+                    styles.kpiChipValue,
+                    data?.comporto?.alert_critico ? { color: colors.error } :
+                    data?.comporto?.alert_attenzione ? { color: colors.warning } : undefined,
+                  ]}
+                >
+                  {data?.comporto?.giorni_malattia_3_anni ?? '–'}/{data?.comporto?.soglia_critica ?? 180}gg
+                </Text>
+              </View>
+              <View style={[styles.kpiChip, styles.kpiChipCompact]}>
+                <Text style={styles.kpiChipLabel}>Ticket</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.ticket }]}>{data?.mese_corrente?.ticket_maturati ?? '–'}</Text>
+              </View>
+            </View>
+          ) : (
+            <ScrollView
+              horizontal
+              showsHorizontalScrollIndicator={false}
+              style={styles.kpiRow}
+              contentContainerStyle={styles.kpiRowContent}
+            >
+              <View style={styles.kpiChip}>
+                <Text style={styles.kpiChipLabel}>Ore mese</Text>
+                <Text style={styles.kpiChipValue}>{data?.mese_corrente?.ore_lavorate?.toFixed(1) ?? '–'}h</Text>
+              </View>
+              <View style={styles.kpiChip}>
+                <Text style={styles.kpiChipLabel}>Straordinari</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{data?.mese_corrente?.ore_straordinarie?.toFixed(1) ?? '–'}h</Text>
+              </View>
+              <View style={styles.kpiChip}>
+                <Text style={styles.kpiChipLabel}>Ferie disp.</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) ?? '–'}h</Text>
+              </View>
+              <View style={[styles.kpiChip,
+                data?.comporto?.alert_critico ? styles.kpiChipDanger :
+                data?.comporto?.alert_attenzione ? styles.kpiChipWarning : undefined]}>
+                <Text style={styles.kpiChipLabel}>Comporto</Text>
+                <Text style={[styles.kpiChipValue,
+                  data?.comporto?.alert_critico ? { color: colors.error } :
+                  data?.comporto?.alert_attenzione ? { color: colors.warning } : undefined]}>
+                  {data?.comporto?.giorni_malattia_3_anni ?? '–'}/{data?.comporto?.soglia_critica ?? 180}gg
+                </Text>
+              </View>
+              <View style={styles.kpiChip}>
+                <Text style={styles.kpiChipLabel}>Ticket</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.ticket }]}>{data?.mese_corrente?.ticket_maturati ?? '–'}</Text>
+              </View>
+            </ScrollView>
+          )}
         </View>
       )}
 
@@ -934,7 +977,7 @@ export default function DashboardScreen() {
             {renderCardContent(key, index)}
           </View>
         ))}
-        <View style={styles.bottomPadding} />
+        <View style={[styles.bottomPadding, isCompactLayout && styles.bottomPaddingCompact]} />
       </ScrollView>
 
       <ReperibilitaSheet
@@ -1066,6 +1109,7 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     payslipLabel: { fontSize: 16, color: colors.textSecondary },
     payslipValue: { fontSize: 24, fontWeight: '700', color: colors.success },
     bottomPadding: { height: 20 },
+    bottomPaddingCompact: { height: 96 },
     marcatureList: { flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginBottom: 12 },
     marcaturaItem: { flexDirection: 'row', alignItems: 'center', backgroundColor: colors.background, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 16, gap: 4 },
     marcaturaText: { fontSize: 13, fontWeight: '500', color: colors.text },
@@ -1104,9 +1148,15 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     reperibilita_labelActive: {
       color: colors.textWhite,
     },
-    kpiRowWrapper: { height: 72, marginBottom: 8 },
+    kpiRowWrapper: { marginBottom: 8 },
     kpiRow: { flex: 1 },
     kpiRowContent: { paddingHorizontal: 16, gap: 8 },
+    kpiGrid: {
+      flexDirection: 'row',
+      flexWrap: 'wrap',
+      gap: 8,
+      paddingHorizontal: 16,
+    },
     kpiChip: {
       alignItems: 'center',
       backgroundColor: colors.card,
@@ -1114,6 +1164,11 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       paddingHorizontal: 14,
       paddingVertical: 10,
       minWidth: 90,
+    },
+    kpiChipCompact: {
+      flexBasis: '31%',
+      flexGrow: 1,
+      minWidth: 0,
     },
     kpiChipDanger: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.error },
     kpiChipWarning: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.warning },

@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Text,
   TouchableOpacity,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
@@ -218,6 +219,8 @@ const groupByYear = <T,>(items: T[], getYear: (item: T) => number): YearGroup<T>
 export default function BustePagaScreen() {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
+  const { width } = useWindowDimensions();
+  const isCompactLayout = width < 480;
   const [activeTab, setActiveTab] = useState<TabType>('cedolini');
   const [bustePaga, setBustePaga] = useState<BustaPaga[]>([]);
   const [archivioCedolini, setArchivioCedolini] = useState<Documento[]>([]);
@@ -903,15 +906,15 @@ export default function BustePagaScreen() {
         <Text style={styles.sectionHint}>Le operazioni più usate sono qui, già pronte senza aprire altri passaggi.</Text>
         <View style={styles.actionGrid}>
           {cloudEnabled ? (
-            <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" style={styles.actionButton} />
+            <Button title="Carica PDF" icon="cloud-upload" onPress={() => requestSingleUpload('cedolino')} loading={uploading} testID="buste-upload-single-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
           ) : null}
           {cloudEnabled ? (
-            <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" style={styles.actionButton} />
+            <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('mixed', false)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-history-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
           ) : null}
           {cloudEnabled ? (
-            <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" style={styles.actionButton} />
+            <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('mixed', true)} disabled={uploading || Platform.OS !== 'web'} testID="buste-upload-folder-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
           ) : null}
-          <Button title="Inserimento manuale" icon="add" variant="outline" onPress={() => { resetForm(); setShowAddSheet(true); }} testID="buste-add-manual-button" style={styles.actionButton} />
+          <Button title="Inserimento manuale" icon="add" variant="outline" onPress={() => { resetForm(); setShowAddSheet(true); }} testID="buste-add-manual-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
         </View>
         {!cloudEnabled && (
           <View style={styles.cloudOfflineHint}>
@@ -991,13 +994,13 @@ export default function BustePagaScreen() {
         <Text style={styles.sectionHint}>Qui carichi solo CUD, con import singolo o storico.</Text>
         <View style={styles.actionGrid}>
           {cloudEnabled ? (
-            <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" style={styles.actionButton} />
+            <Button title="Carica CUD" icon="cloud-upload" onPress={() => requestSingleUpload('cud')} loading={uploading} testID="cud-upload-single-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
           ) : null}
           {cloudEnabled ? (
-            <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" style={styles.actionButton} />
+            <Button title="Importa storico" icon="documents" variant="outline" onPress={() => requestBatchUpload('cud-only', false)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-history-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
           ) : null}
           {cloudEnabled ? (
-            <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" style={styles.actionButton} />
+            <Button title="Importa cartella" icon="folder-open" variant="outline" onPress={() => requestBatchUpload('cud-only', true)} disabled={uploading || Platform.OS !== 'web'} testID="cud-upload-folder-button" style={[styles.actionButton, isCompactLayout && styles.actionButtonCompact]} />
           ) : null}
           <View style={styles.actionPlaceholder} />
         </View>
@@ -1262,6 +1265,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     actionButton: {
       flexBasis: '48%',
       minHeight: 46,
+    },
+    actionButtonCompact: {
+      minHeight: 58,
     },
     actionPlaceholder: {
       flexBasis: '48%',

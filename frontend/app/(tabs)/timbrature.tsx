@@ -9,6 +9,7 @@ import {
   Alert,
   FlatList,
   Switch,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -119,6 +120,8 @@ export default function TimbraturaScreen() {
   const { colors } = useAppTheme();
   const { setTodayTimbratura } = useAppStore();
   const styles = createStyles(colors);
+  const { width } = useWindowDimensions();
+  const isCompactLayout = width < 480;
   const [activeTab, setActiveTab] = useState<TabType>('personali');
   const [timbrature, setTimbrature] = useState<Timbratura[]>([]);
   const [timbratureAziendali, setTimbratureAziendali] = useState<TimbraturaAziendale[]>([]);
@@ -575,7 +578,7 @@ export default function TimbraturaScreen() {
       {/* Month/Year Selector */}
       <View style={styles.monthSelector}>
         <TouchableOpacity 
-          style={styles.monthNavButton}
+          style={[styles.monthNavButton, isCompactLayout && styles.monthNavButtonCompact]}
           testID="timbrature-month-prev"
           onPress={() => {
             if (meseSelezionato === 1) {
@@ -594,7 +597,7 @@ export default function TimbraturaScreen() {
         </View>
         
         <TouchableOpacity 
-          style={styles.monthNavButton}
+          style={[styles.monthNavButton, isCompactLayout && styles.monthNavButtonCompact]}
           testID="timbrature-month-next"
           onPress={() => {
             const now = new Date();
@@ -620,21 +623,21 @@ export default function TimbraturaScreen() {
       {/* Tab Bar */}
       <View style={styles.tabBar}>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'personali' && styles.tabActive]}
+          style={[styles.tab, isCompactLayout && styles.tabCompact, activeTab === 'personali' && styles.tabActive]}
           onPress={() => setActiveTab('personali')}
           testID="timbrature-tab-personali"
         >
           <Text style={[styles.tabText, activeTab === 'personali' && styles.tabTextActive]}>Mie</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'aziendali' && styles.tabActive]}
+          style={[styles.tab, isCompactLayout && styles.tabCompact, activeTab === 'aziendali' && styles.tabActive]}
           onPress={() => setActiveTab('aziendali')}
           testID="timbrature-tab-aziendali"
         >
           <Text style={[styles.tabText, activeTab === 'aziendali' && styles.tabTextActive]}>Azienda</Text>
         </TouchableOpacity>
         <TouchableOpacity
-          style={[styles.tab, activeTab === 'confronto' && styles.tabActive]}
+          style={[styles.tab, isCompactLayout && styles.tabCompact, activeTab === 'confronto' && styles.tabActive]}
           onPress={() => setActiveTab('confronto')}
           testID="timbrature-tab-confronto"
         >
@@ -975,6 +978,9 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       paddingVertical: 10,
       borderRadius: 10,
     },
+    tabCompact: {
+      minHeight: 44,
+    },
     tabActive: {
       backgroundColor: `${colors.primary}14`,
       borderWidth: 1,
@@ -1263,7 +1269,14 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       marginBottom: 12,
     },
     monthNavButton: {
+      minWidth: 44,
+      minHeight: 44,
       padding: 8,
+      alignItems: 'center',
+      justifyContent: 'center',
+    },
+    monthNavButtonCompact: {
+      padding: 10,
     },
     monthDisplay: {
       flex: 1,

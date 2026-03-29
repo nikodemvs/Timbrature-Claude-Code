@@ -5,6 +5,22 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Fix UI responsive: portabilità web/mobile tab principali
+
+Cosa:
+- `index.tsx`: KPI row in Home resa responsive su mobile (layout a 2 righe invece di strip troncata) e aumento del padding finale per evitare sovrapposizione visiva con tab bar.
+- `assenze.tsx`: card summary Ferie/Comporto su mobile passate da affiancate a stack verticale per migliorare leggibilità.
+- `timbrature.tsx`: aumentata area touch minima per frecce mese e segmenti tab (target più robusti su mobile).
+- `buste-paga.tsx`: mantenuta griglia 2x2 delle azioni rapide con aumento altezza minima bottoni su mobile per etichette multilinea.
+- Verifica visuale locale eseguita su desktop (1366x900) e mobile (390x844) con Playwright CLI.
+
+Perché:
+- eliminare incoerenze di portabilità grafica tra web e mobile senza cambiare logica funzionale o UX di business.
+
+File: frontend/app/(tabs)/index.tsx, frontend/app/(tabs)/assenze.tsx, frontend/app/(tabs)/timbrature.tsx, frontend/app/(tabs)/buste-paga.tsx, CHANGELOG.md, CHANGES.md, TEST_RUN.md
+
+---
+
 ## 2026-03-29 — Docs: allineamento governance Codex/Claude + ciclo corrente
 
 Cosa:

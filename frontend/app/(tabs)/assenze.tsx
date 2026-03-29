@@ -7,6 +7,7 @@ import {
   RefreshControl,
   TouchableOpacity,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
@@ -36,6 +37,8 @@ const getTipoOptions = (colors: ReturnType<typeof useAppTheme>['colors']): TipoO
 export default function AssenzeScreen() {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
+  const { width } = useWindowDimensions();
+  const isCompactLayout = width < 480;
   const tipoOptions = getTipoOptions(colors);
   const { settings } = useAppStore();
   const oreGiornaliere = settings?.ore_giornaliere ?? 8;
@@ -203,9 +206,9 @@ export default function AssenzeScreen() {
       </View>
 
       {/* Summary Cards */}
-      <View style={styles.summaryContainer}>
+      <View style={[styles.summaryContainer, isCompactLayout && styles.summaryContainerCompact]}>
         {/* Card Ferie — ore primario, giorni secondario */}
-        <Card style={styles.summaryCard}>
+        <Card style={[styles.summaryCard, isCompactLayout && styles.summaryCardCompact]}>
           <View style={styles.summaryIconContainer}>
             <Ionicons name="airplane" size={20} color={colors.ferie} />
           </View>
@@ -232,7 +235,7 @@ export default function AssenzeScreen() {
         </Card>
 
         {/* Card Comporto — giorni primario, ore secondario, barra progresso */}
-        <Card style={styles.summaryCard}>
+        <Card style={[styles.summaryCard, isCompactLayout && styles.summaryCardCompact]}>
           <View style={styles.summaryIconContainer}>
             <Ionicons name="medkit" size={20} color={colors.malattia} />
           </View>
@@ -409,10 +412,16 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
       gap: 12,
       marginBottom: 16,
     },
+    summaryContainerCompact: {
+      flexDirection: 'column',
+    },
     summaryCard: {
       flex: 1,
       alignItems: 'center',
       paddingVertical: 16,
+    },
+    summaryCardCompact: {
+      width: '100%',
     },
     summaryIconContainer: {
       marginBottom: 8,

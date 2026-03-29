@@ -5,6 +5,15 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: totale netto annuo nell'header sezioni Buste Paga
+
+Cosa:
+- `buste-paga.tsx`: `renderYearSection` ora accetta `headerExtra?: string` opzionale. Per la sezione cedolini ogni header anno mostra "Totale netto: €X.XXX" (somma di tutti i netti del gruppo anno). Il totale rispetta il `privacyMode` (mostra `€ ••••` se attivo). Rimosso il badge ridondante con count numerico a destra; semplificato header a sola freccia chevron.
+Perché: l'utente vuole vedere quanto ha guadagnato in un anno senza aprire tutte le mensilità.
+File: frontend/app/(tabs)/buste-paga.tsx
+
+---
+
 ## 2026-03-29 — Feature: timeline visiva timbrature nella card Home
 
 Cosa:

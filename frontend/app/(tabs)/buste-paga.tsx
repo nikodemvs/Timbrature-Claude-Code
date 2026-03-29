@@ -811,7 +811,7 @@ export default function BustePagaScreen() {
     );
   };
 
-  const renderYearSection = <T,>(section: GroupSection, group: YearGroup<T>, renderItem: (item: T) => React.ReactElement) => {
+  const renderYearSection = <T,>(section: GroupSection, group: YearGroup<T>, renderItem: (item: T) => React.ReactElement, headerExtra?: string) => {
     const expanded = expandedYearsBySection[section].includes(group.anno);
 
     return (
@@ -823,14 +823,12 @@ export default function BustePagaScreen() {
           accessibilityLabel={`Sezione anno ${group.anno}`}
           testID={`buste-year-${group.anno}`}
         >
-          <View>
+          <View style={styles.yearHeaderLeft}>
             <Text style={styles.yearTitle}>{group.anno}</Text>
-            <Text style={styles.yearSubtitle}>
-              {group.items.length} elementi
-            </Text>
+            <Text style={styles.yearSubtitle}>{group.items.length} mensilità</Text>
+            {headerExtra ? <Text style={styles.yearTotalLabel}>{headerExtra}</Text> : null}
           </View>
           <View style={styles.yearActions}>
-            <Text style={styles.yearCount}>{group.items.length}</Text>
             <Ionicons name={expanded ? 'chevron-up' : 'chevron-down'} size={18} color={colors.textSecondary} />
           </View>
         </TouchableOpacity>
@@ -936,7 +934,10 @@ export default function BustePagaScreen() {
           <Text style={styles.emptySubtext}>Carica un cedolino PDF o inserisci i valori manualmente.</Text>
         </Card>
       ) : (
-        cedoliniGroups.map((group) => renderYearSection('cedolini', group, (item) => renderBustaItem({ item })))
+        cedoliniGroups.map((group) => {
+          const totaleNetto = group.items.reduce((sum, item) => sum + (item.netto || 0), 0);
+          return renderYearSection('cedolini', group, (item) => renderBustaItem({ item }), `Totale netto: ${fmt(totaleNetto)}`);
+        })
       )}
       <Text style={styles.listTitle}>Archivio PDF</Text>
       {archivioGroups.length === 0 ? (
@@ -1452,10 +1453,19 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     },
     yearHeader: {
       flexDirection: 'row',
-      alignItems: 'center',
+      alignItems: 'flex-start',
       justifyContent: 'space-between',
       gap: 12,
       minHeight: 52,
+    },
+    yearHeaderLeft: {
+      flex: 1,
+    },
+    yearTotalLabel: {
+      fontSize: 12,
+      fontWeight: '600',
+      color: colors.success,
+      marginTop: 2,
     },
     yearTitle: {
       fontSize: 18,

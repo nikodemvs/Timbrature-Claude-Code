@@ -21,7 +21,11 @@
     "web": {
       "bundler": "metro",
       "output": "static",
-      "favicon": "./assets/images/favicon.png"
+      "favicon": "./assets/images/favicon.png",
+      "name": "Timbrature",
+      "shortName": "Timbrature",
+      "backgroundColor": "#ffffff",
+      "themeColor": "#2563EB"
     },
     "plugins": [
       "expo-router",

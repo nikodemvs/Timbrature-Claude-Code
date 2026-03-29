@@ -5,6 +5,20 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — PWA installabile su iPhone (manifest + service worker + meta tag)
+
+Cosa:
+- `frontend/public/manifest.json`: manifest PWA con name, short_name, start_url, display standalone, theme_color #2563EB, icona 192×192.
+- `frontend/public/sw.js`: service worker con strategia network-first, pre-cache di "/" su install, pulizia cache vecchie su activate, fallback alla cache in caso di rete assente.
+- `frontend/app/+html.tsx`: aggiunti `<link rel="manifest">`, meta tag apple-mobile-web-app-capable/status-bar-style/title, `<link rel="apple-touch-icon">`, script inline di registrazione service worker.
+- `frontend/app.json`: blocco web arricchito con name, shortName, backgroundColor, themeColor.
+- `frontend/assets/favicon.png`: icona 192×192 generata (sfondo #2563EB, "T" bianca pixel-art).
+- `dist/` rigenerata: manifest.json e sw.js presenti, index.html contiene i 3 meta tag apple-mobile-web-app.
+Perché: l'app deve essere installabile su iPhone come PWA (Add to Home Screen) con icona, splash e comportamento standalone.
+File: frontend/public/manifest.json, frontend/public/sw.js, frontend/app/+html.tsx, frontend/app.json, frontend/assets/favicon.png
+
+---
+
 ## 2026-03-29 — Fix UI responsive: portabilità web/mobile tab principali
 
 Cosa:

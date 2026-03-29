@@ -27,6 +27,22 @@ export default function Root({ children }: PropsWithChildren) {
           If you want to enable scrolling, remove `ScrollViewStyleReset` and
           set `overflow: auto` on the body style below.
         */}
+        {/* PWA manifest */}
+        <link rel="manifest" href="/manifest.json" />
+
+        {/* iOS PWA meta tags */}
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-title" content="Timbrature" />
+        <link rel="apple-touch-icon" href="/assets/images/favicon.png" />
+
+        {/* Service Worker registration */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `if ('serviceWorker' in navigator) { navigator.serviceWorker.register('/sw.js'); }`,
+          }}
+        />
+
         <ScrollViewStyleReset />
         <style
           dangerouslySetInnerHTML={{

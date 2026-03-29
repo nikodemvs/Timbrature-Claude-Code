@@ -5,3 +5,4 @@ export { InputField } from './InputField';
 export { StatCard } from './StatCard';
 export { LoadingScreen } from './LoadingScreen';
 export { DatePickerField, TimePickerField } from './DateTimePicker';
+export { SwipeableRow } from './SwipeableRow';

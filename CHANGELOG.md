@@ -5,6 +5,17 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: swipe-to-edit su card assenze e cedolini
+
+Cosa:
+- Nuovo componente `SwipeableRow` (`frontend/src/components/SwipeableRow.tsx`) basato su `Swipeable` di `react-native-gesture-handler`. Supporta azioni opzionali `onEdit` e `onDelete` che compaiono con swipe left.
+- `assenze.tsx`: sostituita `TouchableOpacity` + `onLongPress` con `SwipeableRow` → swipe left rivela "Elimina" (rosso). Feedback più naturale rispetto al longPress.
+- `buste-paga.tsx`: ogni cedolino nella lista ora ha `SwipeableRow` → swipe left rivela "Modifica" (apre il detail sheet).
+Perché: la gesture swipe è più scopribile del longPress e coerente con le app native moderne.
+File: frontend/src/components/SwipeableRow.tsx, frontend/src/components/index.ts, frontend/app/(tabs)/assenze.tsx, frontend/app/(tabs)/buste-paga.tsx
+
+---
+
 ## 2026-03-29 — Feature: totale netto annuo nell'header sezioni Buste Paga
 
 Cosa:

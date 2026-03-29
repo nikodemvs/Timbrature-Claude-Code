@@ -13,7 +13,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { useFocusEffect } from 'expo-router';
-import { BottomSheet, Button, Card, InputField, LoadingScreen } from '../../src/components';
+import { BottomSheet, Button, Card, InputField, LoadingScreen, SwipeableRow } from '../../src/components';
 import * as offlineApi from '../../src/services/offlineApi';
 import { BustaPaga, Documento } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
@@ -756,6 +756,7 @@ export default function BustePagaScreen() {
     ) : null;
 
   const renderBustaItem = ({ item }: { item: BustaPaga }) => (
+    <SwipeableRow onEdit={() => openDetail(item)}>
     <Card style={styles.itemCard} onPress={() => openDetail(item)}>
       <View style={styles.cardRow}>
         <View style={styles.iconBox}>
@@ -787,6 +788,7 @@ export default function BustePagaScreen() {
         </View>
       </View>
     </Card>
+    </SwipeableRow>
   );
 
   const renderDocumentoCard = (documento: Documento) => {

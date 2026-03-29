@@ -10,7 +10,7 @@ import {
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
-import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField } from '../../src/components';
+import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, SwipeableRow } from '../../src/components';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
 import { Assenza } from '../../src/types';
@@ -159,7 +159,7 @@ export default function AssenzeScreen() {
   }
 
   const renderAssenza = ({ item }: { item: Assenza }) => (
-    <TouchableOpacity onLongPress={() => handleDelete(item.id)}>
+    <SwipeableRow onDelete={() => handleDelete(item.id)}>
       <Card style={styles.assenzaCard}>
         <View style={styles.assenzaHeader}>
           <View style={[styles.assenzaIcon, { backgroundColor: `${getColorForTipo(item.tipo)}15` }]}>
@@ -183,7 +183,7 @@ export default function AssenzeScreen() {
           </View>
         )}
       </Card>
-    </TouchableOpacity>
+    </SwipeableRow>
   );
 
   return (

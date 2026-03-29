@@ -890,15 +890,41 @@ export async function timbra(
   isReperibilita = false
 ): Promise<Timbratura> {
   const ora = new Date().toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
-  const data = new Date().toISOString().split('T')[0];
+  const dataOggi = new Date().toISOString().split('T')[0];
 
-  // Leggi timbratura locale esistente per oggi
-  const existing = await db.getTimbraturaByData(data) as Record<string, unknown> | null;
-  const marcatureEsistenti: Marcatura[] = existing?.marcature
-    ? (typeof existing.marcature === 'string'
-        ? JSON.parse(existing.marcature as string)
-        : existing.marcature as Marcatura[])
-    : [];
+  // Determina la data effettiva del record: per l'uscita, se oggi non ha un'entrata aperta
+  // verifica se ieri aveva una sessione aperta (timbratura a cavallo di mezzanotte)
+  let data = dataOggi;
+  let existing = await db.getTimbraturaByData(dataOggi) as Record<string, unknown> | null;
+  let isOvernight = false;
+
+  if (tipo === 'uscita') {
+    const marcatureOggi = parseMarcature(existing?.marcature);
+    const hasOpenEntrataOggi =
+      marcatureOggi.length > 0 && marcatureOggi[marcatureOggi.length - 1].tipo === 'entrata';
+
+    if (!hasOpenEntrataOggi) {
+      const ieriDate = new Date();
+      ieriDate.setDate(ieriDate.getDate() - 1);
+      const dataIeri = ieriDate.toISOString().split('T')[0];
+      const existingIeri = await db.getTimbraturaByData(dataIeri) as Record<string, unknown> | null;
+
+      if (existingIeri) {
+        const marcatureIeri = parseMarcature(existingIeri.marcature);
+        const hasOpenEntrataIeri =
+          marcatureIeri.length > 0 && marcatureIeri[marcatureIeri.length - 1].tipo === 'entrata';
+
+        if (hasOpenEntrataIeri) {
+          // Sessione overnight: salva l'uscita sotto la data di ieri
+          data = dataIeri;
+          existing = existingIeri;
+          isOvernight = true;
+        }
+      }
+    }
+  }
+
+  const marcatureEsistenti: Marcatura[] = parseMarcature(existing?.marcature);
 
   // Aggiungi la nuova marcatura
   const nuovaMarcatura: Marcatura = {
@@ -910,17 +936,29 @@ export async function timbra(
   };
   const nuoveMarcature = [...marcatureEsistenti, nuovaMarcatura];
 
-  // Calcola ore
-  const [oreLavorate, oreArrotondate] = tipo === 'uscita' && marcatureEsistenti.length > 0
-    ? calcolaOreLavorate(
-        marcatureEsistenti.find(m => m.tipo === 'entrata')?.ora ?? null,
-        ora
-      )
-    : [0, 0];
+  // Calcola ore su tutte le coppie E/U ordinando per created_at (gestisce overnight)
+  const nuoveMarcatureSorted = [...nuoveMarcature].sort((a, b) =>
+    (a.created_at ?? '').localeCompare(b.created_at ?? '')
+  );
+  let oreLavorate = 0;
+  let oreArrotondate = 0;
+  let entrataOraCalc: string | null = null;
+  for (const m of nuoveMarcatureSorted) {
+    if (m.tipo === 'entrata') {
+      entrataOraCalc = m.ora;
+    } else if (m.tipo === 'uscita' && entrataOraCalc !== null) {
+      const [ol, oa] = calcolaOreLavorate(entrataOraCalc, m.ora);
+      oreLavorate += ol;
+      oreArrotondate += oa;
+      entrataOraCalc = null;
+    }
+  }
 
   const oreReperibilita = calcolaOreReperibilita(nuoveMarcature);
-  const oraEntrata = nuoveMarcature.find(m => m.tipo === 'entrata')?.ora ?? existing?.ora_entrata ?? null;
-  const oraUscita = tipo === 'uscita' ? ora : (existing?.ora_uscita ?? null);
+  const oraEntrata = nuoveMarcatureSorted.find(m => m.tipo === 'entrata')?.ora
+    ?? (existing?.ora_entrata as string | undefined)
+    ?? null;
+  const oraUscita = tipo === 'uscita' ? ora : ((existing?.ora_uscita as string | undefined) ?? null);
 
   // Salva in locale IMMEDIATAMENTE
   const timbraturaLocale: Record<string, unknown> = {
@@ -932,6 +970,7 @@ export async function timbra(
     ore_arrotondate: oreArrotondate,
     ore_reperibilita: oreReperibilita,
     is_reperibilita_attiva: isReperibilita,
+    is_overnight: isOvernight ? 1 : (existing?.is_overnight ?? 0),
   };
   await db.upsertTimbratura(timbraturaLocale);
 
@@ -939,7 +978,6 @@ export async function timbra(
   if (canUseCloud()) {
     try {
       const res = await api.timbra(tipo, isReperibilita);
-      // Aggiorna locale con i dati ufficiali del backend
       await db.upsertTimbratura(res.data as unknown as Record<string, unknown>);
       markSynced();
       void syncOfflineQueue();
@@ -948,6 +986,7 @@ export async function timbra(
       await db.enqueueOperation('timbra', '/timbrature/timbra', 'POST', {
         tipo,
         is_reperibilita: isReperibilita,
+        data,
         timbratura: timbraturaLocale,
       });
     }
@@ -955,6 +994,7 @@ export async function timbra(
     await db.enqueueOperation('timbra', '/timbrature/timbra', 'POST', {
       tipo,
       is_reperibilita: isReperibilita,
+      data,
       timbratura: timbraturaLocale,
     });
   }
@@ -964,8 +1004,43 @@ export async function timbra(
     ...timbraturaLocale,
     id: `local_${data}`,
     marcature: nuoveMarcature,
+    is_overnight: isOvernight || Boolean(existing?.is_overnight),
     created_at: new Date().toISOString(),
   } as unknown as Timbratura;
+}
+
+/**
+ * Restituisce la timbratura attiva: quella di oggi se ha un'entrata aperta,
+ * altrimenti quella di ieri se ha una sessione overnight aperta,
+ * altrimenti quella di oggi (anche se null o chiusa).
+ */
+export async function getActiveTimbratura(): Promise<Timbratura | null> {
+  const dataOggi = new Date().toISOString().split('T')[0];
+  const timbraturaOggi = await getTimbraturaByDate(dataOggi);
+
+  if (timbraturaOggi) {
+    const marcature = timbraturaOggi.marcature ?? [];
+    const hasOpenEntrata =
+      marcature.length > 0 && marcature[marcature.length - 1].tipo === 'entrata';
+    if (hasOpenEntrata) return timbraturaOggi;
+    // Oggi ha record ma nessuna sessione aperta
+    return timbraturaOggi;
+  }
+
+  // Oggi non ha record: controlla ieri per sessione overnight
+  const ieriDate = new Date();
+  ieriDate.setDate(ieriDate.getDate() - 1);
+  const dataIeri = ieriDate.toISOString().split('T')[0];
+  const timbraturaIeri = await getTimbraturaByDate(dataIeri);
+
+  if (timbraturaIeri) {
+    const marcature = timbraturaIeri.marcature ?? [];
+    const hasOpenEntrata =
+      marcature.length > 0 && marcature[marcature.length - 1].tipo === 'entrata';
+    if (hasOpenEntrata) return timbraturaIeri;
+  }
+
+  return null;
 }
 
 export async function getTimbratureAziendali(

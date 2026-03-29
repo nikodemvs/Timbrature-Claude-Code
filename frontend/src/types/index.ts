@@ -46,6 +46,7 @@ export interface Timbratura {
   ore_arrotondate: number;
   ore_reperibilita: number;
   is_reperibilita_attiva: boolean;
+  is_overnight?: boolean;
   note?: string;
   created_at: string;
 }

@@ -16,7 +16,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
-import { Timbratura, WeeklySummary } from '../../src/types';
+import { Marcatura, Timbratura, WeeklySummary } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { useAppStore } from '../../src/store/appStore';
 
@@ -366,7 +366,26 @@ export default function TimbraturaScreen() {
     return <LoadingScreen message="Caricamento timbrature..." />;
   }
 
-  const renderTimbratura = ({ item }: { item: Timbratura }) => (
+  // Raggruppa le marcature in coppie E/U nell'ordine di inserimento
+  const calcolaCoppie = (marcature: Marcatura[]) => {
+    const coppie: Array<{ entrata: string; uscita: string | null }> = [];
+    let entrataOra: string | null = null;
+    for (const m of marcature) {
+      if (m.tipo === 'entrata') {
+        if (entrataOra !== null) coppie.push({ entrata: entrataOra, uscita: null });
+        entrataOra = m.ora;
+      } else if (m.tipo === 'uscita' && entrataOra !== null) {
+        coppie.push({ entrata: entrataOra, uscita: m.ora });
+        entrataOra = null;
+      }
+    }
+    if (entrataOra !== null) coppie.push({ entrata: entrataOra, uscita: null });
+    return coppie;
+  };
+
+  const renderTimbratura = ({ item }: { item: Timbratura }) => {
+    const coppie = calcolaCoppie(item.marcature ?? []);
+    return (
     <Card style={styles.timbraturaCard}>
       <View style={styles.timbraturaHeader}>
         <View>
@@ -375,6 +394,9 @@ export default function TimbraturaScreen() {
         </View>
         <View style={styles.timbraturaHours}>
           <Text style={styles.timbraturaHoursValue}>{item.ore_arrotondate.toFixed(1)}h</Text>
+          {item.is_overnight && (
+            <Ionicons name="moon-outline" size={12} color={colors.warning} style={{ marginLeft: 4 }} />
+          )}
           {item.is_reperibilita_attiva && (
             <View style={styles.reperibilitaBadge}>
               <Ionicons name="call" size={12} color={colors.reperibilita} />
@@ -382,17 +404,34 @@ export default function TimbraturaScreen() {
           )}
         </View>
       </View>
-      <View style={styles.timbraturaBody}>
-        <View style={styles.timeSlot}>
-          <Ionicons name="log-in" size={16} color={colors.success} />
-          <Text style={styles.timeValue}>{item.ora_entrata || '--:--'}</Text>
+      {coppie.length > 0 ? coppie.map((coppia, idx) => (
+        <View key={idx} style={styles.timbraturaBody}>
+          <View style={styles.timeSlot}>
+            <Ionicons name="log-in" size={16} color={colors.success} />
+            <Text style={styles.timeValue}>{coppia.entrata}</Text>
+          </View>
+          <View style={styles.timeLine} />
+          <View style={styles.timeSlot}>
+            <Ionicons name="log-out" size={16} color={coppia.uscita ? colors.error : colors.textSecondary} />
+            <Text style={styles.timeValue}>{coppia.uscita ?? '--:--'}</Text>
+            {item.is_overnight && idx === coppie.length - 1 && coppia.uscita && (
+              <Ionicons name="moon-outline" size={11} color={colors.warning} style={{ marginLeft: 3 }} />
+            )}
+          </View>
         </View>
-        <View style={styles.timeLine} />
-        <View style={styles.timeSlot}>
-          <Ionicons name="log-out" size={16} color={colors.error} />
-          <Text style={styles.timeValue}>{item.ora_uscita || '--:--'}</Text>
+      )) : (
+        <View style={styles.timbraturaBody}>
+          <View style={styles.timeSlot}>
+            <Ionicons name="log-in" size={16} color={colors.success} />
+            <Text style={styles.timeValue}>{item.ora_entrata || '--:--'}</Text>
+          </View>
+          <View style={styles.timeLine} />
+          <View style={styles.timeSlot}>
+            <Ionicons name="log-out" size={16} color={colors.error} />
+            <Text style={styles.timeValue}>{item.ora_uscita || '--:--'}</Text>
+          </View>
         </View>
-      </View>
+      )}
       {item.note && <Text style={styles.timbraturaNote}>{item.note}</Text>}
       <View style={styles.inlineActions}>
         <TouchableOpacity
@@ -415,7 +454,8 @@ export default function TimbraturaScreen() {
         </TouchableOpacity>
       </View>
     </Card>
-  );
+    );
+  };
 
   const renderTimbraturaAziendale = ({ item }: { item: TimbraturaAziendale }) => (
     <Card style={styles.timbraturaCard}>

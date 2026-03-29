@@ -5,6 +5,17 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: timbrature multiple per giorno + overnight + day rollover
+
+Cosa:
+- `timbrature.tsx`: `renderTimbratura` ora itera `marcature[]` come coppie E/U invece di mostrare solo `ora_entrata`/`ora_uscita` aggregate. Ogni coppia entrata/uscita appare su riga separata. Icona luna (🌙) sulla uscita se timbratura overnight.
+- `offlineApi.ts`: `timbra()` gestisce sessioni a cavallo di mezzanotte (Opzione B): se si preme Uscita e oggi non ha un'entrata aperta, cerca ieri per sessione overnight e salva l'uscita sotto la data di ieri. Calcolo ore corretto su tutte le coppie E/U ordinando per `created_at`. Aggiunto `getActiveTimbratura()`: restituisce la timbratura attiva (oggi o ieri overnight).
+- `index.tsx`: `loadData` usa `getActiveTimbratura()` per mostrare sessioni overnight nella card Home. `workedSecondsTotal` gestisce diff negativo per coppie overnight. Timer controlla cambio data ogni secondo: se il giorno cambia e non c'è sessione overnight aperta, ricarica automaticamente.
+- `types/index.ts`: aggiunto `is_overnight?: boolean` a `Timbratura`.
+
+Perché: la card Home mostrava tutte le marcature individualmente ma la tab Timbrature mostrava solo prima/ultima; le sessioni overnight non erano gestite; l'app non rilevava il cambio di giorno a mezzanotte.
+File: frontend/app/(tabs)/timbrature.tsx, frontend/app/(tabs)/index.tsx, frontend/src/services/offlineApi.ts, frontend/src/types/index.ts
+
 ## 2026-03-26 — Fix reset account: pulizia UI locale e sync PIN
 Cosa: aggiornati `frontend/app/(tabs)/altro.tsx`, `frontend/app/_layout.tsx` e `frontend/src/store/appStore.ts` per azzerare lo stato UI locale dopo cancellazione dati/account, riallineare il PIN salvato con lo stato reale e rimuovere i residui di dashboard/account dalla store.
 Perché: evitare che dopo `Elimina dati` o `Elimina account` restassero visibili stato UI, sessione chat, sheet aperti o PIN obsoleto, mantenendo coerente il reset locale con la cancellazione dei dati.

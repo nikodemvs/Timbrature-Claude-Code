@@ -211,7 +211,7 @@ export default function DashboardScreen() {
     try {
       const [dashboardData, timbraturaData] = await Promise.all([
         offlineApi.getDashboard(),
-        offlineApi.getTimbraturaByDate(getTodayString()).catch(() => null),
+        offlineApi.getActiveTimbratura().catch(() => null),
       ]);
       setDashboard(dashboardData);
       setTodayTimbratura(timbraturaData);
@@ -267,9 +267,23 @@ export default function DashboardScreen() {
     }
     const compute = () => Math.max(0, Math.floor((Date.now() - activeSessionStartMs) / 1000));
     setElapsedSeconds(compute());
-    const interval = setInterval(() => setElapsedSeconds(compute()), 1000);
+    const interval = setInterval(() => {
+      // Se il giorno è cambiato e non c'è una sessione overnight aperta, ricarica
+      const dataOggi = new Date().toISOString().split('T')[0];
+      if (todayTimbratura?.data && todayTimbratura.data !== dataOggi) {
+        const ultimaMarcaturaOggi = todayTimbratura.marcature;
+        const hasOpenEntrata =
+          ultimaMarcaturaOggi.length > 0 &&
+          ultimaMarcaturaOggi[ultimaMarcaturaOggi.length - 1].tipo === 'entrata';
+        if (!hasOpenEntrata) {
+          loadData();
+          return;
+        }
+      }
+      setElapsedSeconds(compute());
+    }, 1000);
     return () => clearInterval(interval);
-  }, [activeEntrataOra, activeSessionStartMs]);
+  }, [activeEntrataOra, activeSessionStartMs, todayTimbratura, loadData]);
 
   useEffect(() => {
     if (!activeEntrataMarcatura) {
@@ -315,6 +329,7 @@ export default function DashboardScreen() {
     if (timbraturaLoading) return;
     const marcature = todayTimbratura?.marcature || [];
     const ultima = marcature.length > 0 ? marcature[marcature.length - 1] : null;
+    // Gestisce anche sessioni overnight: ultima marcatura potrebbe essere di ieri
     if (ultima && ultima.tipo === 'entrata') handleTimbra('uscita');
   };
 
@@ -342,7 +357,9 @@ export default function DashboardScreen() {
       if (m.tipo === 'entrata') {
         lastEntrata = m.ora;
       } else if (m.tipo === 'uscita' && lastEntrata) {
-        total += parseOraToSeconds(m.ora) - parseOraToSeconds(lastEntrata);
+        let diff = parseOraToSeconds(m.ora) - parseOraToSeconds(lastEntrata);
+        if (diff < 0) diff += 24 * 3600; // timbratura a cavallo di mezzanotte
+        total += diff;
         lastEntrata = null;
       }
     }

@@ -64,6 +64,21 @@ Questo repository è usato da entrambi gli agenti:
 
 ---
 
+## Chiusura task — commit e push
+
+Regola identica a `AGENTS.md § CHIUSURA TASK`. Applicarla senza eccezioni.
+
+Al termine di ogni task:
+
+1. Aggiorna `CHANGELOG.md`
+2. `git add` dei soli file modificati (mai `-A` o `.`)
+3. `git commit -m "tipo(scope): descrizione concisa"`
+4. `git push` sul branch corrente
+
+Non bypassare i hook (`--no-verify`). Se il pre-commit fallisce, correggi il problema e riprova.
+
+---
+
 ## Orchestrazione Claude Code
 
 **Le regole di orchestrazione in `AGENTS.md` § "ORCHESTRAZIONE AUTONOMA" sono INVALICABILI e si applicano anche a Claude Code senza eccezioni. Questo blocco le ribadisce e le specifica per il contesto Claude Code.**

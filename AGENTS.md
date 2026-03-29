@@ -225,6 +225,19 @@ Non assumere che ci sia un solo utente, ma non implementare autenticazione senza
 
 ---
 
+## CHIUSURA TASK — COMMIT E PUSH
+
+Al termine di ogni task (implementazione, fix, aggiornamento documenti):
+
+1. Aggiorna `CHANGELOG.md` con una riga datata (vedi sezione STORICO)
+2. `git add` dei soli file modificati — mai `git add -A` o `git add .`
+3. `git commit -m "tipo(scope): descrizione concisa"`
+4. `git push` sul branch corrente
+
+Non fare force push su `main`. Se il pre-commit hook fallisce, correggi il problema e riprova — non bypassare con `--no-verify`.
+
+---
+
 ## STORICO (CHANGELOG.md)
 
 Dopo ogni modifica significativa, aggiungi una riga a CHANGELOG.md nella root:

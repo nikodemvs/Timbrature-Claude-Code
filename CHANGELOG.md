@@ -5,6 +5,16 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: reperibilità — toggle ON/OFF + pianificazione ricorrente
+
+Cosa:
+- `index.tsx`: toggle "Reperibilità ON/OFF" nella card Timbratura Rapida (visibile solo quando si è pronti a timbrare entrata). Attivando il toggle, `offlineApi.timbra` riceve `isReperibilita=true` → la marcatura viene salvata con flag reperibilità. Il toggle si resetta dopo l'entrata. Tasto calendario nell'header card apre lo sheet di pianificazione.
+- `app/components/ReperibilitaSheet.tsx`: nuovo bottom sheet per pianificazione ricorrente. Opzioni: tipo (passiva/attiva), data inizio, ora inizio/fine, interventi (solo attiva), ripetizione (mai/settimanale/bisettimanale/mensile), selezione giorni settimana, inverti sab/dom. Genera preview delle date future e chiama `offlineApi.createReperibilita` per ognuna (max 52 occorrenze, orizzonte 1 anno).
+Perché: la reperibilità prima era solo registrabile tramite API; ora si può attivare manualmente al momento della timbratura e pianificare ricorrenze.
+File: frontend/app/(tabs)/index.tsx, frontend/app/components/ReperibilitaSheet.tsx
+
+---
+
 ## 2026-03-29 — Feature: swipe-to-edit su card assenze e cedolini
 
 Cosa:

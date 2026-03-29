@@ -19,6 +19,7 @@ import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { Marcatura } from '../../src/types';
+import { ReperibilitaSheet } from '../components/ReperibilitaSheet';
 
 const CARD_ORDER_KEY = 'home_card_order';
 const CARD_EXPANDED_KEY = 'home_card_expanded';
@@ -286,6 +287,8 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timbraturaLoading, setTimbraturaLoading] = useState(false);
+  const [reperibilita, setReperibilita] = useState(false);
+  const [showReperibilitaSheet, setShowReperibilitaSheet] = useState(false);
   const [expanded, setExpandedState] = useState<Record<string, boolean>>(DEFAULT_EXPANDED);
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
   const [editMode, setEditMode] = useState(false);
@@ -429,8 +432,9 @@ export default function DashboardScreen() {
   const handleTimbra = async (tipo: 'entrata' | 'uscita') => {
     setTimbraturaLoading(true);
     try {
-      const timbraturaResult = await offlineApi.timbra(tipo);
+      const timbraturaResult = await offlineApi.timbra(tipo, reperibilita);
       const sessionStartedAtMs = Date.now();
+      if (tipo === 'entrata') setReperibilita(false); // reset toggle dopo entrata
       setTodayTimbratura(timbraturaResult);
       const ultimaMarcatura = timbraturaResult.marcature[timbraturaResult.marcature.length - 1];
       if (tipo === 'entrata' && ultimaMarcatura?.tipo === 'entrata') {
@@ -547,6 +551,15 @@ export default function DashboardScreen() {
                 )}
               </TouchableOpacity>
               {editMode && <OrderControls index={index} />}
+              {!editMode && (
+                <TouchableOpacity
+                  style={styles.pianificaBtn}
+                  onPress={() => setShowReperibilitaSheet(true)}
+                  accessibilityLabel="Pianifica reperibilità"
+                >
+                  <Ionicons name="calendar-outline" size={18} color={colors.warning} />
+                </TouchableOpacity>
+              )}
             </View>
 
             {!editMode && expanded.timbratura && marcature.length > 0 && (
@@ -596,6 +609,19 @@ export default function DashboardScreen() {
             ) : !editMode && expanded.timbratura ? (
               <Text style={styles.clockEmpty}>Nessuna timbratura oggi</Text>
             ) : null}
+
+            {!editMode && expanded.timbratura && entrataActive && (
+              <TouchableOpacity
+                style={[styles.reperibilita, reperibilita && styles.reperibilitaActive]}
+                onPress={() => setReperibilita(prev => !prev)}
+                testID="dashboard-reperibilita-toggle"
+              >
+                <Ionicons name="call" size={16} color={reperibilita ? colors.textWhite : colors.warning} />
+                <Text style={[styles.reperibilita_label, reperibilita && styles.reperibilita_labelActive]}>
+                  Reperibilità {reperibilita ? 'ON' : 'OFF'}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {!editMode && expanded.timbratura && (
               <View style={styles.clockButtons}>
@@ -908,6 +934,12 @@ export default function DashboardScreen() {
         ))}
         <View style={styles.bottomPadding} />
       </ScrollView>
+
+      <ReperibilitaSheet
+        visible={showReperibilitaSheet}
+        onClose={() => setShowReperibilitaSheet(false)}
+        onDone={loadData}
+      />
     </SafeAreaView>
   );
 }
@@ -1043,6 +1075,33 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     timerActive: { color: colors.success },
     timerStopped: { color: colors.text },
     timerSubLabel: { fontSize: 13, color: colors.textSecondary, marginTop: 6 },
+    pianificaBtn: {
+      padding: 8,
+      marginLeft: 4,
+    },
+    reperibilita: {
+      flexDirection: 'row',
+      alignItems: 'center',
+      gap: 8,
+      alignSelf: 'flex-start',
+      paddingHorizontal: 14,
+      paddingVertical: 8,
+      borderRadius: 20,
+      borderWidth: 1.5,
+      borderColor: colors.warning,
+      marginTop: 12,
+    },
+    reperibilitaActive: {
+      backgroundColor: colors.warning,
+    },
+    reperibilita_label: {
+      fontSize: 14,
+      fontWeight: '600',
+      color: colors.warning,
+    },
+    reperibilita_labelActive: {
+      color: colors.textWhite,
+    },
     kpiRow: { marginBottom: 8 },
     kpiRowContent: { paddingHorizontal: 16, gap: 8 },
     kpiChip: {

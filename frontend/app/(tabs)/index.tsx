@@ -117,6 +117,117 @@ function parseSessionStartMs(data: string, marcatura: Marcatura): number | null 
   ).getTime();
 }
 
+const TIMELINE_START_H = 7;   // 07:00
+const TIMELINE_END_H = 20;    // 20:00
+const TIMELINE_RANGE_S = (TIMELINE_END_H - TIMELINE_START_H) * 3600;
+
+function timeToPercent(ora: string, nowSeconds?: number): number {
+  const parts = ora.split(':');
+  const s = parseInt(parts[0]) * 3600 + parseInt(parts[1]) * 60 + (parts[2] ? parseInt(parts[2]) : 0);
+  const nowS = nowSeconds ?? s;
+  const clamped = Math.max(TIMELINE_START_H * 3600, Math.min(TIMELINE_END_H * 3600, nowS ?? s));
+  return ((clamped - TIMELINE_START_H * 3600) / TIMELINE_RANGE_S) * 100;
+}
+
+interface TimbraturaTimelineProps {
+  marcature: Marcatura[];
+  elapsedSeconds: number;
+  activeEntrataOra: string | null;
+  colors: ReturnType<typeof useAppTheme>['colors'];
+  themeColors: ReturnType<typeof useAppTheme>['themeColors'];
+}
+
+function TimbraturaTimeline({ marcature, elapsedSeconds, activeEntrataOra, colors, themeColors }: TimbraturaTimelineProps) {
+  const segments: { left: number; width: number; active: boolean }[] = [];
+  const ticks: { pct: number; label: string; tipo: 'entrata' | 'uscita' }[] = [];
+
+  let i = 0;
+  while (i < marcature.length) {
+    const m = marcature[i];
+    if (m.tipo === 'entrata') {
+      const entrataOra = m.ora;
+      const entrataS = parseOraToSeconds(entrataOra);
+      const entrataPct = timeToPercent(entrataOra, entrataS);
+      ticks.push({ pct: entrataPct, label: entrataOra.slice(0, 5), tipo: 'entrata' });
+
+      if (i + 1 < marcature.length && marcature[i + 1].tipo === 'uscita') {
+        const uscitaOra = marcature[i + 1].ora;
+        const uscitaS = parseOraToSeconds(uscitaOra);
+        const uscitaPct = timeToPercent(uscitaOra, uscitaS);
+        ticks.push({ pct: uscitaPct, label: uscitaOra.slice(0, 5), tipo: 'uscita' });
+        segments.push({ left: entrataPct, width: Math.max(1, uscitaPct - entrataPct), active: false });
+        i += 2;
+      } else {
+        // sessione aperta: segmento fino a "adesso"
+        const nowTotalS = entrataS + elapsedSeconds;
+        const nowPct = Math.min(100, timeToPercent('', nowTotalS));
+        segments.push({ left: entrataPct, width: Math.max(1, nowPct - entrataPct), active: true });
+        i++;
+      }
+    } else {
+      i++;
+    }
+  }
+
+  return (
+    <View style={timelineStyles.wrapper}>
+      {/* Barra di sfondo */}
+      <View style={[timelineStyles.track, { backgroundColor: colors.border }]}>
+        {segments.map((seg, idx) => (
+          <View
+            key={idx}
+            style={[
+              timelineStyles.segment,
+              {
+                left: `${seg.left}%` as unknown as number,
+                width: `${seg.width}%` as unknown as number,
+                backgroundColor: seg.active ? themeColors.primary + 'AA' : themeColors.primary,
+              },
+            ]}
+          />
+        ))}
+      </View>
+      {/* Tick + etichette */}
+      <View style={timelineStyles.ticksRow}>
+        {ticks.map((tick, idx) => (
+          <View
+            key={idx}
+            style={[
+              timelineStyles.tickContainer,
+              { left: `${tick.pct}%` as unknown as number },
+            ]}
+          >
+            <View style={[
+              timelineStyles.tickDot,
+              { backgroundColor: tick.tipo === 'entrata' ? colors.success : colors.error },
+            ]} />
+            <Text style={[timelineStyles.tickLabel, { color: colors.textSecondary }]}>
+              {tick.label}
+            </Text>
+          </View>
+        ))}
+      </View>
+      {/* Etichette assi */}
+      <View style={timelineStyles.axisRow}>
+        <Text style={[timelineStyles.axisLabel, { color: colors.textSecondary }]}>07:00</Text>
+        <Text style={[timelineStyles.axisLabel, { color: colors.textSecondary }]}>20:00</Text>
+      </View>
+    </View>
+  );
+}
+
+const timelineStyles = StyleSheet.create({
+  wrapper: { marginVertical: 8 },
+  track: { height: 8, borderRadius: 4, position: 'relative', overflow: 'hidden' },
+  segment: { position: 'absolute', top: 0, height: 8, borderRadius: 4 },
+  ticksRow: { position: 'relative', height: 28, marginTop: 4 },
+  tickContainer: { position: 'absolute', alignItems: 'center', transform: [{ translateX: -8 }] },
+  tickDot: { width: 8, height: 8, borderRadius: 4, marginBottom: 2 },
+  tickLabel: { fontSize: 10, fontWeight: '600' },
+  axisRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  axisLabel: { fontSize: 10 },
+});
+
 function getApiErrorMessage(error: unknown, fallback: string) {
   const response = (error as ApiErrorResponse | null)?.response;
   return response?.data?.detail || fallback;
@@ -455,23 +566,13 @@ export default function DashboardScreen() {
             {!editMode && expanded.timbratura && todayTimbratura ? (
               <View style={styles.clockInfo}>
                 {marcature.length > 0 ? (
-                  <View style={styles.marcatureList}>
-                    {marcature.map((m, idx: number) => (
-                      <View key={m.id || idx} style={styles.marcaturaItem}>
-                          <Ionicons
-                            name={m.tipo === 'entrata' ? 'log-in' : 'log-out'}
-                            size={14}
-                            color={m.tipo === 'entrata' ? colors.success : colors.error}
-                          />
-                        <Text style={styles.marcaturaText}>
-                          {m.tipo === 'entrata' ? 'E' : 'U'}: {m.ora}
-                        </Text>
-                        {m.is_reperibilita && (
-                          <Ionicons name="call" size={12} color={colors.warning} style={{ marginLeft: 4 }} />
-                        )}
-                      </View>
-                    ))}
-                  </View>
+                  <TimbraturaTimeline
+                    marcature={marcature}
+                    elapsedSeconds={elapsedSeconds}
+                    activeEntrataOra={activeEntrataOra}
+                    colors={colors}
+                    themeColors={themeColors}
+                  />
                 ) : (
                   <View style={styles.clockTimeRow}>
                     <View style={styles.clockTimeItem}>

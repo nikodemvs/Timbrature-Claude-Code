@@ -5,6 +5,15 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: timeline visiva timbrature nella card Home
+
+Cosa:
+- `index.tsx`: i badge testuali E/U nella card Timbratura Rapida sono sostituiti da una barra timeline orizzontale (07:00–20:00). Segmenti verdi per ogni coppia entrata-uscita completata; segmento semi-trasparente per sessione aperta corrente. Tick colorati (verde=entrata, rosso=uscita) con etichetta oraria sotto. Logica in `TimbraturaTimeline` component inline + helper `timeToPercent`.
+Perché: i badge testuali erano poco leggibili con molte timbrature; la barra mostra a colpo d'occhio la distribuzione oraria della giornata.
+File: frontend/app/(tabs)/index.tsx
+
+---
+
 ## 2026-03-29 — Feature: card Home ibrida — KPI row scrollabile + expanded persistito
 
 Cosa:

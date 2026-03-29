@@ -21,7 +21,16 @@ import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { Marcatura } from '../../src/types';
 
 const CARD_ORDER_KEY = 'home_card_order';
+const CARD_EXPANDED_KEY = 'home_card_expanded';
 const DEFAULT_ORDER = ['timbratura', 'riepilogo', 'stima', 'ferie', 'comporto', 'busta'];
+const DEFAULT_EXPANDED: Record<string, boolean> = {
+  timbratura: true,
+  riepilogo: false,
+  stima: false,
+  ferie: false,
+  comporto: false,
+  busta: false,
+};
 
 interface ApiErrorResponse {
   response?: {
@@ -166,14 +175,7 @@ export default function DashboardScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [timbraturaLoading, setTimbraturaLoading] = useState(false);
-  const [expanded, setExpanded] = useState<Record<string, boolean>>({
-    timbratura: true,
-    riepilogo: false,
-    stima: false,
-    ferie: false,
-    comporto: false,
-    busta: false,
-  });
+  const [expanded, setExpandedState] = useState<Record<string, boolean>>(DEFAULT_EXPANDED);
   const [cardOrder, setCardOrder] = useState<string[]>(DEFAULT_ORDER);
   const [editMode, setEditMode] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
@@ -194,6 +196,27 @@ export default function DashboardScreen() {
       }
     });
   }, []);
+
+  useEffect(() => {
+    AsyncStorage.getItem(CARD_EXPANDED_KEY).then(saved => {
+      if (saved) {
+        try {
+          const parsed = JSON.parse(saved);
+          if (parsed && typeof parsed === 'object') {
+            setExpandedState(prev => ({ ...prev, ...parsed }));
+          }
+        } catch {}
+      }
+    });
+  }, []);
+
+  const setExpanded = (updater: (prev: Record<string, boolean>) => Record<string, boolean>) => {
+    setExpandedState(prev => {
+      const next = updater(prev);
+      AsyncStorage.setItem(CARD_EXPANDED_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
 
   const saveOrder = (newOrder: string[]) => {
     setCardOrder(newOrder);
@@ -731,6 +754,42 @@ export default function DashboardScreen() {
         <Text style={styles.editHint}>Usa ↑ ↓ per riordinare le sezioni</Text>
       )}
 
+      {!editMode && (
+        <ScrollView
+          horizontal
+          showsHorizontalScrollIndicator={false}
+          style={styles.kpiRow}
+          contentContainerStyle={styles.kpiRowContent}
+        >
+          <View style={styles.kpiChip}>
+            <Text style={styles.kpiChipLabel}>Ore mese</Text>
+            <Text style={styles.kpiChipValue}>{data?.mese_corrente?.ore_lavorate?.toFixed(1) ?? '–'}h</Text>
+          </View>
+          <View style={styles.kpiChip}>
+            <Text style={styles.kpiChipLabel}>Straordinari</Text>
+            <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{data?.mese_corrente?.ore_straordinarie?.toFixed(1) ?? '–'}h</Text>
+          </View>
+          <View style={styles.kpiChip}>
+            <Text style={styles.kpiChipLabel}>Ferie disp.</Text>
+            <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) ?? '–'}h</Text>
+          </View>
+          <View style={[styles.kpiChip,
+            data?.comporto?.alert_critico ? styles.kpiChipDanger :
+            data?.comporto?.alert_attenzione ? styles.kpiChipWarning : undefined]}>
+            <Text style={styles.kpiChipLabel}>Comporto</Text>
+            <Text style={[styles.kpiChipValue,
+              data?.comporto?.alert_critico ? { color: colors.error } :
+              data?.comporto?.alert_attenzione ? { color: colors.warning } : undefined]}>
+              {data?.comporto?.giorni_malattia_3_anni ?? '–'}/{data?.comporto?.soglia_critica ?? 180}gg
+            </Text>
+          </View>
+          <View style={styles.kpiChip}>
+            <Text style={styles.kpiChipLabel}>Ticket</Text>
+            <Text style={[styles.kpiChipValue, { color: colors.ticket }]}>{data?.mese_corrente?.ticket_maturati ?? '–'}</Text>
+          </View>
+        </ScrollView>
+      )}
+
       <ScrollView
         style={styles.scrollView}
         contentContainerStyle={styles.content}
@@ -883,4 +942,18 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     timerActive: { color: colors.success },
     timerStopped: { color: colors.text },
     timerSubLabel: { fontSize: 13, color: colors.textSecondary, marginTop: 6 },
+    kpiRow: { marginBottom: 8 },
+    kpiRowContent: { paddingHorizontal: 16, gap: 8 },
+    kpiChip: {
+      alignItems: 'center',
+      backgroundColor: colors.card,
+      borderRadius: 12,
+      paddingHorizontal: 14,
+      paddingVertical: 10,
+      minWidth: 90,
+    },
+    kpiChipDanger: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.error },
+    kpiChipWarning: { backgroundColor: colors.card, borderWidth: 1, borderColor: colors.warning },
+    kpiChipLabel: { fontSize: 11, color: colors.textSecondary, marginBottom: 4, textTransform: 'uppercase', fontWeight: '600' },
+    kpiChipValue: { fontSize: 16, fontWeight: '700', color: colors.text },
   });

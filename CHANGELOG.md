@@ -5,6 +5,15 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: card Home ibrida — KPI row scrollabile + expanded persistito
+
+Cosa:
+- `index.tsx`: aggiunta riga KPI orizzontale scrollabile sopra le card (ore mese, straordinari, ferie disponibili, comporto, ticket). Visibile sempre (tranne in editMode). Chip comporto evidenziato in arancione/rosso se alert attivi.
+- Stato `expanded` delle card ora persiste in AsyncStorage (`home_card_expanded`): ricaricato al mount, salvato ad ogni toggle. Aggiunto `setExpanded` wrapper con side-effect persistenza; `setExpandedState` resta il setter raw di useState.
+File: frontend/app/(tabs)/index.tsx
+
+---
+
 ## 2026-03-29 — Feature: doppia unità ore+giorni nelle card Assenze
 
 Cosa:

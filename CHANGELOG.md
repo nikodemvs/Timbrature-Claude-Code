@@ -5,6 +5,22 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-30 — Deploy backend NAS completato su DS220j
+
+Cosa:
+- Python 3.9.22 installato tramite Package Center DSM.
+- pip installato con `ensurepip` per Python 3.9 (user install in ~/.local).
+- `requirements-nas.txt` aggiornato: `python-multipart` abbassato a 0.0.20 (0.0.22 richiede Python ≥ 3.10), `pdfplumber` abbassato a 0.10.4 (0.11.9 dipende da pdfminer.six==20251230 che richiede Python ≥ 3.10).
+- Tutti i packages installati: fastapi, uvicorn, pydantic, aiosqlite, pdfplumber, PyPDF2, starlette, multipart, dotenv, click, h11, anyio, pydantic-core, Pillow, pypdfium2, pdfminer.six, cryptography, charset-normalizer.
+- File copiati sul NAS via SSH+base64: `server_nas.py`, `start-nas.sh`, `requirements-nas.txt`, `sometime_parser.py`, `zucchetti_parser.py`, `.env` (vuoto, Gemini non usato).
+- Server avviato: `setsid python3.9 -m uvicorn server_nas:app --host 0.0.0.0 --port 8001`.
+- Verifica: `curl http://localhost:8001/openapi.json` → `BustaPaga API v1.0.0`. Porta 8001 in ascolto su 0.0.0.0.
+Perché: deploy completo del backend light sul DS220j. Chat AI disabilitata per design (google-genai assente), tutte le altre funzionalità attive.
+Note: PID 563, processo persistente. SFTP non disponibile sul NAS — trasferimento file via base64 su SSH.
+File: backend/requirements-nas.txt (versioni corrette per Python 3.9)
+
+---
+
 ## 2026-03-29 — Backend NAS light per Synology DS220j
 
 Cosa:

@@ -5,6 +5,18 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Backend NAS light per Synology DS220j
+
+Cosa:
+- `backend/requirements-nas.txt`: dipendenze ridotte senza google-genai (fastapi, uvicorn, pydantic, aiosqlite, pdfplumber, PyPDF2, starlette, multipart, dotenv).
+- `backend/server_nas.py`: copia di server.py con 4 modifiche minime: (1) import google-genai in try/except → se assente genai=None; (2) rimossa type annotation `genai.Client` su `_gemini_client`; (3) lifespan guarda `if genai and api_key:` prima di creare il client; (4) endpoint `/api/chat` ritorna JSON friendly invece di HTTP 500 quando `_gemini_client is None`. Tutto il resto è identico a server.py.
+- `backend/start-nas.sh`: script bash di avvio con `python3 -m uvicorn server_nas:app --host 0.0.0.0 --port 8001 --workers 1`. Richiede `chmod +x` sul NAS.
+- server.py originale NON modificato (zona protetta rispettata).
+Perché: il DS220j (ARM, 512 MB) non può caricare google-genai; la variante NAS mantiene tutte le funzionalità tranne la chat AI.
+File: backend/requirements-nas.txt, backend/server_nas.py, backend/start-nas.sh
+
+---
+
 ## 2026-03-29 — PWA installabile su iPhone (manifest + service worker + meta tag)
 
 Cosa:

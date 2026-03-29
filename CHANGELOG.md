@@ -5,6 +5,15 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Feature: doppia unità ore+giorni nelle card Assenze
+
+Cosa:
+- `assenze.tsx`: card Ferie mostra ore (primario), giorni equivalenti (secondario, calcolati su `ore_giornaliere` da settings, default 8h), riga dettaglio Maturate/Godute con entrambe le unità. Card Comporto mostra giorni (primario), ore equivalenti (secondario), barra di progresso colorata (verde/arancione/rosso in base agli alert). Aggiunto `useAppStore` per leggere `settings.ore_giornaliere`.
+Perché: unità di misura incoerenti (ferie in ore, comporto in giorni) causavano confusione; ora entrambe le card mostrano entrambe le unità.
+File: frontend/app/(tabs)/assenze.tsx
+
+---
+
 ## 2026-03-29 — Feature: funzionalità cloud condizionali (online/offline)
 
 Cosa:

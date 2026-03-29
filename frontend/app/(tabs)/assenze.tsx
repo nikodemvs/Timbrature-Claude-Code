@@ -15,6 +15,7 @@ import * as offlineApi from '../../src/services/offlineApi';
 import { formatDate, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
 import { Assenza } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
+import { useAppStore } from '../../src/store/appStore';
 import { useFocusEffect } from 'expo-router';
 
 type TipoOption = {
@@ -36,6 +37,9 @@ export default function AssenzeScreen() {
   const { colors } = useAppTheme();
   const styles = createStyles(colors);
   const tipoOptions = getTipoOptions(colors);
+  const { settings } = useAppStore();
+  const oreGiornaliere = settings?.ore_giornaliere ?? 8;
+  const oreToGiorni = (ore: number) => (ore / oreGiornaliere).toFixed(1);
   const [assenze, setAssenze] = useState<Assenza[]>([]);
   const [ferieData, setFerieData] = useState<any>(null);
   const [comporto, setComporto] = useState<any>(null);
@@ -200,6 +204,7 @@ export default function AssenzeScreen() {
 
       {/* Summary Cards */}
       <View style={styles.summaryContainer}>
+        {/* Card Ferie — ore primario, giorni secondario */}
         <Card style={styles.summaryCard}>
           <View style={styles.summaryIconContainer}>
             <Ionicons name="airplane" size={20} color={colors.ferie} />
@@ -208,9 +213,25 @@ export default function AssenzeScreen() {
           <Text style={[styles.summaryValue, { color: colors.ferie }]} testID="assenze-ferie-value">
             {ferieData?.saldo_attuale?.toFixed(1) || '0'}h
           </Text>
+          <Text style={styles.summarySubtextSecondary}>
+            {oreToGiorni(ferieData?.saldo_attuale || 0)} gg
+          </Text>
           <Text style={styles.summarySubtext}>disponibili</Text>
+          {(ferieData?.ore_maturate || ferieData?.ore_godute) ? (
+            <View style={styles.ferieDetails}>
+              <Text style={styles.ferieDetailRow}>
+                <Text style={styles.ferieDetailLabel}>Maturate </Text>
+                <Text style={styles.ferieDetailValue}>{ferieData?.ore_maturate?.toFixed(1) || '0'}h · {oreToGiorni(ferieData?.ore_maturate || 0)} gg</Text>
+              </Text>
+              <Text style={styles.ferieDetailRow}>
+                <Text style={styles.ferieDetailLabel}>Godute </Text>
+                <Text style={styles.ferieDetailValue}>{ferieData?.ore_godute?.toFixed(1) || '0'}h · {oreToGiorni(ferieData?.ore_godute || 0)} gg</Text>
+              </Text>
+            </View>
+          ) : null}
         </Card>
-        
+
+        {/* Card Comporto — giorni primario, ore secondario, barra progresso */}
         <Card style={styles.summaryCard}>
           <View style={styles.summaryIconContainer}>
             <Ionicons name="medkit" size={20} color={colors.malattia} />
@@ -224,7 +245,20 @@ export default function AssenzeScreen() {
           ]}>
             {comporto?.giorni_malattia_3_anni || 0}
           </Text>
+          <Text style={styles.summarySubtextSecondary}>
+            {((comporto?.giorni_malattia_3_anni || 0) * oreGiornaliere).toFixed(0)}h equiv.
+          </Text>
           <Text style={styles.summarySubtext}>/ {comporto?.soglia_critica || 180} giorni</Text>
+          {/* Barra progresso */}
+          <View style={styles.comportoBarContainer}>
+            <View style={[
+              styles.comportoBarFill,
+              {
+                width: `${Math.min(100, ((comporto?.giorni_malattia_3_anni || 0) / (comporto?.soglia_critica || 180)) * 100)}%`,
+                backgroundColor: comporto?.alert_critico ? colors.error : comporto?.alert_attenzione ? colors.warning : colors.success,
+              }
+            ]} />
+          </View>
         </Card>
       </View>
 
@@ -395,6 +429,40 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     summarySubtext: {
       fontSize: 12,
       color: colors.textSecondary,
+    },
+    summarySubtextSecondary: {
+      fontSize: 13,
+      fontWeight: '600',
+      color: colors.textSecondary,
+      marginTop: 1,
+    },
+    ferieDetails: {
+      marginTop: 8,
+      width: '100%',
+      gap: 2,
+    },
+    ferieDetailRow: {
+      fontSize: 11,
+      textAlign: 'center',
+    },
+    ferieDetailLabel: {
+      color: colors.textSecondary,
+    },
+    ferieDetailValue: {
+      color: colors.text,
+      fontWeight: '500',
+    },
+    comportoBarContainer: {
+      marginTop: 8,
+      width: '100%',
+      height: 6,
+      backgroundColor: colors.border,
+      borderRadius: 3,
+      overflow: 'hidden',
+    },
+    comportoBarFill: {
+      height: '100%',
+      borderRadius: 3,
     },
     list: {
       paddingHorizontal: 16,

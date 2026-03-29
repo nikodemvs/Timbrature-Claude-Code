@@ -57,16 +57,16 @@ I calcoli di dominio li fa il backend quando online, oppure `calcoli.ts` in loca
 ## Strumenti di controllo e sviluppo
 
 ### Flusso automatico dei test
-- `pre-commit` esegue la suite minima sui file frontend staged.
-- `pre-push` esegue il gate rapido frontend e aggiunge i controlli speciali se il path lo richiede.
-- `CI` esegue sempre il gate rapido frontend e aggiunge i controlli speciali solo quando servono.
+- `pre-commit` esegue solo `pytest -m "unit or api"`.
+- `pre-push` esegue solo `pytest -m "unit or api"`.
+- `CI` esegue il gate rapido frontend e la suite browser (`e2e_smoke`, `e2e`, `visual`) piu i controlli path-aware quando servono.
 - Gate reali:
-  - `pytest -m e2e` quando tocchi flussi utente completi, navigazione o form.
-  - `pytest -m visual` quando tocchi layout, responsive, dark mode o touch target.
-  - `pytest -m "unit or api"` come gate rapido quando il cambiamento impatta anche la logica condivisa o i contratti con il backend.
-  - `pytest -q tests/test_docs_config.py` quando tocchi docs, memory, porte preview o policy operative.
-  - `pytest -q tests/test_offline_runtime.py` quando tocchi offline queue, storage locale, sync o tipi path-based.
-  - `tsc --noEmit` quando tocchi `src/types`, `src/store`, `src/services` o `src/hooks`.
+  - `pytest -m "unit or api"` come gate rapido predefinito in locale.
+  - `pytest -m e2e_smoke` solo in `CI` per smoke browser su bootstrap frontend.
+  - `pytest -m "e2e and not e2e_smoke"` solo in `CI` per flussi utente completi, navigazione o form.
+  - `pytest -m visual` solo in `CI` per layout, responsive, dark mode o touch target.
+  - `pytest -q tests/test_docs_config.py`, `pytest -q tests/test_offline_runtime.py` e `tsc --noEmit` in `CI` quando i path lo richiedono.
+- In locale, per verifiche E2E/visual durante sviluppo usa `playwright` (CLI Skill), `playwright-interactive` e `screenshot`; non usare `pytest -m e2e` o `pytest -m visual` come gate locale.
 - Regola anti-duplicazione:
   - logica pura e calcoli solo in `unit` o nel gate backend;
   - API e storage solo in `api`;
@@ -79,3 +79,7 @@ I calcoli di dominio li fa il backend quando online, oppure `calcoli.ts` in loca
 - `figma`, `figma-implement-design` e `frontend-skill` sono utili quando l'input arriva da mockup o serve alzare il livello della UI.
 - `pdf` è utile per import documentali e flussi che partono da cedolini o CUD.
 - `security-best-practices` è utile quando tocchi dati utente o flussi esposti.
+
+## Allineamento documentale
+- Se aggiorni regole o policy in questo file, aggiorna nella stessa sessione anche `frontend/CLAUDE.md`.
+- Se l'allineamento chiude un ciclo operativo, aggiorna anche i file root `CHANGES.md` e `TEST_RUN.md`.

@@ -29,7 +29,9 @@ Responsabile della verifica della logica paghe, timbrature e parser protetti.
 
 ## Parallelizzazione
 
-- puo lavorare in parallelo con `BACKEND_API_AGENT` e `OFFLINE_DATA_AGENT` come revisore di dominio
+- default: un sub-agent alla volta, in sequenza
+- puo lavorare in parallelo con `BACKEND_API_AGENT` o `OFFLINE_DATA_AGENT` come revisore di dominio solo quando i sub-agent coinvolti sono gia impegnati su task attivi indipendenti e non c'e conflitto di ownership
+- non avvia parallelismo solo per velocizzare
 - passa a `QA_AGENT` i casi numerici da coprire in test unitari e API
 
 ## PROPOSAL GATE RULE

@@ -95,3 +95,7 @@ Python/FastAPI, porta locale di preview 8001, Docker, deploy su Render.
 - `sentry` e `security-best-practices` sono utili per incidenti, regressioni e flussi sensibili.
 - `security-threat-model` e `render-deploy` sono utili quando cambi superfici esposte o deploy.
 - `openai-docs` va usato solo se lavori su integrazioni OpenAI o documentazione di quel stack.
+
+## Allineamento documentale
+- Se aggiorni regole o policy in questo file, aggiorna nella stessa sessione anche `backend/CLAUDE.md`.
+- Se l'allineamento chiude un ciclo operativo, aggiorna anche i file root `CHANGES.md` e `TEST_RUN.md`.

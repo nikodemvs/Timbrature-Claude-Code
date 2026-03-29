@@ -53,6 +53,7 @@ Questo repository è usato da entrambi gli agenti:
 - **Entrambi** leggono `agents/` per i contratti operativi dei sub-agent condivisi
 - La memoria persistente condivisa vive in `memory/MEMORY.md`
 - Entrambi aggiornano `CHANGELOG.md` dopo ogni modifica significativa
+- A fine ciclo, entrambi devono mantenere in sync anche `CHANGES.md` e `TEST_RUN.md`
 
 ---
 
@@ -71,9 +72,10 @@ Regola identica a `AGENTS.md § CHIUSURA TASK`. Applicarla senza eccezioni.
 Al termine di ogni task:
 
 1. Aggiorna `CHANGELOG.md`
-2. `git add` dei soli file modificati (mai `-A` o `.`)
-3. `git commit -m "tipo(scope): descrizione concisa"`
-4. `git push` sul branch corrente
+2. Se il task chiude un ciclo operativo o un allineamento governance, sovrascrivi anche `CHANGES.md` e `TEST_RUN.md` con il ciclo corrente
+3. `git add` dei soli file modificati (mai `-A` o `.`)
+4. `git commit -m "tipo(scope): descrizione concisa"`
+5. `git push` sul branch corrente
 
 Non bypassare i hook (`--no-verify`). Se il pre-commit fallisce, correggi il problema e riprova.
 
@@ -196,16 +198,17 @@ Uso consigliato:
 
 All'inizio di ogni nuova sessione, o quando richiesto esplicitamente, eseguire questa procedura:
 
-1. Leggi tutti i file `.md` di progetto (escluso `node_modules`): `AGENTS.md`, `CLAUDE.md`, `backend/AGENTS.md`, `frontend/AGENTS.md`, `CHANGELOG.md`, `memory/MEMORY.md` e i file di memoria collegati.
+1. Leggi tutti i file `.md` di progetto (escluso `node_modules`): `AGENTS.md`, `CLAUDE.md`, `backend/AGENTS.md`, `frontend/AGENTS.md`, `backend/CLAUDE.md`, `frontend/CLAUDE.md`, `CHANGELOG.md`, `CHANGES.md`, `TEST_RUN.md`, `memory/MEMORY.md` e i file di memoria collegati.
 2. Confronta i contenuti cercando:
    - Zone protette non allineate tra `AGENTS.md` e `CLAUDE.md`
    - Riferimenti a file o percorsi non più esistenti
    - Stato del progetto nella memoria obsoleto rispetto al `CHANGELOG.md`
+   - `CHANGES.md` e `TEST_RUN.md` non allineati all'ultimo ciclo in `CHANGELOG.md`
    - Endpoint API non documentati in `backend/AGENTS.md`
-   - Regole presenti in `CLAUDE.md` ma mancanti in `AGENTS.md` (o viceversa, dove rilevante)
+   - Regole presenti in `CLAUDE.md` ma mancanti in `AGENTS.md` (o viceversa, dove rilevante), incluse varianti `backend/*` e `frontend/*`
 3. Riporta il report all'utente con: problema, gravità, azione consigliata.
 4. Applica le correzioni solo dopo conferma esplicita dell'utente.
-5. Dopo ogni correzione, aggiorna `CHANGELOG.md`.
+5. Dopo ogni correzione, aggiorna `CHANGELOG.md`; se il ciclo viene chiuso o riallineato, aggiorna anche `CHANGES.md` e `TEST_RUN.md`.
 
 ---
 

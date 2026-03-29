@@ -31,8 +31,9 @@ Responsabile del layer offline-first e della persistenza locale.
 
 ## Parallelizzazione
 
-- puo lavorare in parallelo con `FRONTEND_UI_AGENT` su task con ownership separata
-- puo lavorare in parallelo con `BACKEND_API_AGENT` per definire sync e cache se il contratto e chiaro
+- default: un sub-agent alla volta, in sequenza
+- puo lavorare in parallelo con `FRONTEND_UI_AGENT` o `BACKEND_API_AGENT` solo quando i sub-agent coinvolti sono gia impegnati su task attivi indipendenti e con ownership separata
+- non avvia parallelismo solo per velocizzare
 
 ## PROPOSAL GATE RULE
 

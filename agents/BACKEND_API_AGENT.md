@@ -32,8 +32,9 @@ Responsabile dell'implementazione backend fuori dalla zona protetta.
 
 ## Parallelizzazione
 
-- puo lavorare in parallelo con `FRONTEND_UI_AGENT` se il contratto API e stabile
-- puo lavorare in parallelo con `QA_AGENT` per la preparazione dei test di regressione
+- default: un sub-agent alla volta, in sequenza
+- puo lavorare in parallelo con `FRONTEND_UI_AGENT` o `QA_AGENT` solo quando i sub-agent coinvolti sono gia impegnati su task attivi indipendenti e non c'e conflitto di ownership
+- non avvia parallelismo solo per velocizzare
 
 ## PROPOSAL GATE RULE
 

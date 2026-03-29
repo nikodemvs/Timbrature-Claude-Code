@@ -36,13 +36,13 @@ La memoria persistente condivisa con Claude Code vive in `memory/MEMORY.md`.
 
 ### Flusso automatico dei test
 - `pre-commit` esegue solo `pytest -m "unit or api"`.
-- `pre-push` esegue solo `pytest -m "unit or api"` + `pytest -m e2e_smoke`.
-- `CI` esegue il gate rapido e aggiunge i controlli speciali (`e2e`, `visual`, `docs_config`, `offline_runtime`, `tsc`) quando servono.
+- `pre-push` esegue solo `pytest -m "unit or api"`.
+- `CI` esegue il gate rapido e la suite browser (`e2e_smoke`, `e2e`, `visual`) e aggiunge i controlli speciali (`docs_config`, `offline_runtime`, `tsc`) quando servono.
 - Gate reali:
-  - `pytest -m e2e_smoke` nel `pre-push` per smoke browser rapido dell'avvio.
+  - `pytest -m "unit or api"` come gate rapido locale.
+  - `pytest -m e2e_smoke` solo in `CI` per smoke browser rapido dell'avvio.
   - `pytest -m "e2e and not e2e_smoke"` solo in `CI` per flussi utente completi.
   - `pytest -m visual` solo in `CI` per layout, responsive, dark mode e touch target.
-  - `pytest -m "unit or api"` come gate rapido locale.
   - `pytest -q tests/test_docs_config.py`, `pytest -q tests/test_offline_runtime.py` e `tsc --noEmit` in `CI` quando i path lo richiedono.
 - Regola anti-duplicazione:
   - logica pura e calcoli solo in `unit` o nel gate backend;
@@ -71,3 +71,7 @@ Oltre a Playwright (`tests/test_e2e.py` con marker `@pytest.mark.visual`), sono 
 Uso consigliato:
 - Playwright per test visual automatizzati e CI
 - MCP Preview/Chrome per verifica rapida interattiva durante sviluppo (non sostituisce i test formali)
+
+## Allineamento documentale
+- Se aggiorni regole o policy in questo file, aggiorna nella stessa sessione anche `frontend/AGENTS.md`.
+- Se l'allineamento chiude un ciclo operativo, aggiorna anche i file root `CHANGES.md` e `TEST_RUN.md`.

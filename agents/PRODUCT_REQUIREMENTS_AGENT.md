@@ -22,7 +22,9 @@ Responsabile della definizione dei requisiti funzionali.
 
 ## Parallelizzazione
 
-- puo lavorare in parallelo con `ARCHITECTURE_AGENT` se i requisiti di base sono gia chiari
+- default: un sub-agent alla volta, in sequenza
+- puo lavorare in parallelo con `ARCHITECTURE_AGENT` solo quando entrambi gli agenti sono gia impegnati su task attivi indipendenti e i requisiti di base sono gia chiari
+- non avvia parallelismo solo per velocizzare
 - passa a `QA_AGENT` criteri di accettazione e casi limite verificabili
 
 ## PROPOSAL GATE RULE

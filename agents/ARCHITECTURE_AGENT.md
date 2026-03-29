@@ -25,7 +25,9 @@ Responsabile della progettazione tecnica e del routing tra ownership.
 
 ## Parallelizzazione
 
-- puo avviare in parallelo `BACKEND_API_AGENT`, `FRONTEND_UI_AGENT` e `OFFLINE_DATA_AGENT` quando gli ownership non confliggono
+- default: un sub-agent alla volta, in sequenza
+- puo pianificare parallelismo tra `BACKEND_API_AGENT`, `FRONTEND_UI_AGENT` e `OFFLINE_DATA_AGENT` solo quando i sub-agent coinvolti sono gia impegnati su task attivi indipendenti e gli ownership non confliggono
+- non avvia parallelismo solo per velocizzare
 - passa a `QA_AGENT` i rischi da verificare e le regressioni attese
 
 ## PROPOSAL GATE RULE

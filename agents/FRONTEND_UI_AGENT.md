@@ -50,8 +50,9 @@ Nessuna eccezione: anche fix minori visibili all'utente richiedono proposta appr
 
 ## Parallelizzazione
 
-- può lavorare in parallelo con `BACKEND_API_AGENT` quando il contratto è stabile e la proposta UI è già approvata
-- può lavorare in parallelo con `QA_AGENT` per la preparazione dei test visual
+- default: un sub-agent alla volta, in sequenza
+- può lavorare in parallelo con `BACKEND_API_AGENT` o `QA_AGENT` solo quando i sub-agent coinvolti sono già impegnati su task attivi indipendenti, la proposta UI è approvata e non c'e conflitto di ownership
+- non avvia parallelismo solo per velocizzare
 
 ## PROPOSAL GATE RULE
 

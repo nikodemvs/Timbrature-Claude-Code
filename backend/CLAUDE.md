@@ -53,3 +53,7 @@ La memoria persistente condivisa con Claude Code vive in `memory/MEMORY.md`.
 - `sentry`, `security-best-practices` e `security-threat-model` sono i tool da preferire quando tocchi dati sensibili o superfici esposte.
 - `render-deploy` è utile quando lavori sulla configurazione di deploy.
 - `openai-docs` va usato solo per integrazioni OpenAI o docs di quel stack.
+
+## Allineamento documentale
+- Se aggiorni regole o policy in questo file, aggiorna nella stessa sessione anche `backend/AGENTS.md`.
+- Se l'allineamento chiude un ciclo operativo, aggiorna anche i file root `CHANGES.md` e `TEST_RUN.md`.

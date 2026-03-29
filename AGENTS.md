@@ -230,9 +230,10 @@ Non assumere che ci sia un solo utente, ma non implementare autenticazione senza
 Al termine di ogni task (implementazione, fix, aggiornamento documenti):
 
 1. Aggiorna `CHANGELOG.md` con una riga datata (vedi sezione STORICO)
-2. `git add` dei soli file modificati — mai `git add -A` o `git add .`
-3. `git commit -m "tipo(scope): descrizione concisa"`
-4. `git push` sul branch corrente
+2. Se il task chiude un ciclo operativo o allinea la governance, sovrascrivi anche `CHANGES.md` e `TEST_RUN.md` con lo stato corrente del ciclo
+3. `git add` dei soli file modificati — mai `git add -A` o `git add .`
+4. `git commit -m "tipo(scope): descrizione concisa"`
+5. `git push` sul branch corrente
 
 Non fare force push su `main`. Se il pre-commit hook fallisce, correggi il problema e riprova — non bypassare con `--no-verify`.
 
@@ -253,9 +254,13 @@ Questo file è lo storico del progetto. Quando una nuova sessione AI apre il rep
 legge AGENTS.md per le regole e CHANGELOG.md per sapere a che punto è il progetto.
 Non servono altri file di contesto.
 
+`CHANGES.md` e `TEST_RUN.md` sono file di ciclo "rotate-and-replace":
+- devono riflettere sempre l'ultimo ciclo completato
+- se restano indietro rispetto a `CHANGELOG.md`, il ciclo e considerato non allineato e va corretto subito
+
 ---
 
 ## Cartelle ignorabili
 `.emergent/` — non usata attivamente, non toccare.
-`.claude/` — configurazione Claude Code, non toccare.
+`.claude/` — configurazione Claude Code: non toccare salvo richiesta esplicita dell'utente o allineamento documentale concordato.
 `memory/` — memoria persistente di Claude Code, condivisa con Codex tramite `memory/MEMORY.md`; non toccare salvo aggiornare il contesto.

@@ -23,7 +23,9 @@ Responsabile della verifica qualita e delle regressioni.
 
 ## Parallelizzazione
 
-- puo preparare i controlli in parallelo agli agenti di implementazione
+- default: un sub-agent alla volta, in sequenza
+- puo preparare i controlli in parallelo agli agenti di implementazione solo quando i sub-agent coinvolti sono gia impegnati su task attivi indipendenti e non c'e conflitto di ownership
+- non avvia parallelismo solo per velocizzare
 - chiude il task solo dopo aver verificato il perimetro concordato con orchestratore o `ARCHITECTURE_AGENT`
 
 ## PROPOSAL GATE RULE

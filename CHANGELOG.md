@@ -5,6 +5,22 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-29 — Docs: allineamento governance Codex/Claude + ciclo corrente
+
+Cosa:
+- allineate le policy di orchestrazione e parallelismo tra root e contratti in `agents/*.md`: default sequenziale, parallelismo consentito solo con sub-agent gia impegnati su task indipendenti e senza conflitti di ownership.
+- allineata la policy test frontend tra `frontend/AGENTS.md` e `frontend/CLAUDE.md` alla regola corrente: `pre-commit`/`pre-push` solo `pytest -m "unit or api"`, suite browser (`e2e_smoke`, `e2e`, `visual`) solo in CI, verifiche locali visual tramite Playwright/screenshot.
+- chiarito il tracciamento ciclo in `AGENTS.md`, `CLAUDE.md`, `backend/AGENTS.md`, `backend/CLAUDE.md`, `frontend/AGENTS.md`, `frontend/CLAUDE.md`: quando un allineamento chiude il ciclo vanno aggiornati anche `CHANGES.md` e `TEST_RUN.md`.
+- risolta l'ambiguita su `.claude/` in `AGENTS.md`: non toccare salvo richiesta esplicita utente o allineamento documentale concordato.
+
+Perché:
+- evitare drift tra regole Codex/Claude e tra root/sotto-repo.
+- garantire che i cicli siano tracciati in modo completo e coerente, senza gap tra `CHANGELOG.md`, `CHANGES.md` e `TEST_RUN.md`.
+
+File: AGENTS.md, CLAUDE.md, backend/AGENTS.md, backend/CLAUDE.md, frontend/AGENTS.md, frontend/CLAUDE.md, agents/ARCHITECTURE_AGENT.md, agents/BACKEND_API_AGENT.md, agents/FRONTEND_UI_AGENT.md, agents/OFFLINE_DATA_AGENT.md, agents/PAYROLL_LOGIC_AGENT.md, agents/PRODUCT_REQUIREMENTS_AGENT.md, agents/QA_AGENT.md, CHANGELOG.md, CHANGES.md, TEST_RUN.md
+
+---
+
 ## 2026-03-29 — Feature: reperibilità — toggle ON/OFF + pianificazione ricorrente
 
 Cosa:

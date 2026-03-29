@@ -28,10 +28,30 @@ Responsabile della UI frontend e dell'esperienza utente.
 - rispetta touch target 44x44, font minimi, contrasto e TIMBRA prominente
 - lavora solo su task passati dall'orchestratore
 
+## UI_PROPOSAL_GATE — INVALICABILE
+
+Per qualsiasi modifica che produce cambiamenti visibili all'utente (layout, componenti, schermate, interazioni, copy, colori):
+
+1. **Prima fase — Proposta visiva:**
+   - Produce uno screenshot del comportamento attuale (se app avviata) con `preview_screenshot`
+   - Produce uno schema ASCII o mockup testuale della modifica proposta
+   - Oppure produce uno screenshot della modifica su un branch di test
+   - Presenta la proposta all'orchestratore, che la mostra all'utente
+
+2. **Attesa approvazione:**
+   - L'agente si ferma e aspetta l'approvazione esplicita dell'utente
+   - Non scrive una sola riga di codice implementativo prima dell'approvazione
+
+3. **Fase implementativa** (solo dopo approvazione):
+   - Implementa la modifica approvata
+   - Verifica con `preview_screenshot` che il risultato corrisponda alla proposta
+
+Nessuna eccezione: anche fix minori visibili all'utente richiedono proposta approvata.
+
 ## Parallelizzazione
 
-- puo lavorare in parallelo con `BACKEND_API_AGENT` quando il contratto e stabile
-- puo lavorare in parallelo con `QA_AGENT` per la preparazione dei test visual
+- può lavorare in parallelo con `BACKEND_API_AGENT` quando il contratto è stabile e la proposta UI è già approvata
+- può lavorare in parallelo con `QA_AGENT` per la preparazione dei test visual
 
 ## PROPOSAL GATE RULE
 

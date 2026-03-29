@@ -66,23 +66,47 @@ Questo repository è usato da entrambi gli agenti:
 
 ## Orchestrazione Claude Code
 
-### Sistema di agenti
-- **Explore agent** — per esplorare il codebase, cercare file, capire pattern esistenti
-- **Plan agent** — per progettare l'approccio implementativo prima di scrivere codice
-- **general-purpose agent** — per task complessi multi-step o ricerche approfondite
-- I contratti di ownership dei sub-agent di progetto stanno in `agents/`
-- Lancia agenti **in parallelo** quando i task sono indipendenti (singolo messaggio, più tool call)
-- Usa Explore/Plan prima di eseguire modifiche non banali — non assumere, verifica
+**Le regole di orchestrazione in `AGENTS.md` § "ORCHESTRAZIONE AUTONOMA" sono INVALICABILI e si applicano anche a Claude Code senza eccezioni. Questo blocco le ribadisce e le specifica per il contesto Claude Code.**
 
-### Quando esplorare prima di agire
-- Task che toccano più file → Explore agent
-- Nuove funzionalità o refactoring → Plan agent prima di scrivere codice
-- Bug fix su codice non letto → leggi prima con Read/Grep
+### Flusso obbligatorio per ogni richiesta utente
 
-### Tool call parallelism
-- Più letture di file indipendenti → in parallelo
-- Più ricerche → in parallelo
-- Tool che dipendono dal risultato di un altro → in sequenza
+1. **Filtra e comprendi** la richiesta — chiarisci ambiguità, identifica scope e file coinvolti
+2. **Delega al sub-agent adatto** usando il tool `Agent` con il tipo corretto
+3. **Attendi il risultato** prima di procedere al passo successivo
+4. **Esegui direttamente** solo se tutti i sub-agent adatti sono già impegnati su task attivi
+
+Claude Code NON implementa mai direttamente saltando i sub-agent.
+
+### Regola parallelismo (INVALICABILE)
+
+**Default: un sub-agent alla volta, in sequenza.**
+Il parallelismo tra sub-agent è consentito SOLO quando sono già tutti attivi su task indipendenti.
+Il parallelismo di tool call (Read, Grep, letture) su file indipendenti è sempre consentito.
+
+### Regola proposta visiva UI (INVALICABILE)
+
+Se il task impatta UI visibile (schermate, componenti, layout, interazioni):
+1. Delegare a `FRONTEND_UI_AGENT` (subagent_type: `Plan` o `general-purpose`)
+2. L'agente produce **screenshot o schema** della modifica proposta
+3. Presentare la proposta all'utente e attendere approvazione
+4. Solo dopo approvazione: delegare implementazione
+
+### Agenti disponibili (tool Agent)
+
+| subagent_type | Quando usarlo |
+|---------------|--------------|
+| `Explore` | leggere codebase, cercare file, capire pattern |
+| `Plan` | progettare approccio tecnico, ownership, rischi |
+| `general-purpose` | task complessi multi-step, implementazione delegata |
+
+I contratti di ownership stanno in `agents/` — usarli come riferimento nel prompt del sub-agent.
+
+### Sequenza per task non banali
+
+1. Explore → comprendi il codebase coinvolto
+2. Plan → piano tecnico (ARCHITECTURE_AGENT)
+3. general-purpose → implementazione (FRONTEND_UI_AGENT, OFFLINE_DATA_AGENT, ecc.)
+4. general-purpose → verifica (QA_AGENT)
 
 ## Flusso Automatico Dei Test
 

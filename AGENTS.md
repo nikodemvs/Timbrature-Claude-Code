@@ -53,32 +53,61 @@ non si tocca uno senza toccare l'altro.**
 
 Applica queste regole automaticamente in base a cosa stai modificando.
 Non aspettare che l'utente te lo chieda.
+**Queste regole sono INVALICABILI — valgono sia per Codex sia per Claude Code senza eccezioni.**
 
-### Regola di orchestrazione
-- Codex è l'orchestratore del lavoro, non il primo esecutore
-- I sub-agent devono lavorare per ownership chiara e nel proprio ambito di responsabilità
-- Se esiste un sub-agent adatto e libero, il lavoro va delegato a lui prima di essere eseguito dall'orchestratore
-- L'orchestratore esegue direttamente un task solo quando tutti i sub-agent adatti a svolgerlo sono già impegnati
-- Se un sub-agent non riesce a completare il proprio lavoro, non si abbandona subito la delega: prima si tenta di sbloccarlo, restringere meglio il task, reinviargli contesto utile o riassegnare il lavoro a un altro sub-agent equivalente
-- L'orchestratore interviene direttamente solo dopo che i tentativi ragionevoli di far eseguire il task a un sub-agent sono falliti oppure quando non esiste alcun sub-agent compatibile con quel lavoro
-- Quando più sub-agent possono lavorare in parallelo senza conflitti di ownership, vanno saturati prima di spostare nuovo lavoro sull'orchestratore
+### 1. Orchestratore come filtro — SEMPRE prima di qualsiasi lavoro
+
+L'orchestratore NON esegue mai direttamente un task senza averlo prima delegato.
+Il flusso obbligatorio è:
+
+1. **Filtra e comprendi** la richiesta dell'utente — chiarisci ambiguità, identifica scope
+2. **Delega al sub-agent adatto** — passa il task completo con obiettivo, file coinvolti, vincoli
+3. **Attendi il risultato** del sub-agent prima di procedere al passo successivo
+4. **Intervieni direttamente** solo quando tutti i sub-agent adatti sono già impegnati su altri task attivi
+
+Se un sub-agent non riesce a completare il lavoro: prima si tenta di sbloccarlo, restringere il perimetro o riassegnare a un agente equivalente. L'orchestratore esegue direttamente solo dopo che questi tentativi sono falliti.
+
+### 2. Parallelismo — solo quando i sub-agent sono già occupati
+
+**Default: i sub-agent lavorano in sequenza.**
+Il parallelismo è consentito SOLO quando:
+- più sub-agent sono già impegnati su task attivi indipendenti, E
+- non ci sono dipendenze di ownership tra i loro ambiti
+
+Non si avviano mai due sub-agent in parallelo solo per velocizzare — si satura un agente alla volta.
+
+### 3. UI change → proposta visiva prima dell'implementazione (INVALICABILE)
+
+Se un task impatta la UI (componenti, schermate, layout, interazioni visibili):
+
+1. `FRONTEND_UI_AGENT` prepara una **proposta visiva** (screenshot, schema ASCII o mockup)
+   che mostra le modifiche prima di scrivere qualsiasi codice
+2. La proposta viene presentata all'utente per approvazione
+3. Solo dopo approvazione esplicita dell'utente, `FRONTEND_UI_AGENT` implementa
+
+Nessuna modifica visibile all'utente può essere implementata senza proposta approvata.
 
 ### Contratti dei sub-agent
-I contratti condivisi dei sub-agent stanno in `agents/` e sono validi sia per Codex sia per Claude Code.
+I contratti condivisi stanno in `agents/` — validi sia per Codex sia per Claude Code.
 
-- `agents/PRODUCT_REQUIREMENTS_AGENT.md` — definisce requisiti, casi limite e criteri di accettazione
-- `agents/ARCHITECTURE_AGENT.md` — decide ownership, file coinvolti, dipendenze, rischi e parallelizzazione
-- `agents/BACKEND_API_AGENT.md` — possiede backend, endpoint, storage e test API fuori dalla zona protetta
-- `agents/FRONTEND_UI_AGENT.md` — possiede UI, componenti, schermate e test visual/E2E
-- `agents/OFFLINE_DATA_AGENT.md` — possiede SQLite locale, cache, sync, file storage e cloud toggle
-- `agents/PAYROLL_LOGIC_AGENT.md` — presidia algoritmi, parser e mirror frontend/backend senza toccare zone protette senza conferma
-- `agents/QA_AGENT.md` — verifica regressioni, criteri di accettazione e copertura test
+- `agents/PRODUCT_REQUIREMENTS_AGENT.md` — requisiti, casi limite, criteri di accettazione
+- `agents/ARCHITECTURE_AGENT.md` — ownership, file coinvolti, dipendenze, rischi, sequenza
+- `agents/BACKEND_API_AGENT.md` — backend, endpoint, storage, test API
+- `agents/FRONTEND_UI_AGENT.md` — UI, componenti, schermate, proposta visiva, test visual/E2E
+- `agents/OFFLINE_DATA_AGENT.md` — SQLite locale, cache, sync, file storage, cloud toggle
+- `agents/PAYROLL_LOGIC_AGENT.md` — algoritmi, parser, mirror frontend/backend
+- `agents/QA_AGENT.md` — regressioni, criteri di accettazione, copertura test
 
-Per task cross-cutting:
-- `PRODUCT_REQUIREMENTS_AGENT` chiarisce comportamento atteso
-- `ARCHITECTURE_AGENT` prepara il piano tecnico
-- gli agenti di ownership implementano in parallelo dove possibile
-- `QA_AGENT` chiude il giro con le verifiche
+### Sequenza obbligatoria per task non banali
+
+1. `PRODUCT_REQUIREMENTS_AGENT` — se il comportamento atteso non è ancora chiaro
+2. `ARCHITECTURE_AGENT` — per qualsiasi task che tocca ≥ 2 file o aree diverse
+3. Sub-agent di ownership (in sequenza, o in parallelo solo se già occupati):
+   - `FRONTEND_UI_AGENT` → proposta visiva → approvazione utente → implementazione
+   - `BACKEND_API_AGENT`
+   - `OFFLINE_DATA_AGENT`
+   - `PAYROLL_LOGIC_AGENT` se tocca algoritmi o parser
+4. `QA_AGENT` — verifica regressioni e test finali prima del commit
 
 ## STRUMENTI DI CONTROLLO E SVILUPPO
 

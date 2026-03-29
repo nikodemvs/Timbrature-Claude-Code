@@ -882,6 +882,7 @@ export default function DashboardScreen() {
       )}
 
       {!editMode && (
+        <View style={styles.kpiRowWrapper}>
         <ScrollView
           horizontal
           showsHorizontalScrollIndicator={false}
@@ -915,6 +916,7 @@ export default function DashboardScreen() {
             <Text style={[styles.kpiChipValue, { color: colors.ticket }]}>{data?.mese_corrente?.ticket_maturati ?? '–'}</Text>
           </View>
         </ScrollView>
+        </View>
       )}
 
       <ScrollView
@@ -1102,7 +1104,8 @@ const createStyles = (colors: ReturnType<typeof useAppTheme>['colors']) =>
     reperibilita_labelActive: {
       color: colors.textWhite,
     },
-    kpiRow: { marginBottom: 8 },
+    kpiRowWrapper: { height: 72, marginBottom: 8 },
+    kpiRow: { flex: 1 },
     kpiRowContent: { paddingHorizontal: 16, gap: 8 },
     kpiChip: {
       alignItems: 'center',

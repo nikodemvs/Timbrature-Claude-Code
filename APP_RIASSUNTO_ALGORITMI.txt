@@ -1,0 +1,146 @@
+BUSTAPAGA - RIASSUNTO APPLICAZIONE (PER REVIEW ALGORITMI)
+Aggiornato: 2026-03-30
+Repo: Timbrature-Claude-Code
+
+1) SCOPO APP
+- App gestionale per lavoratori dipendenti italiani.
+- Funzioni principali: timbrature, assenze/ferie/comporto, reperibilita, buste paga, dashboard, confronto timbrature personali vs aziendali, chat AI.
+- Modalita operativa: offline-first (il device lavora anche senza rete; il backend fa sync/backup quando online).
+
+2) STACK TECNICO
+Frontend
+- Expo/React Native + TypeScript.
+- Schermate principali in frontend/app/(tabs)/:
+  - index.tsx (dashboard + timbratura rapida)
+  - timbrature.tsx
+  - assenze.tsx
+  - buste-paga.tsx
+  - altro.tsx (statistiche/chat/reperibilita/settings)
+- API layer/sync: frontend/src/services/offlineApi.ts
+- DB locale SQLite: frontend/src/db/localDb.ts
+- Algoritmi mirror frontend: frontend/src/algorithms/calcoli.ts
+
+Backend
+- Python + FastAPI.
+- Server principale: backend/server.py
+- Variante NAS leggera: backend/server_nas.py
+- Parser PDF timbrature: backend/sometime_parser.py, backend/zucchetti_parser.py
+- DB: SQLite (tabella timbrature, assenze, settings, documenti, chat_history, alerts, ecc.)
+
+Deploy NAS (attuale)
+- API: porta 8001 (uvicorn server_nas:app)
+- Web PWA: porta 8083 (python http.server)
+
+3) OFFLINE-FIRST E FLUSSO DATI
+- Le operazioni utente scrivono prima in locale (SQLite).
+- Se online, l'app sincronizza subito col backend.
+- Se offline, le operazioni vengono accodate in offline_queue e sincronizzate dopo.
+- Fonte operativa sul device; backend come servizio di sync/backup.
+
+4) ENDPOINT BACKEND (GRUPPI)
+- /settings, /settings/verify-pin, /dati-personali/cancella, /account/elimina
+- /timbrature (+ /timbrature/timbra, /timbrature/settimana/{data}, /timbrature/{data})
+- /assenze, /ferie/saldo, /malattia/comporto
+- /reperibilita
+- /buste-paga (+ upload)
+- /documenti, /cud/upload
+- /timbrature-aziendali (+ upload/import)
+- /confronto-timbrature
+- /dashboard
+- /statistiche/mensili
+- /alerts
+- /chat (+ history)
+- /health
+
+5) ALGORITMI DI CALCOLO - DOVE SONO
+Fonte di verita backend:
+- backend/server.py
+Mirror frontend (obbligatorio 1:1):
+- frontend/src/algorithms/calcoli.ts
+
+Regola di progetto importante:
+- Se si modifica un algoritmo condiviso, backend e mirror frontend vanno aggiornati insieme.
+
+6) REGOLE DI CALCOLO CHIAVE (STATO ATTUALE)
+6.1 Timbrature e arrotondamento quarti d'ora
+Funzioni:
+- arrotonda_quarti_ora / arrotondaQuartiOra (eccesso)
+- calcola_ore_lavorate / calcolaOreLavorate
+
+Regola aziendale implementata:
+- Entrata: arrotondamento per eccesso al prossimo quarto d'ora.
+- Uscita: arrotondamento per difetto al quarto precedente.
+- Ore arrotondate = uscita_arrotondata - entrata_arrotondata.
+- Ore effettive restano la differenza reale non arrotondata.
+- Gestione overnight: se uscita < entrata, aggiunge 24h.
+
+Esempi:
+- 08:39 -> 17:02 => entrata 08:45, uscita 17:00 => 08:15 arrotondate.
+- 09:30 -> 17:00 => 07:30 arrotondate.
+- 09:46 -> 17:00 => entrata 10:00 => 07:00 arrotondate.
+
+6.2 Timbra live (coppie Entrata/Uscita)
+Backend:
+- calcola_ore_da_marcature: somma ore effettive per coppie E/U.
+- calcola_ore_arrotondate_da_marcature: somma ore arrotondate per coppie E/U.
+- Nel flusso /timbrature/timbra vengono salvate entrambe (effettive + arrotondate).
+
+Frontend offline:
+- offlineApi.ts nel flusso timbra somma per coppie E/U usando calcolaOreLavorate.
+
+6.3 Straordinario
+Funzione: calcola_straordinario / calcolaStraordinario
+- Quota oraria base: 15.50
+- Fasce: 41-48 o >48 ore settimanali
+- Maggiorazioni diverse per giorno/fascia (lun-ven, sabato, domenica)
+- Bonus intervento 100 per sabato_pomeriggio/domenica
+
+6.4 Ticket
+Funzione: calcola_ticket / calcolaTicket
+- Ticket maturo se (ore_lavorate + ore_giustificate) >= 5.
+
+6.5 Reperibilita
+- Passiva: ore * 4.0
+- Attiva: interventi * 100
+- Ore reperibilita da marcature filtrate con is_reperibilita
+
+6.6 Ferie
+Funzione: get_saldo_ferie / calcolaSaldoFerie
+- Monte annuo: 80 ore
+- Maturazione mensile: 6.667
+- Saldo = maturate - godute (anno target)
+
+6.7 Comporto malattia
+Funzione: get_comporto / calcolaComporto
+- Finestra ultimi 3 anni
+- Soglia attenzione: 150 giorni
+- Soglia critica: 180 giorni
+
+6.8 Stima netto dashboard
+Funzione: stimaNetto
+- Base mensile: paga_base + scatti + superminimo + premio_incarico
+- Straordinario stimato su ore oltre 169 con coefficiente 1.18
+- Ticket totale da giorni con ticket * ticket_valore
+- Lordo stimato = base + straordinario + ticket
+- Netto stimato = lordo * 0.72
+
+7) FORMATI UI ORE (STATO ATTUALE)
+- Ore mostrate in formato hh:mm (non decimali) nelle tab operative principali.
+- Timer centrale timbratura rapida in hh:mm (senza secondi).
+- Differenze orarie in confronto con segno (+/-) e formato hh:mm.
+
+8) FILE CHIAVE DA APRIRE PER REVIEW ALGORITMI (ORDINE CONSIGLIATO)
+1. backend/server.py
+2. frontend/src/algorithms/calcoli.ts
+3. frontend/src/services/offlineApi.ts
+4. frontend/src/db/localDb.ts
+5. frontend/app/(tabs)/index.tsx
+6. frontend/app/(tabs)/timbrature.tsx
+
+9) NOTE OPERATIVE PER PROSSIMA SESSIONE
+- Prima di toccare i calcoli: verificare sempre coerenza backend/mirror frontend.
+- Test rapidi consigliati dopo ogni modifica algoritmica:
+  - pytest -m "unit or api"
+  - npx tsc --noEmit (frontend)
+- Sul NAS, dopo modifiche frontend: rigenerare frontend/dist e ricopiare in frontend-web.
+- Sul NAS, dopo modifiche backend: aggiornare backend/server_nas.py e riavviare start-nas.sh.

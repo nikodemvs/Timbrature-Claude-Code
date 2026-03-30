@@ -5,6 +5,23 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-30 — Documento TXT di handoff per review algoritmi
+
+Cosa:
+- Creato `APP_RIASSUNTO_ALGORITMI.txt` in root con una sintesi operativa e tecnica dell'app:
+  - architettura frontend/backend;
+  - flusso offline-first e sincronizzazione;
+  - gruppi endpoint backend;
+  - mappa algoritmi e regole di calcolo attuali (timbrature, straordinario, ticket, ferie, comporto, stima netto);
+  - file chiave da aprire nella prossima sessione per review calcoli.
+Perché:
+- avere un handoff unico, preciso e sintetico per riprendere rapidamente il lavoro sugli algoritmi in una nuova sessione AI.
+File:
+- APP_RIASSUNTO_ALGORITMI.txt
+- CHANGELOG.md
+
+---
+
 ## 2026-03-30 — Timbrature: arrotondamento aziendale per coppia E/U + formato ore `hh:mm`
 
 Cosa:

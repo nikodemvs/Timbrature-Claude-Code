@@ -47,7 +47,9 @@ export interface TimbraturaAziendalePayload {
   anno_riferimento?: number;
 }
 
-const BASE_URL = process.env.EXPO_PUBLIC_BACKEND_URL || '';
+const BASE_URL = typeof window !== 'undefined' && window.location.hostname
+  ? `http://${window.location.hostname}:8001`
+  : (process.env.EXPO_PUBLIC_BACKEND_URL || '');
 
 const api = axios.create({
   baseURL: `${BASE_URL}/api`,

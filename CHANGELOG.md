@@ -5,6 +5,19 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-30 — PWA: BASE_URL dinamico per accesso da rete locale
+
+Cosa:
+- `frontend/src/services/api.ts`: `BASE_URL` ora si adatta all'host corrente nel browser (`window.location.hostname:8001`) invece di usare URL hardcoded. Fallback alla variabile d'ambiente per uso nativo/CI.
+- Ricompilata `dist/` con `expo export --platform web`.
+- 62 file della nuova `dist/` copiati sul NAS in `/volume1/homes/Marco Zambara/timbrature/frontend-web/` via SSH+base64.
+- Web server `python3.9 -m http.server 8083` in esecuzione sul NAS (PID 15223).
+- Verifica: `curl http://localhost:8083/` → HTTP 200.
+Perché: accedendo da `http://192.168.178.34:8083/` la PWA chiamava un backend con IP hardcoded che non funzionava da LAN. Ora usa `window.location.hostname` → punta automaticamente a `192.168.178.34:8001`.
+File: frontend/src/services/api.ts
+
+---
+
 ## 2026-03-30 — Fix autostart backend NAS dopo reboot (DS220j)
 
 Cosa:

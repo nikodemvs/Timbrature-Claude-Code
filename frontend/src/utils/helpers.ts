@@ -22,6 +22,17 @@ export const formatHours = (hours: number): string => {
   return `${h}h ${m}m`;
 };
 
+export const formatHoursHHMM = (hours: number, opts?: { signed?: boolean }): string => {
+  if (!Number.isFinite(hours)) {
+    return '00:00';
+  }
+  const sign = hours < 0 ? '-' : (opts?.signed && hours > 0 ? '+' : '');
+  const totalMinutes = Math.round(Math.abs(hours) * 60);
+  const hh = Math.floor(totalMinutes / 60);
+  const mm = totalMinutes % 60;
+  return `${sign}${String(hh).padStart(2, '0')}:${String(mm).padStart(2, '0')}`;
+};
+
 export const getTodayString = (): string => {
   return format(new Date(), 'yyyy-MM-dd');
 };

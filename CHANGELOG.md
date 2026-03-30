@@ -5,6 +5,40 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-30 — Timbrature: arrotondamento aziendale per coppia E/U + formato ore `hh:mm`
+
+Cosa:
+- `backend/server.py` e `backend/server_nas.py`: `calcola_ore_lavorate` ora applica la regola aziendale corretta (entrata arrotondata per eccesso al quarto, uscita per difetto, poi differenza). Nel flusso `timbra` l’`ore_arrotondate` viene calcolato sommando le ore arrotondate per ogni coppia entrata/uscita, invece di arrotondare il totale a fine giornata.
+- `frontend/src/algorithms/calcoli.ts`: mirror TypeScript allineato 1:1 alla nuova logica backend.
+- `frontend/src/utils/helpers.ts`: aggiunta utility `formatHoursHHMM` (supporto anche al segno per differenze).
+- UI aggiornata da decimale/secondi a `hh:mm` in tutte le tab operative principali:
+  - `frontend/app/(tabs)/index.tsx` (timer centrale senza secondi, “Ore lavorate” della card Timbratura Rapida su logica aziendale, KPI ore in `hh:mm`);
+  - `frontend/app/(tabs)/timbrature.tsx` (ore personali/aziendali/confronto/settimanale in `hh:mm`);
+  - `frontend/app/(tabs)/altro.tsx` (statistiche giorno-settimana-mese-anno in `hh:mm`);
+  - `frontend/app/(tabs)/assenze.tsx` (ore assenze/ferie/comporto in `hh:mm`);
+  - `frontend/app/(tabs)/buste-paga.tsx` (label ore straordinario in `hh:mm`).
+- Test aggiornati in `tests/test_unit.py` e `tests/test_api.py` con nuovi attesi di arrotondamento (inclusi i casi 08:39→17:02, 09:30, 09:46).
+
+Perché:
+- il calcolo precedente arrotondava i minuti residui del totale giornaliero; l’azienda invece valuta entrata e uscita separatamente a quarti d’ora. Questo causava risultati errati (es. 08:39–17:02 mostrato come 8.30 invece di 8.15).
+- l’interfaccia mostrava durate incoerenti (secondi e ore decimali), non allineate al modello aziendale.
+
+File:
+- backend/server.py
+- backend/server_nas.py
+- frontend/src/algorithms/calcoli.ts
+- frontend/src/utils/helpers.ts
+- frontend/app/(tabs)/index.tsx
+- frontend/app/(tabs)/timbrature.tsx
+- frontend/app/(tabs)/altro.tsx
+- frontend/app/(tabs)/assenze.tsx
+- frontend/app/(tabs)/buste-paga.tsx
+- tests/test_unit.py
+- tests/test_api.py
+- CHANGELOG.md
+
+---
+
 ## 2026-03-30 — PWA: BASE_URL dinamico per accesso da rete locale
 
 Cosa:

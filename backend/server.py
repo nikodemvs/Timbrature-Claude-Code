@@ -1450,16 +1450,14 @@ def _build_manual_marcature(
     return marcature
 
 def arrotonda_quarti_ora(minuti: int) -> int:
-    if minuti == 0:
+    if minuti <= 0:
         return 0
-    elif minuti <= 15:
-        return 15
-    elif minuti <= 30:
-        return 30
-    elif minuti <= 45:
-        return 45
-    else:
-        return 60
+    return ((minuti + 14) // 15) * 15
+
+def arrotonda_quarti_ora_difetto(minuti: int) -> int:
+    if minuti <= 0:
+        return 0
+    return (minuti // 15) * 15
 
 def calcola_ore_lavorate(ora_entrata: str, ora_uscita: str) -> tuple:
     if not ora_entrata or not ora_uscita:
@@ -1467,17 +1465,20 @@ def calcola_ore_lavorate(ora_entrata: str, ora_uscita: str) -> tuple:
     try:
         h1, m1 = map(int, ora_entrata.split(':'))
         h2, m2 = map(int, ora_uscita.split(':'))
-        minuti_totali = (h2 * 60 + m2) - (h1 * 60 + m1)
-        if minuti_totali < 0:
-            minuti_totali += 24 * 60
+        minuti_entrata = (h1 * 60) + m1
+        minuti_uscita = (h2 * 60) + m2
+
+        if minuti_uscita < minuti_entrata:
+            minuti_uscita += 24 * 60
+
+        minuti_totali = minuti_uscita - minuti_entrata
         ore_effettive = minuti_totali / 60
-        ore_intere = minuti_totali // 60
-        minuti_residui = minuti_totali % 60
-        minuti_arrotondati = arrotonda_quarti_ora(minuti_residui)
-        if minuti_arrotondati == 60:
-            ore_arrotondate = ore_intere + 1
-        else:
-            ore_arrotondate = ore_intere + (minuti_arrotondati / 60)
+
+        # Regola aziendale: entrata per eccesso al quarto, uscita per difetto al quarto.
+        minuti_entrata_arrotondati = ((minuti_entrata + 14) // 15) * 15
+        minuti_uscita_arrotondati = (minuti_uscita // 15) * 15
+        minuti_totali_arrotondati = max(0, minuti_uscita_arrotondati - minuti_entrata_arrotondati)
+        ore_arrotondate = minuti_totali_arrotondati / 60
         return round(ore_effettive, 2), round(ore_arrotondate, 2)
     except Exception:
         return 0.0, 0.0
@@ -1521,6 +1522,19 @@ def calcola_ore_da_marcature(marcature: List[Dict]) -> float:
         elif m["tipo"] == "uscita" and entrata_corrente:
             ore, _ = calcola_ore_lavorate(entrata_corrente, m["ora"])
             ore_totali += ore
+            entrata_corrente = None
+    return ore_totali
+
+def calcola_ore_arrotondate_da_marcature(marcature: List[Dict]) -> float:
+    sorted_m = sorted(marcature, key=lambda x: x["ora"])
+    ore_totali = 0.0
+    entrata_corrente = None
+    for m in sorted_m:
+        if m["tipo"] == "entrata":
+            entrata_corrente = m["ora"]
+        elif m["tipo"] == "uscita" and entrata_corrente:
+            _, ore_arrotondate = calcola_ore_lavorate(entrata_corrente, m["ora"])
+            ore_totali += ore_arrotondate
             entrata_corrente = None
     return ore_totali
 
@@ -1809,6 +1823,7 @@ async def timbra(tipo: str, is_reperibilita: bool = False):
             )
         marcature.append(nuova_marcatura)
         ore_totali = calcola_ore_da_marcature(marcature)
+        ore_arrotondate_totali = calcola_ore_arrotondate_da_marcature(marcature)
         ore_reperibilita = calcola_ore_reperibilita(marcature)
         entrate = [m for m in marcature if m["tipo"] == "entrata"]
         uscite = [m for m in marcature if m["tipo"] == "uscita"]
@@ -1819,7 +1834,7 @@ async def timbra(tipo: str, is_reperibilita: bool = False):
                ore_lavorate=?, ore_arrotondate=?, ore_reperibilita=?,
                is_reperibilita_attiva=? WHERE data=?""",
             [json.dumps(marcature), prima_entrata, ultima_uscita,
-             ore_totali, round(ore_totali * 4) / 4, ore_reperibilita,
+             ore_totali, ore_arrotondate_totali, ore_reperibilita,
              int(any(m.get("is_reperibilita") for m in marcature)), data]
         )
         await _db.commit()

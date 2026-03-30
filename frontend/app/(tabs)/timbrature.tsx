@@ -16,7 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, TimePickerField } from '../../src/components';
 import * as offlineApi from '../../src/services/offlineApi';
-import { formatDate, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
+import { formatDate, formatHoursHHMM, getGiornoSettimana, getTodayString } from '../../src/utils/helpers';
 import { Marcatura, Timbratura, WeeklySummary } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { useAppStore } from '../../src/store/appStore';
@@ -396,7 +396,7 @@ export default function TimbraturaScreen() {
           <Text style={styles.timbraturaDay}>{getGiornoSettimana(item.data)}</Text>
         </View>
         <View style={styles.timbraturaHours}>
-          <Text style={styles.timbraturaHoursValue}>{item.ore_arrotondate.toFixed(1)}h</Text>
+          <Text style={styles.timbraturaHoursValue}>{formatHoursHHMM(item.ore_arrotondate ?? 0)}</Text>
           {item.is_overnight && (
             <Ionicons name="moon-outline" size={12} color={colors.warning} style={{ marginLeft: 4 }} />
           )}
@@ -468,7 +468,7 @@ export default function TimbraturaScreen() {
           <Text style={styles.timbraturaDay}>{getGiornoSettimana(item.data)}</Text>
         </View>
         <View style={styles.timbraturaHours}>
-          <Text style={[styles.timbraturaHoursValue, { color: colors.secondary }]}>{item.ore_lavorate.toFixed(1)}h</Text>
+          <Text style={[styles.timbraturaHoursValue, { color: colors.secondary }]}>{formatHoursHHMM(item.ore_lavorate ?? 0)}</Text>
         </View>
       </View>
       <View style={styles.timbraturaBody}>
@@ -496,7 +496,7 @@ export default function TimbraturaScreen() {
         {item.has_discrepancy && (
           <View style={styles.warningBadge}>
             <Ionicons name="warning" size={16} color={colors.warning} />
-            <Text style={styles.warningText}>{item.differenza_ore > 0 ? '+' : ''}{item.differenza_ore.toFixed(1)}h</Text>
+            <Text style={styles.warningText}>{formatHoursHHMM(item.differenza_ore ?? 0, { signed: true })}</Text>
           </View>
         )}
       </View>
@@ -507,7 +507,7 @@ export default function TimbraturaScreen() {
         <Text style={styles.confrontoValue}>
           {item.personale_entrata || '--:--'} - {item.personale_uscita || '--:--'}
         </Text>
-        <Text style={[styles.confrontoOre, { color: colors.primary }]}>{item.personale_ore.toFixed(1)}h</Text>
+        <Text style={[styles.confrontoOre, { color: colors.primary }]}>{formatHoursHHMM(item.personale_ore ?? 0)}</Text>
       </View>
       
       {/* Aziendale */}
@@ -516,7 +516,7 @@ export default function TimbraturaScreen() {
         <Text style={styles.confrontoValue}>
           {item.aziendale_entrata || '--:--'} - {item.aziendale_uscita || '--:--'}
         </Text>
-        <Text style={[styles.confrontoOre, { color: colors.secondary }]}>{item.aziendale_ore.toFixed(1)}h</Text>
+        <Text style={[styles.confrontoOre, { color: colors.secondary }]}>{formatHoursHHMM(item.aziendale_ore ?? 0)}</Text>
       </View>
       
       {item.aziendale_descrizione && (
@@ -663,18 +663,18 @@ export default function TimbraturaScreen() {
               </Text>
               <View style={styles.summaryStats}>
                 <View style={styles.summaryStat}>
-                  <Text style={styles.summaryValue}>{weeklySummary.ore_totali.toFixed(1)}</Text>
+                  <Text style={styles.summaryValue}>{formatHoursHHMM(weeklySummary.ore_totali ?? 0)}</Text>
                   <Text style={styles.summaryLabel}>Ore Totali</Text>
                 </View>
                 <View style={styles.summaryStat}>
                   <Text style={[styles.summaryValue, { color: colors.success }]}>
-                    {weeklySummary.ore_ordinarie.toFixed(1)}
+                    {formatHoursHHMM(weeklySummary.ore_ordinarie ?? 0)}
                   </Text>
                   <Text style={styles.summaryLabel}>Ordinarie</Text>
                 </View>
                 <View style={styles.summaryStat}>
                   <Text style={[styles.summaryValue, { color: colors.overtime }]}>
-                    {weeklySummary.ore_straordinarie.toFixed(1)}
+                    {formatHoursHHMM(weeklySummary.ore_straordinarie ?? 0)}
                   </Text>
                   <Text style={styles.summaryLabel}>Straordinari</Text>
                 </View>
@@ -721,12 +721,12 @@ export default function TimbraturaScreen() {
               <Text style={styles.summaryTitle}>Riepilogo Confronto</Text>
               <View style={styles.summaryStats}>
                 <View style={styles.summaryStat}>
-                  <Text style={styles.summaryValue}>{confrontoRiepilogo.ore_personali_totali?.toFixed(1) || '0.0'}</Text>
+                  <Text style={styles.summaryValue}>{formatHoursHHMM(confrontoRiepilogo.ore_personali_totali ?? 0)}</Text>
                   <Text style={styles.summaryLabel}>Mie Ore</Text>
                 </View>
                 <View style={styles.summaryStat}>
                   <Text style={[styles.summaryValue, { color: colors.secondary }]}>
-                    {confrontoRiepilogo.ore_aziendali_totali.toFixed(1)}
+                    {formatHoursHHMM(confrontoRiepilogo.ore_aziendali_totali ?? 0)}
                   </Text>
                   <Text style={styles.summaryLabel}>Ore Azienda</Text>
                 </View>
@@ -735,7 +735,7 @@ export default function TimbraturaScreen() {
                     styles.summaryValue,
                     { color: differenzaOreTotale > 0 ? colors.success : differenzaOreTotale < 0 ? colors.error : colors.text }
                   ]}>
-                    {differenzaOreTotale > 0 ? '+' : ''}{differenzaOreTotale.toFixed(1)}
+                    {formatHoursHHMM(differenzaOreTotale, { signed: true })}
                   </Text>
                   <Text style={styles.summaryLabel}>Differenza</Text>
                 </View>

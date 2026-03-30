@@ -13,7 +13,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { Card, Button, BottomSheet, InputField, LoadingScreen, DatePickerField, SwipeableRow } from '../../src/components';
 import * as offlineApi from '../../src/services/offlineApi';
-import { formatDate, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
+import { formatDate, formatHoursHHMM, getTipoAssenzaLabel, getTodayString } from '../../src/utils/helpers';
 import { Assenza } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { useAppStore } from '../../src/store/appStore';
@@ -175,7 +175,7 @@ export default function AssenzeScreen() {
             </Text>
           </View>
           <View style={styles.assenzaHours}>
-            <Text style={styles.assenzaHoursValue}>{item.ore_totali}h</Text>
+            <Text style={styles.assenzaHoursValue}>{formatHoursHHMM(item.ore_totali || 0)}</Text>
           </View>
         </View>
         {item.note && <Text style={styles.assenzaNote}>{item.note}</Text>}
@@ -214,7 +214,7 @@ export default function AssenzeScreen() {
           </View>
           <Text style={styles.summaryLabel}>Ferie</Text>
           <Text style={[styles.summaryValue, { color: colors.ferie }]} testID="assenze-ferie-value">
-            {ferieData?.saldo_attuale?.toFixed(1) || '0'}h
+            {formatHoursHHMM(ferieData?.saldo_attuale || 0)}
           </Text>
           <Text style={styles.summarySubtextSecondary}>
             {oreToGiorni(ferieData?.saldo_attuale || 0)} gg
@@ -224,11 +224,11 @@ export default function AssenzeScreen() {
             <View style={styles.ferieDetails}>
               <Text style={styles.ferieDetailRow}>
                 <Text style={styles.ferieDetailLabel}>Maturate </Text>
-                <Text style={styles.ferieDetailValue}>{ferieData?.ore_maturate?.toFixed(1) || '0'}h · {oreToGiorni(ferieData?.ore_maturate || 0)} gg</Text>
+                <Text style={styles.ferieDetailValue}>{formatHoursHHMM(ferieData?.ore_maturate || 0)} · {oreToGiorni(ferieData?.ore_maturate || 0)} gg</Text>
               </Text>
               <Text style={styles.ferieDetailRow}>
                 <Text style={styles.ferieDetailLabel}>Godute </Text>
-                <Text style={styles.ferieDetailValue}>{ferieData?.ore_godute?.toFixed(1) || '0'}h · {oreToGiorni(ferieData?.ore_godute || 0)} gg</Text>
+                <Text style={styles.ferieDetailValue}>{formatHoursHHMM(ferieData?.ore_godute || 0)} · {oreToGiorni(ferieData?.ore_godute || 0)} gg</Text>
               </Text>
             </View>
           ) : null}
@@ -249,7 +249,7 @@ export default function AssenzeScreen() {
             {comporto?.giorni_malattia_3_anni || 0}
           </Text>
           <Text style={styles.summarySubtextSecondary}>
-            {((comporto?.giorni_malattia_3_anni || 0) * oreGiornaliere).toFixed(0)}h equiv.
+            {formatHoursHHMM((comporto?.giorni_malattia_3_anni || 0) * oreGiornaliere)} equiv.
           </Text>
           <Text style={styles.summarySubtext}>/ {comporto?.soglia_critica || 180} giorni</Text>
           {/* Barra progresso */}

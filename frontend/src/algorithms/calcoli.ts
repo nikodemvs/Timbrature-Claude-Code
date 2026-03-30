@@ -75,11 +75,13 @@ export interface ComportoResult {
 // ─── arrotonda_quarti_ora (L1452) ─────────────────────────────────────────────
 
 export function arrotondaQuartiOra(minuti: number): number {
-  if (minuti === 0) return 0;
-  else if (minuti <= 15) return 15;
-  else if (minuti <= 30) return 30;
-  else if (minuti <= 45) return 45;
-  else return 60;
+  if (minuti <= 0) return 0;
+  return Math.ceil(minuti / 15) * 15;
+}
+
+export function arrotondaQuartiOraDifetto(minuti: number): number {
+  if (minuti <= 0) return 0;
+  return Math.floor(minuti / 15) * 15;
 }
 
 // ─── calcola_ore_lavorate (L1464) ─────────────────────────────────────────────
@@ -92,18 +94,19 @@ export function calcolaOreLavorate(
   try {
     const [h1, m1] = oraEntrata.split(':').map(Number);
     const [h2, m2] = oraUscita.split(':').map(Number);
-    let minutiTotali = (h2 * 60 + m2) - (h1 * 60 + m1);
-    if (minutiTotali < 0) minutiTotali += 24 * 60;
+    const minutiEntrata = (h1 * 60) + m1;
+    let minutiUscita = (h2 * 60) + m2;
+    if (minutiUscita < minutiEntrata) minutiUscita += 24 * 60;
+
+    const minutiTotali = minutiUscita - minutiEntrata;
     const oreEffettive = minutiTotali / 60;
-    const oreIntere = Math.floor(minutiTotali / 60);
-    const minutiResidui = minutiTotali % 60;
-    const minutiArrotondati = arrotondaQuartiOra(minutiResidui);
-    let oreArrotondate: number;
-    if (minutiArrotondati === 60) {
-      oreArrotondate = oreIntere + 1;
-    } else {
-      oreArrotondate = oreIntere + (minutiArrotondati / 60);
-    }
+
+    // Regola aziendale: entrata per eccesso al quarto, uscita per difetto al quarto.
+    const minutiEntrataArrotondati = Math.ceil(minutiEntrata / 15) * 15;
+    const minutiUscitaArrotondati = Math.floor(minutiUscita / 15) * 15;
+    const minutiTotaliArrotondati = Math.max(0, minutiUscitaArrotondati - minutiEntrataArrotondati);
+    const oreArrotondate = minutiTotaliArrotondati / 60;
+
     return [Math.round(oreEffettive * 100) / 100, Math.round(oreArrotondate * 100) / 100];
   } catch {
     return [0.0, 0.0];

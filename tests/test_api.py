@@ -331,7 +331,7 @@ async def test_api_timbrature_lista_creazione_duplicato_ed_edge_notturno(client_
     assert vuota.json() == []
     assert creata.status_code == 200
     assert creata.json()["ore_lavorate"] == 1.33
-    assert creata.json()["ore_arrotondate"] == 1.5
+    assert creata.json()["ore_arrotondate"] == 1.0
     assert len(lista.json()) == 1
     assert duplicata.status_code == 400
     assert duplicata.json()["detail"] == "Timbratura già esistente per questa data"

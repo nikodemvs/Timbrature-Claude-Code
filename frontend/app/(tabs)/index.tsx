@@ -16,7 +16,8 @@ import { useFocusEffect } from 'expo-router';
 import { Card, StatCard, LoadingScreen } from '../../src/components';
 import { useAppStore } from '../../src/store/appStore';
 import * as offlineApi from '../../src/services/offlineApi';
-import { formatCurrency, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
+import { formatCurrency, formatHoursHHMM, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
+import { calcolaOreLavorate } from '../../src/algorithms/calcoli';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { Marcatura } from '../../src/types';
@@ -78,10 +79,10 @@ interface DashboardStimaFields {
 }
 
 function formatHMS(totalSeconds: number): string {
-  const h = Math.floor(totalSeconds / 3600);
-  const m = Math.floor((totalSeconds % 3600) / 60);
-  const s = totalSeconds % 60;
-  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+  const totalMinutes = Math.floor(totalSeconds / 60);
+  const h = Math.floor(totalMinutes / 60);
+  const m = totalMinutes % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 }
 
 function parseOraToSeconds(ora: string): number {
@@ -487,6 +488,7 @@ export default function DashboardScreen() {
     ? formatStimaPagamentoPrevisto(data.mese_corrente.mese, data.mese_corrente.anno, data.stime)
     : formatStimaPagamentoPrevisto(today.getMonth() + 1, today.getFullYear(), data?.stime);
   const marcature = todayTimbratura?.marcature || [];
+  const marcatureOrdinate = [...marcature].sort((a, b) => (a.created_at ?? '').localeCompare(b.created_at ?? ''));
   const ultimaMarcatura = marcature.length > 0 ? marcature[marcature.length - 1] : null;
   const entrataActive = !ultimaMarcatura || ultimaMarcatura.tipo === 'uscita';
   const uscitaActive = ultimaMarcatura && ultimaMarcatura.tipo === 'entrata';
@@ -495,7 +497,7 @@ export default function DashboardScreen() {
   const workedSecondsTotal = (() => {
     let total = 0;
     let lastEntrata: string | null = null;
-    for (const m of marcature) {
+    for (const m of marcatureOrdinate) {
       if (m.tipo === 'entrata') {
         lastEntrata = m.ora;
       } else if (m.tipo === 'uscita' && lastEntrata) {
@@ -509,7 +511,29 @@ export default function DashboardScreen() {
     if (activeEntrataOra) total += elapsedSeconds;
     return total;
   })();
-  const workedHoursDecimal = workedSecondsTotal / 3600;
+  const workedHoursRoundedDecimal = (() => {
+    let total = 0;
+    let lastEntrata: string | null = null;
+
+    for (const m of marcatureOrdinate) {
+      if (m.tipo === 'entrata') {
+        lastEntrata = m.ora;
+      } else if (m.tipo === 'uscita' && lastEntrata) {
+        const [, oreArrotondate] = calcolaOreLavorate(lastEntrata, m.ora);
+        total += oreArrotondate;
+        lastEntrata = null;
+      }
+    }
+
+    if (activeEntrataOra) {
+      const now = new Date();
+      const oraCorrente = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+      const [, oreArrotondateParziali] = calcolaOreLavorate(activeEntrataOra, oraCorrente);
+      total += oreArrotondateParziali;
+    }
+
+    return total;
+  })();
 
   // Frecce di riordino mostrate in modalità modifica
   const OrderControls = ({ index }: { index: number }) => (
@@ -605,7 +629,7 @@ export default function DashboardScreen() {
                 <View style={styles.oreTotaliRow}>
                   <Text style={styles.oreTotaliLabel}>Ore lavorate:</Text>
                   <Text style={styles.oreTotaliValue}>
-                    {workedHoursDecimal.toFixed(2)}h
+                    {formatHoursHHMM(workedHoursRoundedDecimal)}
                   </Text>
                 </View>
               </View>
@@ -682,8 +706,8 @@ export default function DashboardScreen() {
           >
             {!editMode && expanded.riepilogo && (
               <View style={styles.statsGrid}>
-                <StatCard label="Ore Lavorate" value={data?.mese_corrente?.ore_lavorate?.toFixed(1) || '0'} unit="h" color={themeColors.primary} />
-                <StatCard label="Straordinari" value={data?.mese_corrente?.ore_straordinarie?.toFixed(1) || '0'} unit="h" color={colors.overtime} />
+                <StatCard label="Ore Lavorate" value={formatHoursHHMM(data?.mese_corrente?.ore_lavorate ?? 0)} color={themeColors.primary} />
+                <StatCard label="Straordinari" value={formatHoursHHMM(data?.mese_corrente?.ore_straordinarie ?? 0)} color={colors.overtime} />
                 <StatCard label="Giorni" value={data?.mese_corrente?.giorni_lavorati || 0} color={colors.success} />
                 <StatCard label="Ticket" value={data?.mese_corrente?.ticket_maturati || 0} color={colors.ticket} />
               </View>
@@ -764,17 +788,17 @@ export default function DashboardScreen() {
             {!editMode && expanded.ferie && (
               <View style={styles.balanceContainer}>
               <View style={styles.balanceMain}>
-                  <Text style={[styles.balanceValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) || '0'}</Text>
+                  <Text style={[styles.balanceValue, { color: colors.ferie }]}>{formatHoursHHMM(data?.ferie?.saldo_attuale ?? 0)}</Text>
                   <Text style={styles.balanceUnit}>ore disponibili</Text>
               </View>
                 <View style={styles.balanceDetails}>
                   <View style={styles.balanceRow}>
                     <Text style={styles.balanceLabel}>Maturate</Text>
-                    <Text style={styles.balanceAmount}>{data?.ferie?.ore_maturate?.toFixed(1) || '0'}h</Text>
+                    <Text style={styles.balanceAmount}>{formatHoursHHMM(data?.ferie?.ore_maturate ?? 0)}</Text>
                   </View>
                   <View style={styles.balanceRow}>
                     <Text style={styles.balanceLabel}>Godute</Text>
-                    <Text style={styles.balanceAmount}>{data?.ferie?.ore_godute?.toFixed(1) || '0'}h</Text>
+                    <Text style={styles.balanceAmount}>{formatHoursHHMM(data?.ferie?.ore_godute ?? 0)}</Text>
                   </View>
                 </View>
               </View>
@@ -890,15 +914,15 @@ export default function DashboardScreen() {
             <View style={styles.kpiGrid}>
               <View style={[styles.kpiChip, styles.kpiChipCompact]}>
                 <Text style={styles.kpiChipLabel}>Ore mese</Text>
-                <Text style={styles.kpiChipValue}>{data?.mese_corrente?.ore_lavorate?.toFixed(1) ?? '–'}h</Text>
+                <Text style={styles.kpiChipValue}>{formatHoursHHMM(data?.mese_corrente?.ore_lavorate ?? 0)}</Text>
               </View>
               <View style={[styles.kpiChip, styles.kpiChipCompact]}>
                 <Text style={styles.kpiChipLabel}>Straordinari</Text>
-                <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{data?.mese_corrente?.ore_straordinarie?.toFixed(1) ?? '–'}h</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{formatHoursHHMM(data?.mese_corrente?.ore_straordinarie ?? 0)}</Text>
               </View>
               <View style={[styles.kpiChip, styles.kpiChipCompact]}>
                 <Text style={styles.kpiChipLabel}>Ferie disp.</Text>
-                <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) ?? '–'}h</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{formatHoursHHMM(data?.ferie?.saldo_attuale ?? 0)}</Text>
               </View>
               <View
                 style={[
@@ -933,15 +957,15 @@ export default function DashboardScreen() {
             >
               <View style={styles.kpiChip}>
                 <Text style={styles.kpiChipLabel}>Ore mese</Text>
-                <Text style={styles.kpiChipValue}>{data?.mese_corrente?.ore_lavorate?.toFixed(1) ?? '–'}h</Text>
+                <Text style={styles.kpiChipValue}>{formatHoursHHMM(data?.mese_corrente?.ore_lavorate ?? 0)}</Text>
               </View>
               <View style={styles.kpiChip}>
                 <Text style={styles.kpiChipLabel}>Straordinari</Text>
-                <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{data?.mese_corrente?.ore_straordinarie?.toFixed(1) ?? '–'}h</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.overtime }]}>{formatHoursHHMM(data?.mese_corrente?.ore_straordinarie ?? 0)}</Text>
               </View>
               <View style={styles.kpiChip}>
                 <Text style={styles.kpiChipLabel}>Ferie disp.</Text>
-                <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{data?.ferie?.saldo_attuale?.toFixed(1) ?? '–'}h</Text>
+                <Text style={[styles.kpiChipValue, { color: colors.ferie }]}>{formatHoursHHMM(data?.ferie?.saldo_attuale ?? 0)}</Text>
               </View>
               <View style={[styles.kpiChip,
                 data?.comporto?.alert_critico ? styles.kpiChipDanger :

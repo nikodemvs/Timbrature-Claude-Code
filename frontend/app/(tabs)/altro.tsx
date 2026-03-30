@@ -19,7 +19,7 @@ import { useFocusEffect, useRouter } from 'expo-router';
 import { Card, Button, BottomSheet, InputField, DatePickerField, TimePickerField } from '../../src/components';
 import { useAppStore, THEMES, ThemeKey, ColorSchemePreference } from '../../src/store/appStore';
 import * as offlineApi from '../../src/services/offlineApi';
-import { formatCurrency, formatDate, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
+import { formatCurrency, formatDate, formatHoursHHMM, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
 import { Alert as AlertType, ChatMessage, Reperibilita, Timbratura } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 
@@ -809,7 +809,7 @@ export default function AltroScreen() {
             {dailyStats.map((day, i) => (
               <View key={i} style={styles.dailyStatItem}>
                 <Text style={styles.dailyStatDate}>{formatDate(day.data, 'dd')}</Text>
-                <Text style={[styles.dailyStatHours, { color: themeColors.primary }]}>{day.ore_arrotondate.toFixed(1)}h</Text>
+                <Text style={[styles.dailyStatHours, { color: themeColors.primary }]}>{formatHoursHHMM(day.ore_arrotondate ?? 0)}</Text>
               </View>
             ))}
           </View>
@@ -822,8 +822,8 @@ export default function AltroScreen() {
             {statsData.map((stat, i) => (
               <View key={i} style={styles.statItem}>
                 <Text style={styles.statMonth}>{getMesiItaliano(stat.mese).substring(0, 3)}</Text>
-                <Text style={[styles.statHours, { color: themeColors.primary }]}>{stat.ore_lavorate}h</Text>
-                <Text style={styles.statOvertime}>+{stat.ore_straordinarie}h</Text>
+                <Text style={[styles.statHours, { color: themeColors.primary }]}>{formatHoursHHMM(stat.ore_lavorate ?? 0)}</Text>
+                <Text style={styles.statOvertime}>+{formatHoursHHMM(stat.ore_straordinarie ?? 0)}</Text>
               </View>
             ))}
           </View>
@@ -835,11 +835,11 @@ export default function AltroScreen() {
           <View style={styles.totalsGrid}>
             <View style={styles.totalItem}>
               <Text style={styles.totalLabel}>Ore Totali</Text>
-              <Text style={[styles.totalValue, { color: themeColors.primary }]}>{statsData.reduce((s, m) => s + m.ore_lavorate, 0).toFixed(1)}h</Text>
+              <Text style={[styles.totalValue, { color: themeColors.primary }]}>{formatHoursHHMM(statsData.reduce((s, m) => s + m.ore_lavorate, 0))}</Text>
             </View>
             <View style={styles.totalItem}>
               <Text style={styles.totalLabel}>Straordinari</Text>
-              <Text style={[styles.totalValue, { color: colors.overtime }]}>{statsData.reduce((s, m) => s + m.ore_straordinarie, 0).toFixed(1)}h</Text>
+              <Text style={[styles.totalValue, { color: colors.overtime }]}>{formatHoursHHMM(statsData.reduce((s, m) => s + m.ore_straordinarie, 0))}</Text>
             </View>
           </View>
         </Card>
@@ -850,7 +850,7 @@ export default function AltroScreen() {
           {allYearsStats.map((year, i) => (
             <TouchableOpacity key={i} style={styles.yearCard} onPress={() => { setSelectedYear(year.anno); setStatsZoom('anno'); }}>
               <Text style={[styles.yearTitle, { color: themeColors.primary }]}>{year.anno}</Text>
-              <Text style={styles.yearHours}>{year.ore_totali.toFixed(0)}h totali</Text>
+              <Text style={styles.yearHours}>{formatHoursHHMM(year.ore_totali ?? 0)} totali</Text>
             </TouchableOpacity>
           ))}
         </Card>

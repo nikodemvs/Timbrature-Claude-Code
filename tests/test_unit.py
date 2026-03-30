@@ -89,8 +89,11 @@ def test_unit_arrotonda_quarti_ora_sui_tagli_attesi():
 
 
 def test_unit_calcola_ore_lavorate_normali_e_notturne():
-    assert server.calcola_ore_lavorate("08:10", "17:20") == (9.17, 9.25)
-    assert server.calcola_ore_lavorate("23:50", "01:10") == (1.33, 1.5)
+    assert server.calcola_ore_lavorate("08:10", "17:20") == (9.17, 9.0)
+    assert server.calcola_ore_lavorate("23:50", "01:10") == (1.33, 1.0)
+    assert server.calcola_ore_lavorate("08:39", "17:02") == (8.38, 8.25)
+    assert server.calcola_ore_lavorate("09:30", "17:00") == (7.5, 7.5)
+    assert server.calcola_ore_lavorate("09:46", "17:00") == (7.23, 7.0)
     assert server.calcola_ore_lavorate("", "17:00") == (0.0, 0.0)
 
 

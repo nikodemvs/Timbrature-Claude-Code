@@ -19,7 +19,7 @@ import * as offlineApi from '../../src/services/offlineApi';
 import { BustaPaga, Documento } from '../../src/types';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { useAppStore } from '../../src/store/appStore';
-import { formatCurrency, formatDate, getCurrentMonthYear, getMesiItaliano } from '../../src/utils/helpers';
+import { formatCurrency, formatDate, formatHoursHHMM, getCurrentMonthYear, getMesiItaliano } from '../../src/utils/helpers';
 
 type TabType = 'cedolini' | 'cud';
 type UploadTarget = 'cedolino' | 'cud';
@@ -1107,7 +1107,7 @@ export default function BustePagaScreen() {
               <Text style={styles.detailValue}>{fmt(selectedBusta.lordo || 0)}</Text>
             </View>
             <View style={styles.detailRow}>
-              <Text style={styles.detailLabel}>Straordinari ({selectedBusta.straordinari_ore || 0}h)</Text>
+              <Text style={styles.detailLabel}>Straordinari ({formatHoursHHMM(selectedBusta.straordinari_ore || 0)})</Text>
               <Text style={styles.detailValue}>{fmt(selectedBusta.straordinari_importo || 0)}</Text>
             </View>
             <View style={styles.detailRow}>

@@ -5,6 +5,29 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-03-30 — Fix autostart backend NAS dopo reboot (DS220j)
+
+Cosa:
+- verificato riavvio NAS e stato servizi: frontend web su `8080/8083` avviato automaticamente, backend API inizialmente non raggiungibile (`8081 -> 502`).
+- individuata instabilita al boot sul comando uvicorn con `--workers 1` (processo avviato ma API non pronta in modo affidabile).
+- aggiornato `backend/start-nas.sh` con avvio robusto:
+  - health check pre-start su `http://127.0.0.1:8001/openapi.json`;
+  - cleanup di processi uvicorn stale;
+  - rimozione di `--workers 1`;
+  - avvio esplicito con `/usr/local/bin/python3.9` e `PYTHONPATH` user-site.
+- ri-validati endpoint dopo fix: `http://192.168.178.34:8080/` e `http://192.168.178.34:8081/openapi.json` entrambi `200`.
+
+Perché:
+- garantire che backend e reverse proxy API tornino disponibili automaticamente dopo reboot del NAS senza intervento manuale.
+
+File:
+- backend/start-nas.sh
+- CHANGELOG.md
+- CHANGES.md
+- TEST_RUN.md
+
+---
+
 ## 2026-03-30 — Deploy backend NAS completato su DS220j
 
 Cosa:

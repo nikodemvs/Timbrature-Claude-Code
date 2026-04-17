@@ -14,16 +14,15 @@ ROOT = Path(__file__).resolve().parents[1]
 ZERO_SHA = "0000000000000000000000000000000000000000"
 
 ROOT_DOCS_AND_CONFIG = {
+    "README.md",
+    "CONTRIBUTING.md",
     "AGENTS.md",
     "CLAUDE.md",
     "PROTECTED_ZONES.md",
     "CHANGELOG.md",
-    "CHANGES.md",
-    "TEST_RUN.md",
-    "algoritmi-verifica.md",
+    "ALGORITMI.md",
     "pyproject.toml",
     "requirements-test.txt",
-    "render.yaml",
     "start-app.ps1",
     "start-backend.ps1",
     "start-frontend.ps1",

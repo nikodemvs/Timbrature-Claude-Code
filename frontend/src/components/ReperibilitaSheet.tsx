@@ -20,10 +20,13 @@ import {
   View,
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
-import { BottomSheet, Button, InputField, DatePickerField, TimePickerField } from '../../src/components';
-import * as offlineApi from '../../src/services/offlineApi';
-import { useAppTheme } from '../../src/hooks/useAppTheme';
-import { getTodayString } from '../../src/utils/helpers';
+import { BottomSheet } from './BottomSheet';
+import { Button } from './Button';
+import { InputField } from './InputField';
+import { DatePickerField, TimePickerField } from './DateTimePicker';
+import * as offlineApi from '../services/offlineApi';
+import { useAppTheme } from '../hooks/useAppTheme';
+import { getTodayString } from '../utils/helpers';
 
 type Ripetizione = 'mai' | 'settimanale' | 'bisettimanale' | 'mensile';
 type TipoRep = 'passiva' | 'attiva';

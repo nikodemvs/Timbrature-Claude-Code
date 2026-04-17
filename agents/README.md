@@ -1,35 +1,18 @@
 # agents/README.md
 
-Contratti operativi dei sub-agent condivisi del progetto BustaPaga.
-**Validi per Codex e Claude Code senza eccezioni.**
+Contratti di ownership dei sub-agent del progetto BustaPaga.
 
----
+> **Stato:** consultivi, non vincolanti.
+> Sono una guida mentale di chi tocca cosa, non un flusso di orchestrazione obbligatorio.
+> Le regole operative vive sono in [../CONTRIBUTING.md](../CONTRIBUTING.md).
 
-## Regole invalicabili dell'orchestratore
+Chi lavora sulla repo (umano o agente) può usarli come checklist per capire dove va una modifica, quale file è probabile che tocchi, e quali test vanno aggiornati. Nessuno è obbligato a delegare ogni task a un sub-agent.
 
-### 1. L'orchestratore è sempre il filtro
+## Linee guida utili, non invalicabili
 
-L'orchestratore (Codex o Claude Code) NON esegue mai un task direttamente.
-Sequenza obbligatoria:
-1. Filtra e comprendi la richiesta utente
-2. Delega al sub-agent adatto
-3. Attendi il risultato
-4. Esegui direttamente solo se tutti i sub-agent compatibili sono già occupati
-
-### 2. Parallelismo: solo quando i sub-agent sono già tutti occupati
-
-Default: un sub-agent alla volta, in sequenza.
-Parallelismo consentito solo quando più sub-agent hanno già task attivi indipendenti in corso.
-Non si parallelizza per velocizzare: si satura un agente alla volta.
-
-### 3. UI change → proposta visiva prima di implementare (INVALICABILE)
-
-Se il task impatta la UI (schermate, componenti, layout, interazioni visibili):
-1. `FRONTEND_UI_AGENT` produce uno **screenshot o schema** della modifica proposta
-2. La proposta viene presentata all'utente per approvazione esplicita
-3. Solo dopo approvazione: `FRONTEND_UI_AGENT` implementa
-
-Nessuna modifica visibile può essere implementata senza proposta approvata.
+1. **Scopo prima di tutto:** prima di scrivere codice, chiarisci cosa deve fare e perché.
+2. **Cambi UI visibili:** se la modifica è visibile all'utente, condividi uno screenshot o uno schema prima di un refactor grande. Non serve un rituale di approvazione per ogni bottone.
+3. **Zone protette:** [../PROTECTED_ZONES.md](../PROTECTED_ZONES.md) è l'unico vincolo rigido. Nessuna modifica lì senza conferma esplicita.
 
 ---
 
@@ -43,28 +26,17 @@ Nessuna modifica visibile può essere implementata senza proposta approvata.
 - `PAYROLL_LOGIC_AGENT.md` — algoritmi protetti, parser, costanti contrattuali, mirror frontend/backend
 - `QA_AGENT.md` — regressioni, criteri di accettazione, test unit/api/e2e/visual
 
-## Sequenza obbligatoria per task non banali
+## Ordine suggerito per task non banali
 
-1. `PRODUCT_REQUIREMENTS_AGENT` — se il comportamento atteso non è ancora chiaro
-2. `ARCHITECTURE_AGENT` — per qualsiasi task che tocca ≥ 2 file o aree diverse
-3. Sub-agent di ownership **in sequenza** (parallelo solo se già tutti occupati):
-   - `FRONTEND_UI_AGENT` → **proposta visiva** → approvazione utente → implementazione
-   - `BACKEND_API_AGENT`
-   - `OFFLINE_DATA_AGENT`
-   - `PAYROLL_LOGIC_AGENT` se il task tocca algoritmi, parser o regole di calcolo
-4. `QA_AGENT` — verifica regressioni e test finali prima del commit
+Un flusso che funziona bene quando il task è davvero grosso (≥ 2 aree, comportamento nuovo):
+
+1. `PRODUCT_REQUIREMENTS_AGENT` se il cosa-deve-fare non è chiaro
+2. `ARCHITECTURE_AGENT` se il task tocca più moduli
+3. Sub-agent di ownership (UI, backend, offline data, payroll logic) a seconda di cosa cambia
+4. `QA_AGENT` per verificare regressioni prima del commit
+
+Per task piccoli (un bug, un bottone, una rotta nuova isolata), si può lavorare direttamente senza questo rituale.
 
 ## Contenuto minimo di un handoff
 
-- obiettivo
-- file o aree coinvolte
-- vincoli
-- verifiche richieste
-- output atteso
-
-## Sblocco agente bloccato
-
-Se un agente non riesce a completare il task:
-1. Tenta di sbloccarlo restringendo il perimetro o inviando contesto aggiuntivo
-2. Riassegna a un agente compatibile
-3. L'orchestratore esegue direttamente solo come ultima opzione
+Se deleghi a un sub-agent, passagli: obiettivo, file coinvolti, vincoli, verifiche richieste, output atteso.

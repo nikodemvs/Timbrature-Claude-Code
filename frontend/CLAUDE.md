@@ -1,77 +1,21 @@
-# CLAUDE.md — Frontend (Claude Code)
+# frontend/CLAUDE.md — Entry point Claude Code per frontend
 
-## Allineamento con AGENTS.md
-Questo file integra `frontend/AGENTS.md` per l'uso con Claude Code.
-**In caso di conflitto con `frontend/AGENTS.md`: analizzare il conflitto, chiedere all'utente se applicare la modifica, e suggerire come allineare i due file.**
-Quando `frontend/AGENTS.md` viene modificato, aggiornare anche questo file.
+> Regole generali del progetto: [../CONTRIBUTING.md](../CONTRIBUTING.md).
+> Specificità frontend: [./AGENTS.md](./AGENTS.md).
+> Zone protette: [../PROTECTED_ZONES.md](../PROTECTED_ZONES.md).
 
-Per le regole complete (mobile-first, offline, testing visual, zona protetta) leggi `frontend/AGENTS.md`.
-Per le regole generali del progetto leggi `AGENTS.md` (root) e `CLAUDE.md` (root).
+## Promemoria operativo
 
----
+Prima di modificare un componente UI:
 
-## Zona protetta — reminder
-`src/helpers.ts` (L12, L19, L83) contiene funzioni di formattazione protette.
-Non modificare senza conferma esplicita.
+1. Leggi il file con `Read` — non assumere la struttura.
+2. Verifica che il componente gestisca i 4 stati (loading, empty, errore, successo).
+3. Mobile-first da 375px, touch target ≥ 44×44px.
+4. Se il cambio è visibile all'utente, condividi uno screenshot o uno schema prima di spingerlo.
+5. Aggiorna `CHANGELOG.md` con una riga datata dopo ogni modifica visiva significativa.
 
----
+## Strumenti rapidi
 
-## Orchestrazione Claude Code per il frontend
-
-Prima di modificare componenti UI:
-1. Leggi i file interessati — non assumere la struttura
-2. Per nuovi componenti o refactoring, usa un Plan agent
-3. Verifica che il componente gestisca i 4 stati: loading, empty, errore, successo
-4. Aggiorna `CHANGELOG.md` dopo ogni modifica visiva significativa
-
-Sub-agent di riferimento:
-- `agents/FRONTEND_UI_AGENT.md`
-- `agents/OFFLINE_DATA_AGENT.md`
-- `agents/PAYROLL_LOGIC_AGENT.md`
-- `agents/QA_AGENT.md`
-
-La memoria persistente condivisa con Claude Code vive in `memory/MEMORY.md`.
-
-## Strumenti di controllo e sviluppo
-
-### Flusso automatico dei test
-- `pre-commit` esegue solo `pytest -m "unit or api"`.
-- `pre-push` esegue solo `pytest -m "unit or api"`.
-- `CI` esegue il gate rapido e la suite browser (`e2e_smoke`, `e2e`, `visual`) e aggiunge i controlli speciali (`docs_config`, `offline_runtime`, `tsc`) quando servono.
-- Gate reali:
-  - `pytest -m "unit or api"` come gate rapido locale.
-  - `pytest -m e2e_smoke` solo in `CI` per smoke browser rapido dell'avvio.
-  - `pytest -m "e2e and not e2e_smoke"` solo in `CI` per flussi utente completi.
-  - `pytest -m visual` solo in `CI` per layout, responsive, dark mode e touch target.
-  - `pytest -q tests/test_docs_config.py`, `pytest -q tests/test_offline_runtime.py` e `tsc --noEmit` in `CI` quando i path lo richiedono.
-- Regola anti-duplicazione:
-  - logica pura e calcoli solo in `unit` o nel gate backend;
-  - API e storage solo in `api`;
-  - flussi utente solo in `e2e`;
-  - resa visiva solo in `visual`;
-  - non duplicare in `e2e` ciò che è già coperto bene da `unit` o `api`.
-
-### Strumenti utili
-- `playwright` (CLI Skill) per verifiche E2E/visual locali durante sviluppo.
-- `playwright-interactive` per debug visivo iterativo (browser persistente), non come gate automatico.
-- `screenshot` per catture mirate durante QA manuale.
-- `figma`, `figma-implement-design` e `frontend-skill` sono utili quando l'input arriva da mockup o serve alzare il livello della UI.
-- `pdf` è utile per import documentali e flussi che partono da cedolini o CUD.
-- `security-best-practices` è utile quando tocchi dati utente o flussi esposti.
-
----
-
-## Test visual con MCP Tools (Claude Code only)
-
-Oltre a Playwright (`tests/test_e2e.py` con marker `@pytest.mark.visual`), sono disponibili:
-
-- **Claude Preview MCP** — avvia preview dell'app, cattura screenshot a 375px e 768px, verifica layout
-- **Chrome MCP** — naviga nell'app nel browser, verifica touch target, contrasto, font size
-
-Uso consigliato:
-- Playwright per test visual automatizzati e CI
-- MCP Preview/Chrome per verifica rapida interattiva durante sviluppo (non sostituisce i test formali)
-
-## Allineamento documentale
-- Se aggiorni regole o policy in questo file, aggiorna nella stessa sessione anche `frontend/AGENTS.md`.
-- Se l'allineamento chiude un ciclo operativo, aggiorna anche i file root `CHANGES.md` e `TEST_RUN.md`.
+- `playwright` CLI per smoke visuale locale.
+- `playwright-interactive` per debug iterativo con browser persistente.
+- `screenshot` per catture mirate.

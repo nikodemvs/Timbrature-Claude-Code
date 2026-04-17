@@ -37,16 +37,6 @@ export interface EliminaAccountResponse {
   settings_reset: boolean;
 }
 
-export interface TimbraturaAziendalePayload {
-  data: string;
-  ora_entrata?: string | null;
-  ora_uscita?: string | null;
-  ore_lavorate?: number;
-  descrizione?: string | null;
-  mese_riferimento?: number;
-  anno_riferimento?: number;
-}
-
 const BASE_URL = typeof window !== 'undefined' && window.location.hostname
   ? `http://${window.location.hostname}:8001`
   : (process.env.EXPO_PUBLIC_BACKEND_URL || '');
@@ -61,7 +51,6 @@ const api = axios.create({
 // Settings
 export const getSettings = () => api.get<UserSettings>('/settings');
 export const updateSettings = (data: Partial<UserSettings>) => api.put<UserSettings>('/settings', data);
-export const verifyPin = (pin: string) => api.post('/settings/verify-pin', null, { params: { pin } });
 export const deletePersonalData = (conferma = true) =>
   api.post<CancellaDatiPersonaliResponse>('/dati-personali/cancella', { conferma });
 export const deleteAccount = (conferma = true) =>
@@ -84,9 +73,6 @@ export const getWeeklySummary = (data: string) => api.get<WeeklySummary>(`/timbr
 export const getAssenze = (params?: { tipo?: string; anno?: number }) => api.get<Assenza[]>('/assenze', { params });
 export const createAssenza = (data: { tipo: string; data_inizio: string; data_fine: string; ore_totali?: number; note?: string }) =>
   api.post<Assenza>('/assenze', data);
-export const uploadCertificato = (id: string, file: FormData) => api.post(`/assenze/${id}/certificato`, file, {
-  headers: { 'Content-Type': 'multipart/form-data' },
-});
 export const deleteAssenza = (id: string) => api.delete(`/assenze/${id}`);
 
 // Ferie
@@ -114,10 +100,6 @@ export const createBustaPaga = (data: {
   trattenute_totali?: number;
 }) =>
   api.post<BustaPaga>('/buste-paga', data);
-export const uploadBustaPaga = (anno: number, mese: number, file: FormData) =>
-  api.post<PdfUploadResponse>(`/buste-paga/${anno}/${mese}/upload`, file, {
-    headers: { 'Content-Type': 'multipart/form-data' },
-  });
 export const uploadBustaPagaAuto = (file: FormData) =>
   api.post<PdfUploadResponse>('/buste-paga/upload', file, {
     headers: { 'Content-Type': 'multipart/form-data' },
@@ -128,10 +110,6 @@ export const updateBustaPaga = (anno: number, mese: number, data: Partial<BustaP
 // Documenti
 export const getDocumenti = (tipo?: string, sottotipo?: string) =>
   api.get<Documento[]>('/documenti', { params: { tipo, sottotipo } });
-export const getDocumento = (id: string) => api.get<Documento>(`/documenti/${id}`);
-export const uploadDocumento = (formData: FormData) => api.post<Documento>('/documenti', formData, {
-  headers: { 'Content-Type': 'multipart/form-data' },
-});
 export const deleteDocumento = (id: string) => api.delete(`/documenti/${id}`);
 export const uploadCud = (file: FormData) =>
   api.post<{ documento: Documento; anno: number }>('/cud/upload', file, {
@@ -144,10 +122,7 @@ export const getStatisticheMensili = (anno?: number) => api.get('/statistiche/me
 
 // Alerts
 export const getAlerts = (soloNonLetti?: boolean) => api.get<Alert[]>('/alerts', { params: { solo_non_letti: soloNonLetti } });
-export const createAlert = (data: { tipo: string; titolo: string; messaggio: string; data_scadenza?: string }) =>
-  api.post<Alert>('/alerts', null, { params: data });
 export const markAlertRead = (id: string) => api.put(`/alerts/${id}/letto`);
-export const deleteAlert = (id: string) => api.delete(`/alerts/${id}`);
 
 // Chat
 export const sendChatMessage = (message: string, sessionId?: string) =>
@@ -162,15 +137,16 @@ export const uploadTimbratureAziendali = (file: FormData) =>
   api.post<PdfUploadResponse>('/timbrature-aziendali/upload', file, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
-export const importTimbratureAziendali = (timbrature: TimbraturaAziendalePayload[]) =>
-  api.post('/timbrature-aziendali/import', timbrature);
-export const deleteTimbraturaAziendale = (data: string) =>
-  api.delete(`/timbrature-aziendali/${data}`);
-export const deleteAllTimbratureAziendali = (mese: number, anno: number) =>
-  api.delete('/timbrature-aziendali', { params: { mese, anno } });
 
 // Confronto Timbrature
 export const getConfrontoTimbrature = (mese: number, anno: number) =>
   api.get('/confronto-timbrature', { params: { mese, anno } });
 
 export default api;
+
+// Rimosso 2026-04-16 (F2.3 restauro): simboli senza chiamanti nel frontend.
+// Se uno di questi serve di nuovo, ri-dichiaralo qui e aggiungi la chiamata nel consumer reale.
+//   verifyPin, uploadCertificato, uploadBustaPaga (variante anno/mese esplicito),
+//   getDocumento, uploadDocumento, createAlert, deleteAlert,
+//   importTimbratureAziendali, deleteTimbraturaAziendale, deleteAllTimbratureAziendali,
+//   TimbraturaAziendalePayload.

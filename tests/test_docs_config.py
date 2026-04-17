@@ -45,91 +45,125 @@ def test_preview_config_is_aligned():
     assert "e2e and not e2e_smoke" in checks_text
 
 
-def test_docs_cover_gemini_memory_and_offline_first():
-    agents = read_text("AGENTS.md")
-    backend_agents = read_text("backend/AGENTS.md")
-    frontend_agents = read_text("frontend/AGENTS.md")
-    claude = read_text("CLAUDE.md")
-    backend_claude = read_text("backend/CLAUDE.md")
-    frontend_claude = read_text("frontend/CLAUDE.md")
-    protected_zones = read_text("PROTECTED_ZONES.md")
+def test_required_governance_files_exist():
+    """I file di governance consolidati dopo F1.3 devono esistere."""
+    required = [
+        "README.md",
+        "CONTRIBUTING.md",
+        "PROTECTED_ZONES.md",
+        "CHANGELOG.md",
+        "AGENTS.md",
+        "CLAUDE.md",
+        "backend/AGENTS.md",
+        "backend/CLAUDE.md",
+        "frontend/AGENTS.md",
+        "frontend/CLAUDE.md",
+        "memory/MEMORY.md",
+        "agents/README.md",
+    ]
+    for relative_path in required:
+        assert (ROOT / relative_path).is_file(), f"file richiesto mancante: {relative_path}"
 
-    assert "Gemini può leggere i dati e i file utente necessari a rispondere" in agents
-    assert "Mai loggare dati personali o contesto superfluo" in agents
-    assert "### Flusso automatico dei test" in agents
-    assert "pre-commit" in agents
-    assert "pre-push" in agents
-    assert "CI" in agents
-    assert '`pre-push` esegue solo `pytest -m "unit or api"`.' in agents
-    assert "`pytest -m e2e_smoke` solo in `CI`" in agents
-    assert "anti-duplicazione" in agents
-    assert "### Skill raccomandate (non vincolanti)" in agents
-    assert "non definisce gate" in agents
-    assert "/api/settings/verify-pin" in backend_agents
-    assert "/api/timbrature/{data}" in backend_agents
-    assert "SQLite e file storage" in frontend_agents
-    assert "IndexedDB" not in frontend_agents
-    assert "localStorage" not in frontend_agents
-    assert "memory/MEMORY.md" in claude
-    assert (ROOT / "memory" / "MEMORY.md").exists()
-    assert "PROTECTED_ZONES.md" in agents
-    assert "PROTECTED_ZONES.md" in claude
-    assert "backend/server.py" in protected_zones
-    assert "frontend/src/algorithms/calcoli.ts" in protected_zones
-    assert "## Flusso Automatico Dei Test" in claude
-    assert "pre-commit" in claude
-    assert "pre-push" in claude
-    assert "CI" in claude
-    assert '`pre-push` esegue solo `pytest -m "unit or api"`.' in claude
-    assert "`pytest -m e2e_smoke` solo in `CI`" in claude
-    assert "anti-duplicazione" in claude
-    assert 'pytest -m "unit or api"' in claude
-    assert "pytest -m e2e_smoke" in claude
-    assert 'pytest -m "e2e and not e2e_smoke"' in claude
-    assert "pytest -m visual" in claude
-    assert "tsc --noEmit" in claude
-    assert "Claude Preview MCP" in claude
-    assert "Chrome MCP" in claude
-    assert "sorgente unica del metodo di avvio locale" in claude
-    assert "## Skill Utili (non vincolanti)" in claude
-    assert "non vincolanti" in claude
-    assert "`playwright`" in claude
-    assert "`playwright-interactive`" in claude
-    assert "`screenshot`" in claude
-    assert "`pdf`" in claude
-    assert "`frontend-skill`" in claude
-    assert "`figma`" in claude
-    assert "`figma-implement-design`" in claude
-    assert "`render-deploy`" in claude
-    assert "`sentry`" in claude
-    assert "`spreadsheet`" in claude
-    assert "`security-best-practices`" in claude
-    assert "`security-threat-model`" in claude
-    assert "`openai-docs`" in claude
-    assert "`skill-installer`" in claude
-    assert "`skill-creator`" in claude
-    assert "Flusso automatico dei test" in frontend_claude
-    assert "pre-commit" in frontend_claude
-    assert "pre-push" in frontend_claude
-    assert "CI" in frontend_claude
-    assert "anti-duplicazione" in frontend_claude
-    assert "pytest -m e2e" in frontend_claude
-    assert "pytest -m visual" in frontend_claude
-    assert "tsc --noEmit" in frontend_claude
-    assert "playwright-interactive" in frontend_claude
-    assert "pdf" in frontend_claude
-    assert "frontend-skill" in frontend_claude
-    assert "Flusso automatico dei test" in backend_claude
-    assert "pre-commit" in backend_claude
-    assert "pre-push" in backend_claude
-    assert "CI" in backend_claude
-    assert "anti-duplicazione" in backend_claude
-    assert "pytest -m unit" in backend_claude
-    assert "pytest -m api" in backend_claude
-    assert "pdf" in backend_claude
-    assert "sentry" in backend_claude
-    assert "security-threat-model" in backend_claude
-    assert "render-deploy" in backend_claude
-    assert "non vincolanti" in read_text("AGENTS.md")
-    assert "## Controlli" in read_text("memory/MEMORY.md")
-    assert "## Skill Utili (non vincolanti)" in read_text("memory/MEMORY.md")
+
+def test_legacy_rotate_files_are_gone():
+    """CHANGES.md e TEST_RUN.md sono stati rimossi in F1.4."""
+    assert not (ROOT / "CHANGES.md").exists(), "CHANGES.md doveva essere rimosso"
+    assert not (ROOT / "TEST_RUN.md").exists(), "TEST_RUN.md doveva essere rimosso"
+
+
+def test_thin_pointer_files_reference_contributing():
+    """AGENTS.md, CLAUDE.md root e le varianti backend/frontend rinviano a CONTRIBUTING.md."""
+    for path in ("AGENTS.md", "CLAUDE.md", "backend/AGENTS.md", "backend/CLAUDE.md", "frontend/AGENTS.md", "frontend/CLAUDE.md"):
+        text = read_text(path)
+        assert "CONTRIBUTING.md" in text, f"{path} deve riferire CONTRIBUTING.md"
+
+
+def test_thin_pointer_files_reference_protected_zones():
+    """Tutti i pointer governance rinviano a PROTECTED_ZONES.md."""
+    for path in ("AGENTS.md", "CLAUDE.md", "backend/AGENTS.md", "frontend/AGENTS.md", "agents/README.md"):
+        text = read_text(path)
+        assert "PROTECTED_ZONES.md" in text, f"{path} deve riferire PROTECTED_ZONES.md"
+
+
+def test_contributing_has_core_sections():
+    """CONTRIBUTING.md deve contenere le sezioni operative fondamentali."""
+    text = read_text("CONTRIBUTING.md")
+    required_sections = [
+        "Principi",
+        "Zona protetta",
+        "Testing",
+        "Convenzioni backend",
+        "Convenzioni frontend",
+        "Commit",
+    ]
+    for heading in required_sections:
+        assert heading in text, f"CONTRIBUTING.md deve contenere la sezione '{heading}'"
+
+    # Regole test devono comparire almeno una volta
+    assert 'pytest -m "unit or api"' in text
+    assert "pytest -m e2e_smoke" in text or "e2e_smoke" in text
+    assert "pytest -m visual" in text
+    assert "tsc --noEmit" in text
+
+
+def test_contributing_documents_key_endpoints():
+    """La mappa endpoint deve documentare le rotte critiche."""
+    text = read_text("CONTRIBUTING.md")
+    endpoints = [
+        "/api/health",
+        "/api/settings",
+        "/api/settings/verify-pin",
+        "/api/timbrature",
+        "/api/timbrature/{data}",
+        "/api/dashboard",
+        "/api/ferie/saldo",
+        "/api/malattia/comporto",
+        "/api/reperibilita",
+        "/api/buste-paga",
+        "/api/confronto-timbrature",
+        "/api/statistiche/mensili",
+        "/api/chat",
+    ]
+    for endpoint in endpoints:
+        assert endpoint in text, f"endpoint {endpoint} non documentato in CONTRIBUTING.md"
+
+
+def test_protected_zones_references_real_paths():
+    """PROTECTED_ZONES.md punta a file che esistono davvero."""
+    text = read_text("PROTECTED_ZONES.md")
+    expected_paths = [
+        "backend/server.py",
+        "backend/server_nas.py",
+        "backend/sometime_parser.py",
+        "backend/zucchetti_parser.py",
+        "frontend/src/utils/helpers.ts",
+        "frontend/src/algorithms/calcoli.ts",
+    ]
+    for relative_path in expected_paths:
+        assert relative_path in text, f"PROTECTED_ZONES.md deve menzionare {relative_path}"
+        assert (ROOT / relative_path).is_file(), f"path protetto inesistente: {relative_path}"
+
+
+def test_protected_zones_names_key_pure_functions():
+    """I simboli chiave di algoritmo compaiono in PROTECTED_ZONES.md."""
+    text = read_text("PROTECTED_ZONES.md")
+    symbols = [
+        "arrotonda_quarti_ora",
+        "arrotonda_quarti_ora_difetto",
+        "calcola_ore_lavorate",
+        "calcola_straordinario",
+        "calcola_ticket",
+        "calcola_reperibilita_passiva",
+        "calcola_reperibilita_attiva",
+        "calcola_ore_da_marcature",
+        "arrotondaQuartiOra",
+        "calcolaOreLavorate",
+    ]
+    for symbol in symbols:
+        assert symbol in text, f"PROTECTED_ZONES.md deve menzionare il simbolo {symbol}"
+
+
+def test_memory_file_is_readable():
+    """memory/MEMORY.md contiene almeno le sezioni base."""
+    text = read_text("memory/MEMORY.md")
+    assert "Controlli" in text or "controlli" in text.lower()

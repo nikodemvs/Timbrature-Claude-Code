@@ -5,6 +5,73 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-04-16 — Restauro Fase A (F2.5) — rimossi artefatti deploy orfani
+
+Cosa:
+- Rimosso `backend/Dockerfile` e `render.yaml` (deploy Render.com mai usato; il deploy attivo è NAS Synology via `backend/start-nas.sh`, porta 8001). Il Dockerfile puntava a `uvicorn server:app --port 8000`, incoerente con la realtà operativa.
+- Rimosso `tests/legacy/frontend-web-runtime-regressions.test.mjs` e la cartella `tests/legacy/` (runner orfano: nessuno script npm e nessun check in `tools/checks.py` lo invocava). Le stesse regressioni sono già coperte indirettamente da `tsc --noEmit` e dai test visual Playwright.
+- `tools/checks.py`: rimosso `render.yaml` da `ROOT_DOCS_AND_CONFIG`.
+- `backend/AGENTS.md`: rimossa la riga "`Dockerfile` — build container (in revisione)".
+
+Perché:
+- file di deploy "nel dubbio" (Dockerfile/render.yaml non usati) diventano trappole: qualcuno li aggiorna credendo siano vivi, qualcun altro li modifica rompendoli senza accorgersene. Meglio cancellarli e ripristinarli solo quando servono davvero.
+- il test `.mjs` era un runner alternativo mai agganciato alla CI; tenerlo in repo sotto `tests/legacy/` crea confusione sul cosa sia "attivo" e cosa no.
+
+File:
+- render.yaml (rimosso)
+- backend/Dockerfile (rimosso)
+- tests/legacy/frontend-web-runtime-regressions.test.mjs (rimosso)
+- tests/legacy/ (cartella rimossa)
+- tools/checks.py
+- backend/AGENTS.md
+- CHANGELOG.md
+
+---
+
+## 2026-04-16 — Restauro Fase A (F1.5) — doc algoritmi unificato
+
+Cosa:
+- Creato `ALGORITMI.md` (root) come fonte di verità unica per la spec degli algoritmi. Consolida `algoritmi-verifica.md` (spec dettagliata, ma stale sul nuovo arrotondamento) e `APP_RIASSUNTO_ALGORITMI.txt` (handoff sintetico, aggiornato al nuovo arrotondamento).
+- Sezioni 1–3 (arrotondamento entrata/uscita, `calcola_ore_lavorate`) riscritte per riflettere la regola aziendale attuale: entrata per eccesso, uscita per difetto, poi differenza. Esempi numerici aggiornati (08:39→17:02 = 8,25 arrotondate).
+- Rimossi `algoritmi-verifica.md` e `APP_RIASSUNTO_ALGORITMI.txt`.
+- `tools/checks.py`: `ROOT_DOCS_AND_CONFIG` aggiornato (rimosso `algoritmi-verifica.md`, aggiunto `ALGORITMI.md`).
+- `README.md` e `CONTRIBUTING.md`: aggiunto riferimento esplicito ad `ALGORITMI.md`.
+
+Perché:
+- evitare che restino in repo due documenti che descrivono gli stessi algoritmi con regole diverse (quello vecchio era stale sul punto più critico: la regola di arrotondamento delle timbrature).
+
+File:
+- ALGORITMI.md (nuovo)
+- algoritmi-verifica.md (rimosso)
+- APP_RIASSUNTO_ALGORITMI.txt (rimosso)
+- tools/checks.py
+- README.md
+- CONTRIBUTING.md
+- CHANGELOG.md
+
+---
+
+## 2026-04-16 — Restauro Fase A (F2.3 + F2.4)
+
+Cosa:
+- F2.3 — `frontend/src/services/api.ts`: rimossi 10 simboli esportati senza chiamanti nel frontend (`verifyPin`, `uploadCertificato`, variante esplicita di `uploadBustaPaga`, `getDocumento`, `uploadDocumento`, `createAlert`, `deleteAlert`, `importTimbratureAziendali`, `deleteTimbraturaAziendale`, `deleteAllTimbratureAziendali`) e l'interfaccia `TimbraturaAziendalePayload`. Aggiunto commento in coda con elenco dei simboli rimossi per ripristino rapido se torneranno necessari. Nessun endpoint backend rimosso.
+- F2.4 — spostato `ReperibilitaSheet.tsx` da `frontend/app/components/` a `frontend/src/components/`; adeguati gli import interni al nuovo livello (`../services/offlineApi`, `../hooks/useAppTheme`, `../utils/helpers`, import diretti dei componenti sorelle). Aggiunto export nel barrel `frontend/src/components/index.ts`. Aggiornato il consumer `frontend/app/(tabs)/index.tsx` per importare dal barrel `../../src/components`. Cartella `frontend/app/components/` rimossa perché vuota.
+
+Perché:
+- F2.3: ridurre superficie morta (meno simboli esportati = meno tentazione di agganciare codice nuovo a rotte fantasma). Restano preservati tutti gli endpoint GDPR-sensibili (`deletePersonalData`, `deleteAccount`).
+- F2.4: un'unica convenzione per tutti i componenti (`src/components/`) elimina l'incoerenza `app/components` vs `src/components` rilevata in REFERTO_RESTAURO.md.
+
+File:
+- frontend/src/services/api.ts
+- frontend/src/components/ReperibilitaSheet.tsx (nuovo)
+- frontend/src/components/index.ts
+- frontend/app/(tabs)/index.tsx
+- frontend/app/components/ReperibilitaSheet.tsx (rimosso)
+- frontend/app/components/ (cartella rimossa)
+- CHANGELOG.md
+
+---
+
 ## 2026-03-30 — Documento TXT di handoff per review algoritmi
 
 Cosa:

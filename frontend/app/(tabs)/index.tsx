@@ -13,7 +13,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useFocusEffect } from 'expo-router';
-import { Card, StatCard, LoadingScreen } from '../../src/components';
+import { Card, StatCard, LoadingScreen, ReperibilitaSheet } from '../../src/components';
 import { useAppStore } from '../../src/store/appStore';
 import * as offlineApi from '../../src/services/offlineApi';
 import { formatCurrency, formatHoursHHMM, getMesiItaliano, getTodayString } from '../../src/utils/helpers';
@@ -21,7 +21,6 @@ import { calcolaOreLavorate } from '../../src/algorithms/calcoli';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAppTheme } from '../../src/hooks/useAppTheme';
 import { Marcatura } from '../../src/types';
-import { ReperibilitaSheet } from '../components/ReperibilitaSheet';
 
 const CARD_ORDER_KEY = 'home_card_order';
 const CARD_EXPANDED_KEY = 'home_card_expanded';

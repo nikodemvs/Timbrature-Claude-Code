@@ -56,8 +56,12 @@ log "killing stale uvicorn (if any)"
 pkill -f "uvicorn server_nas:app" 2>/dev/null || true
 sleep 1
 
-log "launching start-nas.sh"
-"$RUNTIME/backend/start-nas.sh"
+log "launching start-nas.sh (detached)"
+# start-nas.sh fa `exec uvicorn` foreground. Detach con setsid+nohup per evitare
+# di bloccare la sessione SSH e per sopravvivere alla disconnessione del client.
+UVICORN_LOG="$RUNTIME/backend/uvicorn-deploy.log"
+setsid nohup "$RUNTIME/backend/start-nas.sh" </dev/null >>"$UVICORN_LOG" 2>&1 &
+disown 2>/dev/null || true
 
 # --- 4. Health check ---
 log "waiting backend up (timeout ${HEALTH_TIMEOUT}s)"

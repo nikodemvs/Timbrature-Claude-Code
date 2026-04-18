@@ -77,7 +77,7 @@ log = open('$UVICORN_LOG', 'ab', 0)
 os.dup2(log.fileno(), 1)
 os.dup2(log.fileno(), 2)
 os.execv('/usr/local/bin/python3.9',
-  ['python3.9','-m','uvicorn','server_nas:app','--host','0.0.0.0','--port','$BACKEND_PORT'])
+  ['/usr/local/bin/python3.9','-m','uvicorn','server_nas:app','--host','0.0.0.0','--port','$BACKEND_PORT'])
 "
 
 # --- 4. Health check ---

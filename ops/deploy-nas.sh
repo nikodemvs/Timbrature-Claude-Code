@@ -56,12 +56,29 @@ log "killing stale uvicorn (if any)"
 pkill -f "uvicorn server_nas:app" 2>/dev/null || true
 sleep 1
 
-log "launching start-nas.sh (detached)"
-# start-nas.sh fa `exec uvicorn` foreground. Detach con setsid+nohup per evitare
-# di bloccare la sessione SSH e per sopravvivere alla disconnessione del client.
-UVICORN_LOG="$RUNTIME/backend/uvicorn-deploy.log"
-setsid nohup "$RUNTIME/backend/start-nas.sh" </dev/null >>"$UVICORN_LOG" 2>&1 &
-disown 2>/dev/null || true
+log "launching uvicorn (detached via python double-fork)"
+# start-nas.sh fa `exec uvicorn` foreground => blocca SSH. Qui lanciamo uvicorn
+# direttamente detached con python double-fork (stessa tecnica di ts-ensure
+# in sandbox). Così SSH session puo' chiudere senza killare uvicorn.
+UVICORN_LOG="/tmp/uvicorn-deploy-$$.log"
+USER_SITE="/var/services/homes/Marco Zambara/.local/lib/python3.9/site-packages"
+export PYTHONPATH="${USER_SITE}${PYTHONPATH:+:${PYTHONPATH}}"
+
+/usr/local/bin/python3.9 -c "
+import os, sys
+# First fork
+if os.fork() > 0: os._exit(0)
+os.setsid()
+# Second fork — il grandchild diventa processo di init-owned
+if os.fork() > 0: os._exit(0)
+os.chdir('$RUNTIME/backend')
+sys.stdin.close()
+log = open('$UVICORN_LOG', 'ab', 0)
+os.dup2(log.fileno(), 1)
+os.dup2(log.fileno(), 2)
+os.execv('/usr/local/bin/python3.9',
+  ['python3.9','-m','uvicorn','server_nas:app','--host','0.0.0.0','--port','$BACKEND_PORT'])
+"
 
 # --- 4. Health check ---
 log "waiting backend up (timeout ${HEALTH_TIMEOUT}s)"

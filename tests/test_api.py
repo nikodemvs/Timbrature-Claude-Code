@@ -28,7 +28,35 @@ class FintoGemini:
 
 
 async def _semina_dati_operativi_e_personali(db_temporaneo):
-    timestamp = "2026-03-21T10:00:00+00:00"
+    # Date dinamiche ancorate al mese corrente — il dashboard filtra per
+    # datetime.now().month, quindi seminare sul mese in corso evita time-bomb
+    # quando il test viene eseguito in un mese diverso da quello in cui è stato scritto.
+    now = datetime.now()
+    mese_corrente = now.month
+    anno_corrente = now.year
+    # Giorni sicuri (bassi) per evitare edge di fine mese (febbraio 28/29).
+    giorno_tim_personale = 4
+    giorno_tim_aziendale = 5
+    giorno_assenza_inizio = 1
+    giorno_assenza_fine = 2
+    giorno_reperibilita = 3
+
+    data_tim_personale = f"{anno_corrente}-{mese_corrente:02d}-{giorno_tim_personale:02d}"
+    data_tim_aziendale = f"{anno_corrente}-{mese_corrente:02d}-{giorno_tim_aziendale:02d}"
+    data_assenza_inizio = f"{anno_corrente}-{mese_corrente:02d}-{giorno_assenza_inizio:02d}"
+    data_assenza_fine = f"{anno_corrente}-{mese_corrente:02d}-{giorno_assenza_fine:02d}"
+    data_reperibilita = f"{anno_corrente}-{mese_corrente:02d}-{giorno_reperibilita:02d}"
+    data_riferimento_documento = f"{anno_corrente}-{mese_corrente:02d}"
+    pdf_busta_nome = f"cedolino-{anno_corrente}-{mese_corrente:02d}.pdf"
+    titolo_busta = f"Cedolino {mese_corrente:02d}/{anno_corrente}"
+    # Scadenza alert: 1° del mese successivo (gestisce rollover dicembre → gennaio).
+    if mese_corrente == 12:
+        data_scadenza_alert = f"{anno_corrente + 1}-01-01"
+    else:
+        data_scadenza_alert = f"{anno_corrente}-{mese_corrente + 1:02d}-01"
+    timestamp = datetime(anno_corrente, mese_corrente, giorno_tim_aziendale, 10, 0, 0).strftime(
+        "%Y-%m-%dT%H:%M:%S+00:00"
+    )
     await db_temporaneo.execute(
         """
         INSERT INTO timbrature (
@@ -39,7 +67,7 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
         """,
         [
             "timbr-1",
-            "2026-03-20",
+            data_tim_personale,
             "08:00",
             "17:00",
             "[]",
@@ -60,14 +88,14 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
         """,
         [
             "timbr-aziendale-1",
-            "2026-03-21",
+            data_tim_aziendale,
             "08:00",
             "17:00",
             8.0,
             "Report aziendale",
             "report-mese.pdf",
-            3,
-            2026,
+            mese_corrente,
+            anno_corrente,
             timestamp,
         ],
     )
@@ -82,10 +110,10 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
         """,
         [
             "busta-1",
-            3,
-            2026,
+            mese_corrente,
+            anno_corrente,
             base64.b64encode(b"%PDF-busta").decode("ascii"),
-            "marzo-2026.pdf",
+            pdf_busta_nome,
             2400.0,
             1800.0,
             4.0,
@@ -108,13 +136,13 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
         [
             "doc-1",
             "busta_paga",
-            "Cedolino marzo 2026",
+            titolo_busta,
             "Documento personale",
             "ordinaria",
             base64.b64encode(b"%PDF-doc").decode("ascii"),
-            "cedolino-marzo-2026.pdf",
+            pdf_busta_nome,
             "pdf",
-            "2026-03",
+            data_riferimento_documento,
             timestamp,
         ],
     )
@@ -128,8 +156,8 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
         [
             "assenza-1",
             "ferie",
-            "2026-03-10",
-            "2026-03-11",
+            data_assenza_inizio,
+            data_assenza_fine,
             16.0,
             "Assenza di test",
             None,
@@ -146,7 +174,7 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
         """,
         [
             "rep-1",
-            "2026-03-18",
+            data_reperibilita,
             "22:00",
             "02:00",
             "passiva",
@@ -182,7 +210,7 @@ async def _semina_dati_operativi_e_personali(db_temporaneo):
             "promemoria",
             "Scadenza",
             "Messaggio personale",
-            "2026-04-01",
+            data_scadenza_alert,
             0,
             timestamp,
         ],

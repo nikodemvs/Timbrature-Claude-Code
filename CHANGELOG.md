@@ -5,6 +5,20 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-09-20 — CI spostata su runner Windows
+
+Cosa:
+- `.github/workflows/automated-checks.yml`: `runs-on` da `ubuntu-latest` a `windows-latest`.
+
+Perché:
+- tre dei quattro check del modo `ci` (`e2e_smoke`, `e2e`, `visual`) avviano l'applicazione tramite `start-backend.ps1` e `start-frontend.ps1` con `powershell`. Su `ubuntu-latest` il binario non esiste e gli script sono comunque Windows-specifici (`taskkill`, `netstat -aon`, `node.exe`, `$env:LOCALAPPDATA`), quindi quei tre check non potevano passare: la CI verificava solo `backend_unit_api`. Su runner Windows girano come sulla macchina di sviluppo.
+
+File:
+- `.github/workflows/automated-checks.yml`
+- `CHANGELOG.md`
+
+---
+
 ## 2026-09-20 — _run-checks.sh preferisce il virtualenv del progetto
 
 Cosa:

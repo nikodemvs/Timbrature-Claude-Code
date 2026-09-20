@@ -5,6 +5,20 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-09-20 — _run-checks.sh preferisce il virtualenv del progetto
+
+Cosa:
+- `.githooks/_run-checks.sh`: se `PYTHON` non è impostato e esiste `.venv/bin/python` nella radice del repo, viene usato quello prima di cercare `python`/`python3` nel PATH.
+
+Perché:
+- gli hook risolvevano l'interprete solo dal PATH, quindi fallivano con `No module named pytest` a meno di avere il virtualenv attivo nella shell corrente. L'errore non indicava la causa reale e rendeva gli hook inaffidabili. La variabile `PYTHON` resta prioritaria per chi vuole forzare un interprete, e la CI — che non crea un `.venv` — continua a usare il Python di sistema senza alcun cambiamento.
+
+File:
+- `.githooks/_run-checks.sh`
+- `CHANGELOG.md`
+
+---
+
 ## 2026-09-20 — Hook git locali resi operativi
 
 Cosa:

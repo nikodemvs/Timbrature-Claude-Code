@@ -5,6 +5,22 @@ Leggere questo file insieme a AGENTS.md per avere il contesto completo.
 
 ---
 
+## 2026-09-20 — Hook git locali resi operativi
+
+Cosa:
+- Aggiunto il bit di esecuzione a `.githooks/pre-commit` e `.githooks/pre-push`.
+- Impostato `core.hooksPath` su `.githooks` nella configurazione locale del repo.
+
+Perché:
+- gli hook erano versionati ma inerti: `core.hooksPath` non era configurato e i due file non erano eseguibili, quindi git li ignorava in silenzio. Il gate rapido `pytest -m "unit or api"` descritto in CONTRIBUTING.md non è mai stato eseguito in locale, e l'intercettazione delle regressioni è rimasta a carico della sola CI.
+
+File:
+- `.githooks/pre-commit` (modo 100644 → 100755)
+- `.githooks/pre-push` (modo 100644 → 100755)
+- `CHANGELOG.md`
+
+---
+
 ## 2026-04-16 — Restauro Fase A (F2.5) — rimossi artefatti deploy orfani
 
 Cosa:
